@@ -1,0 +1,464 @@
+/* ========================================
+   대본 검수 시스템 - Custom Styles
+   Script Review Pro v2.0
+   ======================================== */
+
+/* === Base Styles === */
+* {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+/* === Dark Mode Variables === */
+:root {
+    --bg-primary: #f8fafc;
+    --bg-secondary: #ffffff;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --border-color: #e2e8f0;
+}
+
+.dark {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --border-color: #334155;
+}
+
+/* === Dark Mode Styles === */
+.dark body {
+    background-color: #0f172a;
+    color: #f1f5f9;
+}
+
+.dark .bg-white {
+    background-color: #1e293b !important;
+}
+
+.dark .bg-gray-50 {
+    background-color: #334155 !important;
+}
+
+.dark .bg-gray-100 {
+    background-color: #374151 !important;
+}
+
+.dark .text-gray-800 {
+    color: #f1f5f9 !important;
+}
+
+.dark .text-gray-700 {
+    color: #e2e8f0 !important;
+}
+
+.dark .text-gray-600 {
+    color: #cbd5e1 !important;
+}
+
+.dark .text-gray-500 {
+    color: #94a3b8 !important;
+}
+
+.dark .border-gray-200 {
+    border-color: #475569 !important;
+}
+
+.dark .border-gray-300 {
+    border-color: #4b5563 !important;
+}
+
+.dark textarea {
+    background-color: #1e293b;
+    color: #f1f5f9;
+    border-color: #475569;
+}
+
+.dark textarea::placeholder {
+    color: #64748b;
+}
+
+.dark textarea:focus {
+    border-color: #ef4444;
+}
+
+.dark .tab-btn {
+    color: #94a3b8;
+}
+
+.dark .tab-btn:hover {
+    background-color: #334155;
+    color: #f1f5f9;
+}
+
+.dark .tab-btn.active {
+    background-color: #1e3a5f !important;
+    color: #60a5fa !important;
+}
+
+.dark header {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
+.dark nav {
+    background-color: #1e293b;
+    border-color: #334155;
+}
+
+.dark footer {
+    background-color: #0f172a;
+}
+
+body {
+    line-height: 1.6;
+}
+
+/* === Tab System === */
+.tab-btn {
+    position: relative;
+    min-width: 160px;
+}
+
+.tab-btn::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 0;
+    height: 2px;
+    background: #2563eb;
+    transition: all 0.3s ease;
+    transform: translateX(-50%);
+}
+
+.tab-btn:hover::after {
+    width: 100%;
+}
+
+.tab-btn.active::after {
+    width: 100%;
+}
+
+/* Tab Content Animation */
+.tab-content {
+    animation: fadeIn 0.3s ease;
+}
+
+.tab-content.hidden {
+    display: none;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* === Textarea Styles === */
+textarea {
+    line-height: 1.8;
+    font-family: 'D2Coding', 'Noto Sans KR', monospace;
+}
+
+textarea:focus {
+    outline: none;
+}
+
+textarea::placeholder {
+    color: #9ca3af;
+    line-height: 1.6;
+}
+
+/* === Scrollbar Styling === */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* === Button Effects === */
+button {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+/* === Card Hover Effects === */
+.bg-white.rounded-xl {
+    transition: box-shadow 0.3s ease;
+}
+
+.bg-white.rounded-xl:hover {
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 
+                0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+/* === Stats Cards === */
+.grid .bg-gray-100 {
+    transition: all 0.2s ease;
+}
+
+.grid .bg-gray-100:hover {
+    background: #e2e8f0;
+    transform: translateY(-2px);
+}
+
+/* === Results Area === */
+.result-item {
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    animation: slideIn 0.3s ease;
+}
+
+.result-item.error {
+    background: #fef2f2;
+    border-left: 4px solid #ef4444;
+}
+
+.result-item.warning {
+    background: #fffbeb;
+    border-left: 4px solid #f59e0b;
+}
+
+.result-item.success {
+    background: #f0fdf4;
+    border-left: 4px solid #10b981;
+}
+
+.result-item.info {
+    background: #eff6ff;
+    border-left: 4px solid #3b82f6;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* === Responsive Adjustments === */
+@media (max-width: 768px) {
+    .tab-btn {
+        min-width: auto;
+        padding: 12px 16px;
+    }
+    
+    .tab-btn span:last-child {
+        display: none;
+    }
+    
+    .tab-btn span:first-child {
+        margin: 0;
+    }
+    
+    #main-tabs {
+        justify-content: space-around;
+    }
+    
+    textarea {
+        height: 200px !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+    
+    header h1 {
+        font-size: 1rem;
+    }
+}
+
+/* === Loading Animation === */
+.loading {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #2563eb;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* === Tooltip === */
+.tooltip {
+    position: relative;
+}
+
+.tooltip::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 12px;
+    background: #1e293b;
+    color: white;
+    font-size: 12px;
+    border-radius: 4px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+}
+
+.tooltip:hover::before {
+    opacity: 1;
+    visibility: visible;
+    bottom: calc(100% + 8px);
+}
+
+/* === Badge Styles === */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 9999px;
+}
+
+.badge-success {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.badge-warning {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.badge-error {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.badge-info {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+/* === Header Gradient === */
+header {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+}
+
+/* === Focus States for Accessibility === */
+button:focus-visible,
+textarea:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+}
+
+/* === AI Analysis Section === */
+#korea-ai-analysis {
+    animation: fadeIn 0.5s ease;
+}
+
+.loading.border-indigo-500 {
+    border-top-color: #6366f1 !important;
+}
+
+/* AI Score Animation */
+#korea-ai-result .text-xl.font-bold {
+    transition: all 0.3s ease;
+}
+
+#korea-ai-result .text-xl.font-bold:hover {
+    transform: scale(1.05);
+}
+
+/* AI Result Cards */
+#korea-ai-result > div {
+    animation: fadeIn 0.3s ease;
+}
+
+/* Dark Mode for AI Section */
+.dark #korea-ai-analysis .bg-indigo-50 {
+    background-color: rgba(99, 102, 241, 0.1) !important;
+}
+
+.dark #korea-ai-analysis .bg-red-50 {
+    background-color: rgba(239, 68, 68, 0.1) !important;
+}
+
+.dark #korea-ai-analysis .bg-green-50 {
+    background-color: rgba(34, 197, 94, 0.1) !important;
+}
+
+.dark #korea-ai-analysis .text-indigo-800 {
+    color: #a5b4fc !important;
+}
+
+.dark #korea-ai-analysis .text-red-800 {
+    color: #fca5a5 !important;
+}
+
+.dark #korea-ai-analysis .text-green-800 {
+    color: #86efac !important;
+}
+
+.dark #korea-ai-analysis .text-red-700 {
+    color: #fca5a5 !important;
+}
+
+.dark #korea-ai-analysis .text-green-700 {
+    color: #86efac !important;
+}
+
+/* === Print Styles === */
+@media print {
+    header, footer, .tab-btn, button {
+        display: none !important;
+    }
+    
+    .tab-content {
+        display: block !important;
+    }
+    
+    .bg-white.rounded-xl {
+        box-shadow: none;
+        border: 1px solid #e5e7eb;
+    }
+    
+    #korea-ai-analysis {
+        display: block !important;
+    }
+}
