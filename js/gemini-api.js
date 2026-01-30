@@ -427,36 +427,34 @@ GeminiAPI.prototype.getEntertainmentPrompt = function(script) {
 /**
  * AI 응답 파싱
  */
-GeminiAPI.prototype.parseAnalysisResponse = function(response, analysisType) {
-    try {
-        // JSON 블록 추출
-        var jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
-        if (jsonMatch && jsonMatch[1]) {
-            return JSON.parse(jsonMatch[1]);
-        }
-        
-        // JSON 블록이 없으면 전체 응답에서 JSON 찾기
-        var jsonStart = response.indexOf('{');
-        var jsonEnd = response.lastIndexOf('}');
-        if (jsonStart !== -1 && jsonEnd !== -1) {
-            return JSON.parse(response.substring(jsonStart, jsonEnd + 1));
-        }
-        
-        // 파싱 실패 시 텍스트로 반환
-        return {
-            raw: response,
-            parsed: false,
-            error: 'JSON 파싱 실패'
-        };
-    } catch (error) {
-        console.error('응답 파싱 오류:', error);
-        return {
-            raw: response,
-            parsed: false,
-            error: error.message
-        };
-    }
+// ========================================
+// JSON 파싱 (다단계 + 복구 + 세션 1회 알림)
+// ========================================
+GeminiAPI.prototype.repairJson = function(jsonString) {
+    if (!jsonString || typeof jsonString !== 'string') return jsonString;
+
+    var repaired = jsonString;
+
+    // 주석 제거
+    repaired = repaired.replace(/\/\/[^\n\r]*/g, '');
+    repaired = repaired.replace(/\/\*[\s\S]*?\*\//g, '');
+
+    // trailing comma 제거
+    repaired = repaired.replace(/,\s*}/g, '}');
+    repaired = repaired.replace(/,\s*]/g, ']');
+
+    // 작은따옴표 → 큰따옴표(간단 복구)
+    repaired = repaired.replace(/'([^'\\]*)'/g, '"$1"');
+
+    // 줄바꿈/탭 정리
+    repaired = repaired.replace(/[\r\n\t]+/g, ' ');
+
+    // 연속 공백 축소
+    repaired = repaired.replace(/\s{2,}/g, ' ');
+
+    return repaired.trim();
 };
+
 
 // ========================================
 // 전역 인스턴스
