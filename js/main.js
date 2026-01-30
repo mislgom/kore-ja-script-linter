@@ -65,8 +65,173 @@ document.addEventListener('DOMContentLoaded', function() {
     initAIAnalysis();
     initIssuesSystem();
     initApiKeyUI(); // API 키 UI 초기화 추가
-    console.log('✅ 대본 검수 시스템 vNext (Issues 관리) 초기화 완료');
-});
+    // ========================================
+// API 키 UI 초기화
+// ========================================
+(function () {
+  // 전역 중복 방지(파일 중복 로드까지 방어)
+  if (window.__apiKeyUIBound) return;
+  window.__apiKeyUIBound = true;
+
+  window.initApiKeyUI = function initApiKeyUI() {
+    const STORAGE_KEY = 'GEMINI_API_KEY';
+
+    const container = document.getElementById('api-key-container');
+    const toggleBtn = document.getElementById('api-key-toggle-btn');
+    const panel = document.getElementById('api-key-panel');
+    const closeBtn = document.getElementById('api-key-close-btn');
+    const input = document.getElementById('api-key-input');
+    const saveBtn = document.getElementById('api-key-save-btn');
+    const deleteBtn = document.getElementById('api-key-delete-btn');
+    const statusIcon = document.getElementById('api-key-status-icon');
+    const statusText = document.getElementById('api-key-status-text');
+    const statusEl = document.getElementById('api-key-status');
+
+    console.log('[API KEY BTN] found=', !!toggleBtn, 'id=', toggleBtn?.id);
+    console.log('[API KEY PANEL] found=', !!panel, 'id=', panel?.id);
+
+    if (!toggleBtn || !panel) {
+      console.error('[API KEY UI] required elements missing');
+      return;
+    }
+
+    function updateStatus(message, type = 'info') {
+      if (statusText) statusText.textContent = message;
+
+      if (statusIcon) {
+        const iconMap = {
+          saved: 'fa-check-circle',
+          deleted: 'fa-trash-alt',
+          warning: 'fa-exclamation-triangle',
+          info: 'fa-info-circle',
+          error: 'fa-times-circle',
+        };
+        statusIcon.className = `fas ${iconMap[type] || 'fa-info-circle'} mr-1`;
+      }
+
+      if (statusEl) {
+        statusEl.classList.remove('status-saved', 'status-deleted', 'status-warning', 'status-error', 'status-info');
+        statusEl.classList.add('status-' + type);
+      }
+    }
+
+    function updateButtonState() {
+      const hasKey = !!localStorage.getItem(STORAGE_KEY);
+      if (hasKey) {
+        toggleBtn.classList.add('has-key');
+        toggleBtn.title = 'API 키 설정됨';
+      } else {
+        toggleBtn.classList.remove('has-key');
+        toggleBtn.title = 'API 키 설정';
+      }
+    }
+
+    function openPanel() {
+      console.log('[API KEY PANEL] class=', panel.className, '(before open)');
+      panel.classList.remove('hidden');
+      console.log('[API KEY PANEL] class=', panel.className, '(after open)');
+    }
+
+    function closePanel() {
+      console.log('[API KEY PANEL] class=', panel.className, '(before close)');
+      panel.classList.add('hidden');
+      console.log('[API KEY PANEL] class=', panel.className, '(after close)');
+    }
+
+    function togglePanel() {
+      panel.classList.contains('hidden') ? openPanel() : closePanel();
+    }
+
+    function loadSavedKey() {
+      const savedKey = localStorage.getItem(STORAGE_KEY);
+      if (savedKey && input) {
+        input.value = savedKey;
+        updateStatus('키가 저장되어 있습니다.', 'saved');
+      } else {
+        updateStatus('API 키를 입력해주세요.', 'info');
+      }
+      updateButtonState();
+    }
+
+    function handleSave() {
+      const key = input ? input.value.trim() : '';
+      if (!key) {
+        updateStatus('API 키를 입력해주세요.', 'warning');
+        return;
+      }
+      localStorage.setItem(STORAGE_KEY, key);
+      updateStatus('저장되었습니다.', 'saved');
+      updateButtonState();
+      console.log('✅ Gemini API 키 저장 완료');
+    }
+
+    function handleDelete() {
+      localStorage.removeItem(STORAGE_KEY);
+      if (input) input.value = '';
+      updateStatus('삭제되었습니다.', 'deleted');
+      updateButtonState();
+      console.log('🗑️ Gemini API 키 삭제 완료');
+    }
+
+    // ===== 이벤트 바인딩 (중복 방지: dataset 플래그) =====
+    if (toggleBtn.dataset.listenerAttached) return;
+    toggleBtn.dataset.listenerAttached = 'true';
+
+    toggleBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      console.log('[API KEY BTN] clicked');
+      console.log('[API KEY BTN] target=', e.target);
+      e.stopPropagation();
+      togglePanel();
+    });
+
+    panel.addEventListener('click', function (e) {
+      e.stopPropagation();
+    });
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        closePanel();
+      });
+    }
+
+    if (saveBtn) saveBtn.addEventListener('click', handleSave);
+    if (deleteBtn) deleteBtn.addEventListener('click', handleDelete);
+
+    if (input) {
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handleSave();
+        }
+      });
+    }
+
+    // 외부 클릭 닫기(전역 1회만)
+    if (!window.__apiKeyOutsideClickBound) {
+      window.__apiKeyOutsideClickBound = true;
+      document.addEventListener('click', function (e) {
+        const p = document.getElementById('api-key-panel');
+        const c = document.getElementById('api-key-container');
+        if (p && c && !p.classList.contains('hidden') && !c.contains(e.target)) {
+          p.classList.add('hidden');
+        }
+      });
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          const p = document.getElementById('api-key-panel');
+          if (p) p.classList.add('hidden');
+        }
+      });
+    }
+
+    loadSavedKey();
+    console.log('✅ API 키 UI 초기화 완료');
+  };
+})();
 
 // ========================================
 // Issues 시스템 초기화
