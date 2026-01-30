@@ -1,17 +1,22 @@
 /**
  * Gemini API 연동 모듈
- * Google Gemini Flash 2.5 API 통합
+ * Google Gemini 2.5 Flash API 통합
  * 
- * 대본 심층 분석을 위한 AI 기능 제공
+ * [STEP 2 최종 보완]
+ * - 모든 API 호출은 forceGeminiAnalyze() 단일 함수에서만 수행
+ * - API 키는 localStorage("GEMINI_API_KEY")에서만 읽음
+ * - 엔드포인트/모델 고정: v1/models/gemini-2.5-flash:generateContent
+ * - 금지 문자열 완전 제거: v1beta, preview-, gemini-pro, 하드코딩 키
+ * - testConnection() 호출부 0건 (자동 호출 금지)
+ * - AIza 형식 검증 제거 (빈 값만 차단)
  */
 
 // ========================================
-// Gemini API 설정
+// Gemini API 설정 (고정값)
 // ========================================
-const GeminiConfig = {
-    apiKey: 'AIzaSyBBe3VO3f56aidIb-tYa-dhoVUbqEOkFoI',
-    model: 'gemini-2.5-flash-preview-05-20',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/models',
+var GeminiConfig = {
+    // 엔드포인트 고정 (v1 + gemini-2.5-flash)
+    endpoint: 'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent',
     maxTokens: 8192,
     temperature: 0.7
 };
@@ -19,516 +24,454 @@ const GeminiConfig = {
 // ========================================
 // Gemini API 클래스
 // ========================================
-class GeminiAPI {
-    constructor(apiKey = GeminiConfig.apiKey) {
-        this.apiKey = apiKey;
-        this.model = GeminiConfig.model;
-        this.baseUrl = GeminiConfig.baseUrl;
-        this.isAvailable = true;
-        this.lastError = null;
-    }
+function GeminiAPI() {
+    this.endpoint = GeminiConfig.endpoint;
+    this.isAvailable = false;
+    this.lastError = null;
+}
 
-    /**
-     * API 연결 테스트
-     */
-    async testConnection() {
-        try {
-            const response = await this.generateContent('테스트입니다. "연결 성공"이라고만 답해주세요.');
-            this.isAvailable = response && response.length > 0;
-            return this.isAvailable;
-        } catch (error) {
-            this.isAvailable = false;
-            this.lastError = error.message;
-            console.error('Gemini API 연결 실패:', error);
-            return false;
-        }
-    }
+/**
+ * API 키 가져오기 (localStorage에서만)
+ * @returns {string|null} API 키 또는 null
+ */
+GeminiAPI.prototype.getApiKey = function() {
+    return localStorage.getItem('GEMINI_API_KEY');
+};
 
-    /**
-     * 콘텐츠 생성 (기본 API 호출)
-     */
-    async generateContent(prompt, options = {}) {
-        const url = `${this.baseUrl}/${this.model}:generateContent?key=${this.apiKey}`;
+/**
+ * API 키 존재 여부 확인 (빈 값만 체크, 형식 검증 없음)
+ * @returns {boolean}
+ */
+GeminiAPI.prototype.hasApiKey = function() {
+    var key = this.getApiKey();
+    return !!(key && key.trim());
+};
+
+/**
+ * API 연결 테스트
+ * 
+ * [주의] 이 함수는 내부적으로 forceGeminiAnalyze()를 호출함.
+ * 자동 호출 금지 규칙에 따라 프로젝트 전역에서 이 함수를 호출하면 안 됨.
+ * 수동 테스트/디버깅 목적으로만 유지.
+ */
+GeminiAPI.prototype.testConnection = async function() {
+    if (!this.hasApiKey()) {
+        this.isAvailable = false;
+        return false;
+    }
+    
+    try {
+        var response = await this.forceGeminiAnalyze('테스트입니다. "연결 성공"이라고만 답해주세요.', {
+            maxTokens: 100,
+            temperature: 0.1
+        });
+        this.isAvailable = response && response.length > 0;
+        return this.isAvailable;
+    } catch (error) {
+        this.isAvailable = false;
+        this.lastError = error.message;
+        console.error('Gemini API 연결 실패:', error);
+        return false;
+    }
+};
+
+/**
+ * ============================================
+ * 핵심 API 호출 함수 (단일 진입점)
+ * 모든 Gemini API 호출은 이 함수에서만 수행
+ * ============================================
+ * @param {string} prompt - 프롬프트 텍스트
+ * @param {object} options - 옵션 (temperature, maxTokens 등)
+ * @returns {Promise<string|null>} 응답 텍스트 또는 null
+ */
+GeminiAPI.prototype.forceGeminiAnalyze = async function(prompt, options) {
+    options = options || {};
+    
+    // 1) API 키 로드 (localStorage에서만)
+    var apiKey = this.getApiKey();
+    
+    // 2) 키 없음/빈 값 체크 (형식 검증 없음)
+    if (!apiKey || !apiKey.trim()) {
+        var errorMsg = 'API 키가 설정되지 않았습니다. 우측 상단 🔑 버튼에서 설정해주세요.';
+        console.warn('⚠️ Gemini API:', errorMsg);
         
-        const requestBody = {
-            contents: [{
-                parts: [{
-                    text: prompt
-                }]
-            }],
-            generationConfig: {
-                temperature: options.temperature || GeminiConfig.temperature,
-                maxOutputTokens: options.maxTokens || GeminiConfig.maxTokens,
-                topP: options.topP || 0.95,
-                topK: options.topK || 40
+        // 사용자 경고 (기존 showNotification 함수 사용)
+        if (typeof window.showNotification === 'function') {
+            window.showNotification(errorMsg, 'warning');
+        } else {
+            alert(errorMsg);
+        }
+        
+        // 네트워크 요청 없이 즉시 반환
+        return null;
+    }
+    
+    // 3) 엔드포인트 구성 (고정 URL + API 키)
+    var url = this.endpoint + '?key=' + apiKey;
+    
+    // 4) 요청 본문 구성
+    var requestBody = {
+        contents: [{
+            parts: [{
+                text: prompt
+            }]
+        }],
+        generationConfig: {
+            temperature: options.temperature !== undefined ? options.temperature : GeminiConfig.temperature,
+            maxOutputTokens: options.maxTokens || GeminiConfig.maxTokens,
+            topP: options.topP || 0.95,
+            topK: options.topK || 40
+        },
+        safetySettings: [
+            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+        ]
+    };
+
+    // 5) API 호출 (fetch)
+    console.log('🚀 Gemini API 호출 시작...');
+    console.log('📍 Endpoint:', this.endpoint);
+    
+    try {
+        var response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
             },
-            safetySettings: [
-                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-            ]
-        };
+            body: JSON.stringify(requestBody)
+        });
 
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(requestBody)
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error?.message || `API 오류: ${response.status}`);
-            }
-
-            const data = await response.json();
+        // 6) 응답 상태 확인
+        if (!response.ok) {
+            var errorData = await response.json().catch(function() { return {}; });
+            var errorMessage = (errorData.error && errorData.error.message) 
+                ? errorData.error.message 
+                : 'API 오류: ' + response.status;
             
-            if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-                return data.candidates[0].content.parts[0].text;
+            console.error('❌ Gemini API 오류:', errorMessage);
+            this.lastError = errorMessage;
+            
+            if (typeof window.showNotification === 'function') {
+                window.showNotification('API 호출 실패: ' + errorMessage, 'error');
             }
             
-            throw new Error('응답 형식이 올바르지 않습니다.');
-        } catch (error) {
-            this.lastError = error.message;
-            throw error;
+            throw new Error(errorMessage);
         }
+
+        // 7) 응답 파싱
+        var data = await response.json();
+        
+        if (data.candidates && data.candidates[0] && 
+            data.candidates[0].content && data.candidates[0].content.parts &&
+            data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text) {
+            
+            var resultText = data.candidates[0].content.parts[0].text;
+            console.log('✅ Gemini API 응답 수신 완료 (길이:', resultText.length, '자)');
+            return resultText;
+        }
+        
+        throw new Error('응답 형식이 올바르지 않습니다.');
+        
+    } catch (error) {
+        this.lastError = error.message;
+        console.error('❌ Gemini API 호출 실패:', error);
+        throw error;
+    }
+};
+
+/**
+ * 대본 종합 분석 (forceGeminiAnalyze 위임)
+ */
+GeminiAPI.prototype.analyzeScript = async function(script, analysisType) {
+    analysisType = analysisType || 'comprehensive';
+    
+    var prompts = {
+        comprehensive: this.getComprehensivePrompt(script),
+        characters: this.getCharacterPrompt(script),
+        story: this.getStoryPrompt(script),
+        entertainment: this.getEntertainmentPrompt(script)
+    };
+
+    var prompt = prompts[analysisType] || prompts.comprehensive;
+    
+    try {
+        var response = await this.forceGeminiAnalyze(prompt, {
+            temperature: 0.3,
+            maxTokens: 4096
+        });
+        
+        if (!response) {
+            return { error: 'API 키가 설정되지 않았습니다.' };
+        }
+        
+        return this.parseAnalysisResponse(response, analysisType);
+    } catch (error) {
+        console.error('대본 분석 오류:', error);
+        return { error: error.message };
+    }
+};
+
+/**
+ * 빠른 분석 (forceGeminiAnalyze 위임)
+ */
+GeminiAPI.prototype.quickAnalyze = async function(script, item) {
+    var prompts = {
+        korea: '이 대본이 한국 배경인지 확인하고, 발견된 한국 지명/장소/문화 키워드를 나열해주세요. JSON 형식으로 {"isKorea": true/false, "keywords": [], "score": 0-100, "feedback": ""} 응답해주세요.\n\n대본:\n' + script.substring(0, 5000),
+        
+        characters: '이 대본의 등장인물 이름, 나이, 관계, 특성을 추출해주세요. JSON 형식으로 {"characters": [{"name": "", "age": "", "relation": "", "traits": []}]} 응답해주세요.\n\n대본:\n' + script.substring(0, 5000),
+        
+        flow: '이 대본의 이야기 흐름이 자연스러운지 평가해주세요. JSON 형식으로 {"score": 0-100, "feedback": "", "issues": []} 응답해주세요.\n\n대본:\n' + script.substring(0, 5000)
+    };
+
+    var prompt = prompts[item] || prompts.korea;
+    
+    try {
+        var response = await this.forceGeminiAnalyze(prompt, {
+            temperature: 0.2,
+            maxTokens: 1024
+        });
+        
+        if (!response) {
+            return { error: 'API 키가 설정되지 않았습니다.' };
+        }
+        
+        return this.parseAnalysisResponse(response, item);
+    } catch (error) {
+        return { error: error.message };
+    }
+};
+
+/**
+ * FLOW 후보 구간 분석 (forceGeminiAnalyze 위임)
+ */
+GeminiAPI.prototype.analyzeFlowCandidates = async function(candidateSegments, fullScript) {
+    if (!candidateSegments || candidateSegments.length === 0) {
+        return [];
     }
 
-    /**
-     * 대본 종합 분석
-     */
-    async analyzeScript(script, analysisType = 'comprehensive') {
-        const prompts = {
-            comprehensive: this.getComprehensivePrompt(script),
-            characters: this.getCharacterPrompt(script),
-            story: this.getStoryPrompt(script),
-            entertainment: this.getEntertainmentPrompt(script)
-        };
+    var results = [];
+    var self = this;
 
-        const prompt = prompts[analysisType] || prompts.comprehensive;
+    for (var i = 0; i < candidateSegments.length; i++) {
+        var candidate = candidateSegments[i];
         
         try {
-            const response = await this.generateContent(prompt, {
-                temperature: 0.3, // 분석은 낮은 온도로
-                maxTokens: 4096
-            });
+            var segmentText = fullScript.substring(candidate.startIndex, candidate.endIndex);
             
-            return this.parseAnalysisResponse(response, analysisType);
-        } catch (error) {
-            console.error('대본 분석 오류:', error);
-            throw error;
-        }
-    }
+            var prompt = '당신은 한국 시니어 낭독 콘텐츠 스토리 전문가입니다.\n' +
+                '아래 대본 구간에서 전개/흐름 오류가 있는지 판정해주세요.\n\n' +
+                '## 후보 유형\n' +
+                (candidate.type === 'TIME_JUMP' ? '시간 점프 (급격한 시간 변화)' : 
+                 candidate.type === 'EMOTION_SHIFT' ? '감정 급변 (긍정↔부정 혼재)' : 
+                 candidate.type === 'LOCATION_CHANGE' ? '장소 급변' : '기타 전환') + '\n\n' +
+                '## 대본 구간 (씬 ' + (candidate.sceneNum || '?') + ')\n' +
+                segmentText.substring(0, 3000) + '\n\n' +
+                '## 응답 형식 (반드시 JSON으로)\n' +
+                '```json\n' +
+                '{\n' +
+                '    "isIssue": true/false,\n' +
+                '    "issueType": "부자연전개/인과누락/연결부자연/급변화/없음",\n' +
+                '    "severity": "HIGH/MED/LOW",\n' +
+                '    "confidence": "HIGH/MID/LOW",\n' +
+                '    "reason": "판정 근거 설명",\n' +
+                '    "suggestion": "최소 수정 제안"\n' +
+                '}\n' +
+                '```';
 
-    /**
-     * 종합 분석 프롬프트
-     */
-    getComprehensivePrompt(script) {
-        return `당신은 한국 시니어 낭독 콘텐츠 전문 대본 검수자입니다.
-아래 대본을 분석하고 JSON 형식으로 결과를 제공해주세요.
-
-## 분석 기준
-1. **한국 배경 확인**: 한국 지명, 문화, 장소가 적절히 사용되었는지
-2. **등장인물 설정 일관성**: 이름, 나이, 특성이 처음부터 끝까지 일관되는지
-3. **인물 관계 일관성**: 가족/사회 관계가 변하지 않는지
-4. **이야기 흐름**: 자연스럽고 논리적인 전개인지
-5. **반전/변화 속도**: 급격한 변화 없이 적절한 페이싱인지
-6. **재미/몰입 요소**: 시니어 시청자가 공감하고 몰입할 수 있는지
-
-## 대본
-${script.substring(0, 15000)}
-
-## 응답 형식 (반드시 JSON으로)
-\`\`\`json
-{
-    "summary": "대본 전체 요약 (2-3문장)",
-    "koreaBackground": {
-        "score": 0-100,
-        "pass": true/false,
-        "feedback": "피드백 내용",
-        "keywords": ["발견된 한국 키워드들"]
-    },
-    "characterConsistency": {
-        "score": 0-100,
-        "pass": true/false,
-        "feedback": "피드백 내용",
-        "characters": [
-            {"name": "이름", "age": "나이", "traits": "특성", "consistent": true/false}
-        ],
-        "issues": ["발견된 문제점"]
-    },
-    "relationshipConsistency": {
-        "score": 0-100,
-        "pass": true/false,
-        "feedback": "피드백 내용",
-        "relationships": [
-            {"from": "인물1", "to": "인물2", "relation": "관계", "consistent": true/false}
-        ],
-        "issues": ["발견된 문제점"]
-    },
-    "storyFlow": {
-        "score": 0-100,
-        "pass": true/false,
-        "feedback": "피드백 내용",
-        "strengths": ["강점"],
-        "weaknesses": ["개선점"]
-    },
-    "pacingSpeed": {
-        "score": 0-100,
-        "pass": true/false,
-        "feedback": "피드백 내용",
-        "issues": ["페이싱 문제점"],
-        "suggestions": ["개선 제안"]
-    },
-    "entertainment": {
-        "score": 0-100,
-        "pass": true/false,
-        "feedback": "피드백 내용",
-        "elements": ["발견된 재미 요소"],
-        "suggestions": ["추가 제안"]
-    },
-    "overallScore": 0-100,
-    "verdict": "합격/조건부/재검토",
-    "topIssues": ["가장 중요한 개선점 3가지"],
-    "recommendations": ["전문가 추천사항"]
-}
-\`\`\``;
-    }
-
-    /**
-     * 캐릭터 분석 프롬프트
-     */
-    getCharacterPrompt(script) {
-        return `당신은 대본 전문 분석가입니다.
-아래 대본에서 등장인물 정보를 추출하고 일관성을 분석해주세요.
-
-## 분석 항목
-1. 모든 등장인물의 이름, 나이, 관계, 특성 추출
-2. 대본 전체에서 인물 정보가 일관되게 유지되는지 확인
-3. 인물 간 관계가 변하지 않는지 확인
-
-## 대본
-${script.substring(0, 15000)}
-
-## 응답 형식 (반드시 JSON으로)
-\`\`\`json
-{
-    "characters": [
-        {
-            "name": "이름",
-            "age": "나이",
-            "relation": "관계(엄마/아들 등)",
-            "traits": ["특성 목록"],
-            "firstAppearance": "첫 등장 위치 설명",
-            "mentions": 3,
-            "consistent": true,
-            "inconsistencies": []
-        }
-    ],
-    "relationships": [
-        {
-            "person1": "인물1",
-            "person2": "인물2", 
-            "relation": "관계",
-            "consistent": true,
-            "changes": []
-        }
-    ],
-    "issues": ["발견된 문제점"],
-    "score": 0-100
-}
-\`\`\``;
-    }
-
-    /**
-     * 스토리 분석 프롬프트
-     */
-    getStoryPrompt(script) {
-        return `당신은 시니어 낭독 콘텐츠 스토리 전문가입니다.
-아래 대본의 스토리 구조와 흐름을 분석해주세요.
-
-## 분석 항목
-1. 이야기 흐름의 자연스러움
-2. 씬 전환의 적절성
-3. 반전/변화의 속도와 타이밍
-4. 시니어 시청자를 위한 페이싱
-
-## 대본
-${script.substring(0, 15000)}
-
-## 응답 형식 (반드시 JSON으로)
-\`\`\`json
-{
-    "structure": {
-        "introduction": "도입부 분석",
-        "development": "전개부 분석",
-        "climax": "절정 분석",
-        "resolution": "결말 분석"
-    },
-    "sceneTransitions": {
-        "score": 0-100,
-        "feedback": "씬 전환 평가",
-        "issues": []
-    },
-    "pacing": {
-        "score": 0-100,
-        "feedback": "페이싱 평가",
-        "tooFast": [],
-        "tooSlow": [],
-        "suggestions": []
-    },
-    "emotionalArc": {
-        "description": "감정선 설명",
-        "peaks": ["감정 고조 지점"],
-        "appropriateness": "시니어 적합성 평가"
-    },
-    "overallScore": 0-100,
-    "verdict": "평가 결론"
-}
-\`\`\``;
-    }
-
-    /**
-     * 재미 요소 분석 프롬프트
-     */
-    getEntertainmentPrompt(script) {
-        return `당신은 시니어 콘텐츠 전문가입니다.
-아래 대본의 재미 요소와 시청 몰입도를 분석해주세요.
-
-## 분석 항목
-1. 시니어 시청자가 공감할 수 있는 요소
-2. 지루하지 않게 하는 장치들
-3. 감정적 몰입 요소
-4. 시청 시간을 늘릴 수 있는 요소
-
-## 대본
-${script.substring(0, 15000)}
-
-## 응답 형식 (반드시 JSON으로)
-\`\`\`json
-{
-    "engagementElements": [
-        {
-            "type": "요소 유형",
-            "description": "설명",
-            "effectiveness": 0-100
-        }
-    ],
-    "seniorAppeal": {
-        "score": 0-100,
-        "relatable": ["공감 요소"],
-        "nostalgic": ["향수 요소"],
-        "emotional": ["감동 요소"]
-    },
-    "retention": {
-        "score": 0-100,
-        "hooks": ["시청 유지 요소"],
-        "dropoffRisks": ["이탈 위험 지점"],
-        "suggestions": ["개선 제안"]
-    },
-    "overallEntertainment": 0-100,
-    "verdict": "평가 결론"
-}
-\`\`\``;
-    }
-
-    /**
-     * AI 응답 파싱
-     */
-    parseAnalysisResponse(response, analysisType) {
-        try {
-            // JSON 블록 추출
-            const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
-            if (jsonMatch && jsonMatch[1]) {
-                return JSON.parse(jsonMatch[1]);
-            }
-            
-            // JSON 블록이 없으면 전체 응답에서 JSON 찾기
-            const jsonStart = response.indexOf('{');
-            const jsonEnd = response.lastIndexOf('}');
-            if (jsonStart !== -1 && jsonEnd !== -1) {
-                return JSON.parse(response.substring(jsonStart, jsonEnd + 1));
-            }
-            
-            // 파싱 실패 시 텍스트로 반환
-            return {
-                raw: response,
-                parsed: false,
-                error: 'JSON 파싱 실패'
-            };
-        } catch (error) {
-            console.error('응답 파싱 오류:', error);
-            return {
-                raw: response,
-                parsed: false,
-                error: error.message
-            };
-        }
-    }
-
-    /**
-     * 특정 항목만 빠르게 분석
-     */
-    async quickAnalyze(script, item) {
-        const prompts = {
-            korea: `이 대본이 한국 배경인지 확인하고, 발견된 한국 지명/장소/문화 키워드를 나열해주세요. JSON 형식으로 {"isKorea": true/false, "keywords": [], "score": 0-100, "feedback": ""} 응답해주세요.\n\n대본:\n${script.substring(0, 5000)}`,
-            
-            characters: `이 대본의 등장인물 이름, 나이, 관계, 특성을 추출해주세요. JSON 형식으로 {"characters": [{"name": "", "age": "", "relation": "", "traits": []}]} 응답해주세요.\n\n대본:\n${script.substring(0, 5000)}`,
-            
-            flow: `이 대본의 이야기 흐름이 자연스러운지 평가해주세요. JSON 형식으로 {"score": 0-100, "feedback": "", "issues": []} 응답해주세요.\n\n대본:\n${script.substring(0, 5000)}`
-        };
-
-        const prompt = prompts[item] || prompts.korea;
-        
-        try {
-            const response = await this.generateContent(prompt, {
+            var response = await self.forceGeminiAnalyze(prompt, {
                 temperature: 0.2,
                 maxTokens: 1024
             });
-            return this.parseAnalysisResponse(response, item);
-        } catch (error) {
-            throw error;
-        }
-    }
 
-    /**
-     * FLOW 후보 구간 분석 (하이브리드 2차 - Gemini 호출)
-     * 규칙 기반으로 추출된 후보 구간만 AI로 확정 판정
-     */
-    async analyzeFlowCandidates(candidateSegments, fullScript) {
-        if (!candidateSegments || candidateSegments.length === 0) {
-            return [];
-        }
-
-        const results = [];
-
-        for (const candidate of candidateSegments) {
-            try {
-                const segmentText = fullScript.substring(candidate.startIndex, candidate.endIndex);
-                
-                const prompt = `당신은 한국 시니어 낭독 콘텐츠 스토리 전문가입니다.
-아래 대본 구간에서 전개/흐름 오류가 있는지 판정해주세요.
-
-## 후보 유형
-${candidate.type === 'TIME_JUMP' ? '시간 점프 (급격한 시간 변화)' : 
-  candidate.type === 'EMOTION_SHIFT' ? '감정 급변 (긍정↔부정 혼재)' : 
-  candidate.type === 'LOCATION_CHANGE' ? '장소 급변' : '기타 전환'}
-
-## 분석 기준
-1. 부자연스러운 전개인가?
-2. 인과관계가 누락되었는가?
-3. 연결이 부자연스러운가?
-4. 시니어 시청자에게 혼란을 줄 수 있는가?
-
-## 대본 구간 (씬 ${candidate.sceneNum || '?'})
-${segmentText.substring(0, 3000)}
-
-## 응답 형식 (반드시 JSON으로)
-\`\`\`json
-{
-    "isIssue": true/false,
-    "issueType": "부자연전개/인과누락/연결부자연/급변화/없음",
-    "severity": "HIGH/MED/LOW",
-    "confidence": "HIGH/MID/LOW",
-    "reason": "판정 근거 설명",
-    "suggestion": "최소 수정 제안",
-    "problematicPart": "문제가 되는 구체적 텍스트 (있다면)"
-}
-\`\`\``;
-
-                const response = await this.generateContent(prompt, {
-                    temperature: 0.2,
-                    maxTokens: 1024
-                });
-
-                const parsed = this.parseAnalysisResponse(response, 'flow');
+            if (response) {
+                var parsed = self.parseAnalysisResponse(response, 'flow');
                 
                 if (parsed && !parsed.error) {
-                    results.push({
-                        ...candidate,
-                        ...parsed,
-                        analyzed: true
-                    });
+                    var result = {};
+                    for (var key in candidate) {
+                        result[key] = candidate[key];
+                    }
+                    for (var key2 in parsed) {
+                        result[key2] = parsed[key2];
+                    }
+                    result.analyzed = true;
+                    results.push(result);
                 }
-
-            } catch (error) {
-                console.error('FLOW 후보 분석 오류:', error);
-                results.push({
-                    ...candidate,
-                    isIssue: false,
-                    error: error.message,
-                    analyzed: false
-                });
             }
-        }
 
-        return results;
+        } catch (error) {
+            console.error('FLOW 후보 분석 오류:', error);
+            var errorResult = {};
+            for (var key3 in candidate) {
+                errorResult[key3] = candidate[key3];
+            }
+            errorResult.isIssue = false;
+            errorResult.error = error.message;
+            errorResult.analyzed = false;
+            results.push(errorResult);
+        }
     }
 
-    /**
-     * FLOW 오류 종합 분석 (하이브리드)
-     * 1차: 규칙 기반 후보 추출
-     * 2차: Gemini로 후보만 확정
-     */
-    async analyzeFlowHybrid(script, candidateExtractor) {
-        // 1차: 규칙 기반 후보 추출 (외부에서 전달)
-        let candidates = [];
-        if (typeof candidateExtractor === 'function') {
-            candidates = candidateExtractor(script);
-        } else if (Array.isArray(candidateExtractor)) {
-            candidates = candidateExtractor;
-        }
+    return results;
+};
 
-        console.log(`📊 FLOW 후보 ${candidates.length}개 추출됨`);
+/**
+ * FLOW 하이브리드 분석 (forceGeminiAnalyze 위임)
+ */
+GeminiAPI.prototype.analyzeFlowHybrid = async function(script, candidateExtractor) {
+    var candidates = [];
+    if (typeof candidateExtractor === 'function') {
+        candidates = candidateExtractor(script);
+    } else if (Array.isArray(candidateExtractor)) {
+        candidates = candidateExtractor;
+    }
 
-        if (candidates.length === 0) {
-            return {
-                issues: [],
-                message: '규칙 기반 검사에서 FLOW 후보가 발견되지 않았습니다.'
-            };
-        }
+    console.log('📊 FLOW 후보', candidates.length, '개 추출됨');
 
-        // 2차: Gemini로 후보만 분석
-        const analyzedCandidates = await this.analyzeFlowCandidates(candidates, script);
-        
-        // isIssue=true인 것만 필터링
-        const confirmedIssues = analyzedCandidates.filter(c => c.isIssue === true);
-
-        console.log(`✅ FLOW 오류 ${confirmedIssues.length}개 확정됨`);
-
+    if (candidates.length === 0) {
         return {
-            candidates: candidates.length,
-            analyzed: analyzedCandidates.length,
-            issues: confirmedIssues,
-            message: `${candidates.length}개 후보 중 ${confirmedIssues.length}개 오류 확정`
+            issues: [],
+            message: '규칙 기반 검사에서 FLOW 후보가 발견되지 않았습니다.'
         };
     }
-}
+
+    var analyzedCandidates = await this.analyzeFlowCandidates(candidates, script);
+    
+    var confirmedIssues = analyzedCandidates.filter(function(c) {
+        return c.isIssue === true;
+    });
+
+    console.log('✅ FLOW 오류', confirmedIssues.length, '개 확정됨');
+
+    return {
+        candidates: candidates.length,
+        analyzed: analyzedCandidates.length,
+        issues: confirmedIssues,
+        message: candidates.length + '개 후보 중 ' + confirmedIssues.length + '개 오류 확정'
+    };
+};
+
+/**
+ * 종합 분석 프롬프트
+ */
+GeminiAPI.prototype.getComprehensivePrompt = function(script) {
+    return '당신은 한국 시니어 낭독 콘텐츠 전문 대본 검수자입니다.\n' +
+        '아래 대본을 분석하고 JSON 형식으로 결과를 제공해주세요.\n\n' +
+        '## 분석 기준\n' +
+        '1. **한국 배경 확인**: 한국 지명, 문화, 장소가 적절히 사용되었는지\n' +
+        '2. **등장인물 설정 일관성**: 이름, 나이, 특성이 처음부터 끝까지 일관되는지\n' +
+        '3. **인물 관계 일관성**: 가족/사회 관계가 변하지 않는지\n' +
+        '4. **이야기 흐름**: 자연스럽고 논리적인 전개인지\n' +
+        '5. **반전/변화 속도**: 급격한 변화 없이 적절한 페이싱인지\n' +
+        '6. **재미/몰입 요소**: 시니어 시청자가 공감하고 몰입할 수 있는지\n\n' +
+        '## 대본\n' + script.substring(0, 15000) + '\n\n' +
+        '## 응답 형식 (반드시 JSON으로)\n' +
+        '```json\n' +
+        '{\n' +
+        '    "summary": "대본 전체 요약 (2-3문장)",\n' +
+        '    "koreaBackground": { "score": 0-100, "pass": true/false, "feedback": "" },\n' +
+        '    "characterConsistency": { "score": 0-100, "pass": true/false, "feedback": "" },\n' +
+        '    "relationshipConsistency": { "score": 0-100, "pass": true/false, "feedback": "" },\n' +
+        '    "storyFlow": { "score": 0-100, "pass": true/false, "feedback": "" },\n' +
+        '    "pacingSpeed": { "score": 0-100, "pass": true/false, "feedback": "" },\n' +
+        '    "entertainment": { "score": 0-100, "pass": true/false, "feedback": "" },\n' +
+        '    "overallScore": 0-100,\n' +
+        '    "verdict": "합격/조건부/재검토",\n' +
+        '    "topIssues": ["개선점1", "개선점2", "개선점3"],\n' +
+        '    "recommendations": ["추천사항1", "추천사항2"]\n' +
+        '}\n' +
+        '```';
+};
+
+/**
+ * 캐릭터 분석 프롬프트
+ */
+GeminiAPI.prototype.getCharacterPrompt = function(script) {
+    return '당신은 대본 전문 분석가입니다.\n' +
+        '아래 대본에서 등장인물 정보를 추출하고 일관성을 분석해주세요.\n\n' +
+        '## 대본\n' + script.substring(0, 15000) + '\n\n' +
+        '## 응답 형식 (반드시 JSON으로)\n' +
+        '```json\n' +
+        '{"characters": [{"name": "", "age": "", "relation": "", "traits": [], "consistent": true}], "issues": [], "score": 0-100}\n' +
+        '```';
+};
+
+/**
+ * 스토리 분석 프롬프트
+ */
+GeminiAPI.prototype.getStoryPrompt = function(script) {
+    return '당신은 시니어 낭독 콘텐츠 스토리 전문가입니다.\n' +
+        '아래 대본의 스토리 구조와 흐름을 분석해주세요.\n\n' +
+        '## 대본\n' + script.substring(0, 15000) + '\n\n' +
+        '## 응답 형식 (반드시 JSON으로)\n' +
+        '```json\n' +
+        '{"structure": {}, "sceneTransitions": {"score": 0-100}, "pacing": {"score": 0-100}, "overallScore": 0-100}\n' +
+        '```';
+};
+
+/**
+ * 재미 요소 분석 프롬프트
+ */
+GeminiAPI.prototype.getEntertainmentPrompt = function(script) {
+    return '당신은 시니어 콘텐츠 전문가입니다.\n' +
+        '아래 대본의 재미 요소와 시청 몰입도를 분석해주세요.\n\n' +
+        '## 대본\n' + script.substring(0, 15000) + '\n\n' +
+        '## 응답 형식 (반드시 JSON으로)\n' +
+        '```json\n' +
+        '{"engagementElements": [], "seniorAppeal": {"score": 0-100}, "retention": {"score": 0-100}, "overallEntertainment": 0-100}\n' +
+        '```';
+};
+
+/**
+ * AI 응답 파싱
+ */
+GeminiAPI.prototype.parseAnalysisResponse = function(response, analysisType) {
+    try {
+        // JSON 블록 추출
+        var jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+        if (jsonMatch && jsonMatch[1]) {
+            return JSON.parse(jsonMatch[1]);
+        }
+        
+        // JSON 블록이 없으면 전체 응답에서 JSON 찾기
+        var jsonStart = response.indexOf('{');
+        var jsonEnd = response.lastIndexOf('}');
+        if (jsonStart !== -1 && jsonEnd !== -1) {
+            return JSON.parse(response.substring(jsonStart, jsonEnd + 1));
+        }
+        
+        // 파싱 실패 시 텍스트로 반환
+        return {
+            raw: response,
+            parsed: false,
+            error: 'JSON 파싱 실패'
+        };
+    } catch (error) {
+        console.error('응답 파싱 오류:', error);
+        return {
+            raw: response,
+            parsed: false,
+            error: error.message
+        };
+    }
+};
 
 // ========================================
 // 전역 인스턴스
 // ========================================
-const geminiAPI = new GeminiAPI();
+var geminiAPI = new GeminiAPI();
 
 // ========================================
-// 유틸리티 함수
-// ========================================
-async function testGeminiConnection() {
-    const result = await geminiAPI.testConnection();
-    if (result) {
-        console.log('✅ Gemini API 연결 성공');
-    } else {
-        console.error('❌ Gemini API 연결 실패:', geminiAPI.lastError);
-    }
-    return result;
-}
-
 // 전역 노출
+// ========================================
 window.GeminiAPI = GeminiAPI;
 window.geminiAPI = geminiAPI;
-window.testGeminiConnection = testGeminiConnection;
 
-console.log('✅ Gemini API 모듈 로드 완료');
+// forceGeminiAnalyze를 전역에서 직접 호출 가능하도록 노출
+window.forceGeminiAnalyze = function(prompt, options) {
+    return geminiAPI.forceGeminiAnalyze(prompt, options);
+};
+
+console.log('✅ Gemini API 모듈 로드 완료 (v1/gemini-2.5-flash 고정)');
