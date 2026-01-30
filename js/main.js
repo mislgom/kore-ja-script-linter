@@ -1130,3 +1130,187 @@ window.ScriptReview = {
         return false;
     }
 };
+// ========================================
+// API 키 UI 초기화 및 관리
+// ========================================
+
+// 중복 초기화 방지 플래그
+let isApiKeyUIInitialized = false;
+
+/**
+ * API 키 UI 초기화
+ * - localStorage에서 기존 키 로드
+ * - 이벤트 바인딩 (열기/닫기/저장/삭제)
+ */
+function initApiKeyUI() {
+    // (3) 중복 리스너 방지 가드
+    if (isApiKeyUIInitialized) {
+        console.warn('⚠️ API 키 UI가 이미 초기화되었습니다.');
+        return;
+    }
+
+    const STORAGE_KEY = 'GEMINI_API_KEY';
+
+    // DOM 요소 참조
+    const container = document.getElementById('api-key-container');
+    const toggleBtn = document.getElementById('api-key-toggle-btn');
+    const panel = document.getElementById('api-key-panel');
+    const closeBtn = document.getElementById('api-key-close-btn');
+    const input = document.getElementById('api-key-input');
+    const saveBtn = document.getElementById('api-key-save-btn');
+    const deleteBtn = document.getElementById('api-key-delete-btn');
+    const statusEl = document.getElementById('api-key-status');
+    const statusIcon = document.getElementById('api-key-status-icon');
+    const statusText = document.getElementById('api-key-status-text');
+
+    // (1) DOM 요소 전부 null 체크
+    if (!container) { console.warn('⚠️ API 키 UI: #api-key-container 요소를 찾을 수 없습니다.'); return; }
+    if (!toggleBtn) { console.warn('⚠️ API 키 UI: #api-key-toggle-btn 요소를 찾을 수 없습니다.'); return; }
+    if (!panel) { console.warn('⚠️ API 키 UI: #api-key-panel 요소를 찾을 수 없습니다.'); return; }
+    if (!closeBtn) { console.warn('⚠️ API 키 UI: #api-key-close-btn 요소를 찾을 수 없습니다.'); return; }
+    if (!input) { console.warn('⚠️ API 키 UI: #api-key-input 요소를 찾을 수 없습니다.'); return; }
+    if (!saveBtn) { console.warn('⚠️ API 키 UI: #api-key-save-btn 요소를 찾을 수 없습니다.'); return; }
+    if (!deleteBtn) { console.warn('⚠️ API 키 UI: #api-key-delete-btn 요소를 찾을 수 없습니다.'); return; }
+    if (!statusEl) { console.warn('⚠️ API 키 UI: #api-key-status 요소를 찾을 수 없습니다.'); return; }
+    if (!statusIcon) { console.warn('⚠️ API 키 UI: #api-key-status-icon 요소를 찾을 수 없습니다.'); return; }
+    if (!statusText) { console.warn('⚠️ API 키 UI: #api-key-status-text 요소를 찾을 수 없습니다.'); return; }
+
+    // (2)(4) 상태 메시지 업데이트 함수 (기본 클래스 유지 + status-* 토글)
+    function updateStatus(message, type) {
+        type = type || 'info';
+
+        var icons = {
+            info: 'fa-info-circle',
+            saved: 'fa-check-circle',
+            deleted: 'fa-trash-alt',
+            error: 'fa-exclamation-triangle'
+        };
+
+        statusEl.classList.remove('status-info', 'status-saved', 'status-deleted', 'status-error');
+        statusEl.classList.add('status-' + type);
+
+        statusIcon.classList.remove('fa-info-circle', 'fa-check-circle', 'fa-trash-alt', 'fa-exclamation-triangle');
+        statusIcon.classList.add(icons[type] || icons.info);
+
+        statusText.textContent = message;
+    }
+
+    function updateButtonState() {
+        var hasKey = !!localStorage.getItem(STORAGE_KEY);
+        if (hasKey) {
+            toggleBtn.classList.add('has-key');
+            toggleBtn.title = 'API 키 설정됨';
+        } else {
+            toggleBtn.classList.remove('has-key');
+            toggleBtn.title = 'API 키 설정';
+        }
+    }
+
+    function openPanel() {
+        panel.classList.remove('hidden', 'closing');
+        input.focus();
+    }
+
+    function closePanel() {
+        panel.classList.add('closing');
+        setTimeout(function() {
+            panel.classList.add('hidden');
+            panel.classList.remove('closing');
+        }, 150);
+    }
+
+    function togglePanel(e) {
+        e.stopPropagation();
+        if (panel.classList.contains('hidden')) openPanel();
+        else closePanel();
+    }
+
+    function handlePanelClick(e) {
+        e.stopPropagation();
+    }
+
+    function loadSavedKey() {
+        var savedKey = localStorage.getItem(STORAGE_KEY);
+        if (savedKey) {
+            input.value = savedKey;
+            updateStatus('API 키가 저장되어 있습니다.', 'saved');
+        } else {
+            input.value = '';
+            updateStatus('API 키가 설정되지 않았습니다.', 'info');
+        }
+        updateButtonState();
+    }
+
+    function handleSave(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        var keyValue = input.value.trim();
+
+        if (!keyValue) {
+            updateStatus('API 키를 입력해주세요.', 'error');
+            input.focus();
+            return;
+        }
+
+        if (!keyValue.startsWith('AIza')) {
+            updateStatus('올바른 API 키 형식이 아닙니다. (AIza...)', 'error');
+            input.focus();
+            return;
+        }
+
+        localStorage.setItem(STORAGE_KEY, keyValue);
+        updateStatus('저장 완료! API 키가 저장되었습니다.', 'saved');
+        updateButtonState();
+        console.log('✅ Gemini API 키 저장 완료');
+    }
+
+    function handleDelete(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        localStorage.removeItem(STORAGE_KEY);
+        input.value = '';
+        updateStatus('삭제 완료! API 키가 제거되었습니다.', 'deleted');
+        updateButtonState();
+        console.log('🗑️ Gemini API 키 삭제 완료');
+    }
+
+    function handleClose(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        closePanel();
+    }
+
+    function handleOutsideClick(e) {
+        if (panel.classList.contains('hidden')) return;
+        if (container.contains(e.target)) return;
+        closePanel();
+    }
+
+    function handleEscKey(e) {
+        if (e.key === 'Escape' && !panel.classList.contains('hidden')) closePanel();
+    }
+
+    function handleInputKeydown(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleSave(e);
+        }
+    }
+
+    toggleBtn.addEventListener('click', togglePanel);
+    panel.addEventListener('click', handlePanelClick);
+    closeBtn.addEventListener('click', handleClose);
+    saveBtn.addEventListener('click', handleSave);
+    deleteBtn.addEventListener('click', handleDelete);
+    input.addEventListener('keydown', handleInputKeydown);
+    document.addEventListener('click', handleOutsideClick);
+    document.addEventListener('keydown', handleEscKey);
+
+    loadSavedKey();
+
+    isApiKeyUIInitialized = true;
+
+    console.log('✅ API 키 UI 초기화 완료');
+}
