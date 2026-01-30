@@ -8,51 +8,47 @@
 // ========================================
 // 전역 상태 관리
 // ========================================
+// ========================================
+// 전역 상태 관리 (AppState는 프로퍼티만 포함)
+// ========================================
 const AppState = {
-    // ========================================
-// STEP 3 추가 전역 상태 (AppState 아래에만 추가)
+  currentTab: 'korea-senior',
+  isReviewing: false,
+  isAIAnalyzing: false,
+  isDarkMode: false,
+  analysisResult: null,
+  lastReviewResult: null,
+  aiAnalysisResult: null,
+  issuesProcessed: false,
+  tabConfig: {
+    'korea-senior': { name: '한국 시니어 낭독', color: 'red', icon: 'fa-book-open' },
+    'joseon-yadam': { name: '조선 야담', color: 'amber', icon: 'fa-scroll' },
+    'japan-senior': { name: '일본 시니어 낭독', color: 'pink', icon: 'fa-torii-gate' },
+    'world-news': { name: '전세계 뉴스', color: 'blue', icon: 'fa-globe' }
+  }
+};
+
+// ========================================
+// STEP 3 추가 전역 상태 (AppState 밖에 선언)
 // ========================================
 var notificationState = {
-    lastMessage: '',
-    lastTimestamp: 0,
-    dedupeInterval: 2000  // 2초
+  lastMessage: '',
+  lastTimestamp: 0,
+  dedupeInterval: 2000
 };
 
 var buttonThrottle = {
-    lastClickTime: {},
-    interval: 300  // 300ms
+  lastClickTime: {},
+  interval: 300
 };
 
-// ========================================
-// 버튼 쓰로틀 체크
-// ========================================
 function isButtonThrottled(buttonId) {
-    var now = Date.now();
-    var lastTime = buttonThrottle.lastClickTime[buttonId] || 0;
-
-    if (now - lastTime < buttonThrottle.interval) {
-        return true;
-    }
-
-    buttonThrottle.lastClickTime[buttonId] = now;
-    return false;
+  var now = Date.now();
+  var lastTime = buttonThrottle.lastClickTime[buttonId] || 0;
+  if (now - lastTime < buttonThrottle.interval) return true;
+  buttonThrottle.lastClickTime[buttonId] = now;
+  return false;
 }
-
-    currentTab: 'korea-senior',
-    isReviewing: false,
-    isAIAnalyzing: false,
-    isDarkMode: false,
-    analysisResult: null,
-    lastReviewResult: null,
-    aiAnalysisResult: null,
-    issuesProcessed: false,
-    tabConfig: {
-        'korea-senior': { name: '한국 시니어 낭독', color: 'red', icon: 'fa-book-open' },
-        'joseon-yadam': { name: '조선 야담', color: 'amber', icon: 'fa-scroll' },
-        'japan-senior': { name: '일본 시니어 낭독', color: 'pink', icon: 'fa-torii-gate' },
-        'world-news': { name: '전세계 뉴스', color: 'blue', icon: 'fa-globe' }
-    }
-};
 
 // ========================================
 // DOM 로드 완료 시 초기화
