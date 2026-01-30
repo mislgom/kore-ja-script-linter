@@ -933,42 +933,59 @@ document.head.appendChild(styleSheet);
 // ========================================
 // AI 분석 초기화
 // ========================================
+// ========================================
+// AI 분석 초기화
+// ========================================
 function initAIAnalysis() {
-    const aiBtn = document.getElementById('korea-ai-analyze-btn');
-    
-    if (aiBtn) {
-        aiBtn.addEventListener('click', function() {
-            const script = document.getElementById('korea-senior-script')?.value;
-            if (!script || script.trim().length < 100) {
-                showNotification('AI 분석을 위해 최소 100자 이상의 대본이 필요합니다.', 'warning');
-                return;
-            }
-            runAIAnalysis(script);
-        });
-    }
+    var aiBtn = document.getElementById('korea-ai-analyze-btn');
+
+    if (!aiBtn) return;
+
+    aiBtn.addEventListener('click', function() {
+        var scriptEl = document.getElementById('korea-senior-script');
+        var scriptValue = scriptEl ? scriptEl.value : '';
+
+        if (!scriptValue || scriptValue.trim().length < 100) {
+            showNotification('AI 분석을 위해 최소 100자 이상의 대본이 필요합니다.', 'warning');
+            return;
+        }
+
+        // runAIAnalysis -> analyzeScript -> forceGeminiAnalyze 단일 경로
+        runAIAnalysis(scriptValue);
+    });
 }
 
 // ========================================
-// AI 분석 실행
+// AI 분석 실행 (Gemini API)
 // ========================================
+
+/**
+ * AI 분석 실행
+ * - 버튼 클릭 시 1회만 호출
+ * - forceGeminiAnalyze()를 통해 API 호출 단일화
+ * - 사전 키 체크 제거 (forceGeminiAnalyze에서 처리, 중복 경고 방지)
+ */
 async function runAIAnalysis(script) {
+    // 중복 실행 방지
     if (AppState.isAIAnalyzing) {
         showNotification('이미 AI 분석이 진행 중입니다.', 'warning');
         return;
     }
-    
-    // Gemini API 확인
+
+    // Gemini API 모듈 확인
     if (!window.geminiAPI) {
         showNotification('Gemini API 모듈이 로드되지 않았습니다.', 'error');
         return;
     }
-    
+
+    // [보완] 사전 키 체크 제거 - forceGeminiAnalyze()에서만 처리 (중복 경고 방지)
+
     AppState.isAIAnalyzing = true;
-    
-    const loadingEl = document.getElementById('korea-ai-loading');
-    const resultEl = document.getElementById('korea-ai-result');
-    const btn = document.getElementById('korea-ai-analyze-btn');
-    
+
+    var loadingEl = document.getElementById('korea-ai-loading');
+    var resultEl = document.getElementById('korea-ai-result');
+    var btn = document.getElementById('korea-ai-analyze-btn');
+
     // UI 상태 변경
     if (loadingEl) loadingEl.classList.remove('hidden');
     if (resultEl) resultEl.classList.add('hidden');
@@ -976,36 +993,48 @@ async function runAIAnalysis(script) {
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>분석 중...';
     }
-    
+
     showNotification('AI가 대본을 심층 분석하고 있습니다...', 'info');
-    
+
     try {
-        // Gemini API 호출
-        const analysis = await window.geminiAPI.analyzeScript(script, 'comprehensive');
-        
+        // forceGeminiAnalyze를 통한 단일 API 호출 (analyzeScript 내부에서 호출)
+        var analysis = await window.geminiAPI.analyzeScript(script, 'comprehensive');
+
         console.log('🤖 AI 분석 결과:', analysis);
-        
+
         if (analysis && !analysis.error) {
             AppState.aiAnalysisResult = analysis;
             displayAIAnalysisResult(analysis);
             showNotification('✅ AI 심층 분석이 완료되었습니다!', 'success');
         } else {
-            throw new Error(analysis?.error || 'AI 응답 파싱 실패');
+            var errorMsg = analysis && analysis.error ? analysis.error : 'AI 응답 처리 실패';
+
+            // 키 없음 오류는 forceGeminiAnalyze에서 이미 경고했으므로 추가 알림 생략
+            if (errorMsg !== 'API 키가 설정되지 않았습니다.') {
+                throw new Error(errorMsg);
+            }
         }
-        
+
     } catch (error) {
         console.error('AI 분석 오류:', error);
-        showNotification(`AI 분석 중 오류 발생: ${error.message}`, 'error');
-        
+
+        // forceGeminiAnalyze에서 이미 알림 표시했으므로 중복 방지
+        // 네트워크/파싱 오류만 추가 표시
+        if (error.message && !error.message.includes('API 키')) {
+            showNotification('AI 분석 중 오류 발생: ' + error.message, 'error');
+        }
+
         // 오류 시에도 결과 영역 표시
         if (resultEl) {
             resultEl.classList.remove('hidden');
-            document.getElementById('korea-ai-summary').textContent = 
-                `분석 중 오류가 발생했습니다: ${error.message}. 잠시 후 다시 시도해주세요.`;
+            var summaryEl = document.getElementById('korea-ai-summary');
+            if (summaryEl) {
+                summaryEl.textContent = '분석 중 오류가 발생했습니다: ' + error.message;
+            }
         }
     } finally {
         AppState.isAIAnalyzing = false;
-        
+
         if (loadingEl) loadingEl.classList.add('hidden');
         if (btn) {
             btn.disabled = false;
