@@ -462,3 +462,108 @@ textarea:focus-visible {
         display: block !important;
     }
 }
+/* ========================================
+   API Key Panel Styles
+   ======================================== */
+
+/* 패널 기본 스타일 */
+.api-key-panel {
+    animation: apiKeyPanelFadeIn 0.2s ease;
+}
+
+.api-key-panel.hidden {
+    display: none;
+}
+
+@keyframes apiKeyPanelFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 패널 닫힘 애니메이션 */
+.api-key-panel.closing {
+    animation: apiKeyPanelFadeOut 0.15s ease forwards;
+}
+
+@keyframes apiKeyPanelFadeOut {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+}
+
+/* 상태 메시지 스타일 */
+#api-key-status.status-saved {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.dark #api-key-status.status-saved {
+    background-color: rgba(16, 185, 129, 0.2);
+    color: #6ee7b7;
+}
+
+#api-key-status.status-deleted {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.dark #api-key-status.status-deleted {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+}
+
+#api-key-status.status-error {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+.dark #api-key-status.status-error {
+    background-color: rgba(245, 158, 11, 0.2);
+    color: #fcd34d;
+}
+
+#api-key-status.status-info {
+    background-color: #f3f4f6;
+    color: #6b7280;
+}
+
+.dark #api-key-status.status-info {
+    background-color: #374151;
+    color: #9ca3af;
+}
+
+/* API 키 버튼 활성화 상태 표시 */
+#api-key-toggle-btn.has-key {
+    position: relative;
+}
+
+#api-key-toggle-btn.has-key::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 8px;
+    height: 8px;
+    background-color: #10b981;
+    border-radius: 50%;
+    border: 2px solid #374151;
+}
+
+/* 모바일 대응 */
+@media (max-width: 480px) {
+    .api-key-panel {
+        width: calc(100vw - 32px);
+        right: -8px;
+    }
+}
