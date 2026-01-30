@@ -761,37 +761,57 @@ function resetKoreaSeniorResults() {
 // ========================================
 // 알림 표시
 // ========================================
-function showNotification(message, type = 'info') {
-    const existingNotif = document.querySelector('.notification');
+// ========================================
+// 알림 표시 (중복 방지 포함)
+// ========================================
+function showNotification(message, type, options) {
+    type = type || 'info';
+    options = options || {};
+
+    var now = Date.now();
+
+    // 중복 방지 (force 옵션으로 무시 가능)
+    if (!options.force) {
+        if (message === notificationState.lastMessage &&
+            (now - notificationState.lastTimestamp) < notificationState.dedupeInterval) {
+            return;
+        }
+        notificationState.lastMessage = message;
+        notificationState.lastTimestamp = now;
+    }
+
+    var existingNotif = document.querySelector('.notification');
     if (existingNotif) existingNotif.remove();
-    
-    const styles = {
+
+    var styles = {
         success: 'bg-green-500',
         warning: 'bg-amber-500',
         error: 'bg-red-500',
         info: 'bg-blue-500'
     };
-    
-    const icons = {
+
+    var icons = {
         success: 'fa-check-circle',
         warning: 'fa-exclamation-triangle',
         error: 'fa-times-circle',
         info: 'fa-info-circle'
     };
-    
-    const notification = document.createElement('div');
-    notification.className = `notification fixed top-4 right-4 ${styles[type]} text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2 z-50`;
+
+    var notification = document.createElement('div');
+    notification.className =
+        'notification fixed top-4 right-4 ' + styles[type] +
+        ' text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2 z-50';
     notification.style.animation = 'slideIn 0.3s ease';
-    notification.innerHTML = `
-        <i class="fas ${icons[type]}"></i>
-        <span>${message}</span>
-    `;
-    
+    notification.innerHTML =
+        '<i class="fas ' + icons[type] + '"></i><span>' + message + '</span>';
+
     document.body.appendChild(notification);
-    
-    setTimeout(() => {
+
+    setTimeout(function() {
         notification.style.animation = 'slideOut 0.3s ease forwards';
-        setTimeout(() => notification.remove(), 300);
+        setTimeout(function() {
+            if (notification.parentNode) notification.remove();
+        }, 300);
     }, 3000);
 }
 
@@ -967,10 +987,14 @@ document.head.appendChild(styleSheet);
 // ========================================
 function initAIAnalysis() {
     var aiBtn = document.getElementById('korea-ai-analyze-btn');
-
     if (!aiBtn) return;
 
-    aiBtn.addEventListener('click', function() {
+    aiBtn.addEventListener('click', function(e) {
+        if (e && typeof e.preventDefault === 'function') e.preventDefault();
+
+        // 300ms 쓰로틀 (버튼 1회 클릭 = 네트워크 1회 보장 보조)
+        if (isButtonThrottled('korea-ai-analyze-btn')) return;
+
         var scriptEl = document.getElementById('korea-senior-script');
         var scriptValue = scriptEl ? scriptEl.value : '';
 
@@ -979,11 +1003,10 @@ function initAIAnalysis() {
             return;
         }
 
-        // runAIAnalysis -> analyzeScript -> forceGeminiAnalyze 단일 경로
+        // 실제 실행(버튼 disabled/문구 원복 책임은 runAIAnalysis finally에서만)
         runAIAnalysis(scriptValue);
     });
 }
-
 // ========================================
 // AI 분석 실행 (Gemini API)
 // ========================================
@@ -994,20 +1017,19 @@ function initAIAnalysis() {
  * - forceGeminiAnalyze()를 통해 API 호출 단일화
  * - 사전 키 체크 제거 (forceGeminiAnalyze에서 처리, 중복 경고 방지)
  */
+// ========================================
+// AI 분석 실행 (Gemini API) - 버튼 문구 원복/disabled 책임 단일화
+// ========================================
 async function runAIAnalysis(script) {
-    // 중복 실행 방지
     if (AppState.isAIAnalyzing) {
         showNotification('이미 AI 분석이 진행 중입니다.', 'warning');
         return;
     }
 
-    // Gemini API 모듈 확인
     if (!window.geminiAPI) {
         showNotification('Gemini API 모듈이 로드되지 않았습니다.', 'error');
         return;
     }
-
-    // [보완] 사전 키 체크 제거 - forceGeminiAnalyze()에서만 처리 (중복 경고 방지)
 
     AppState.isAIAnalyzing = true;
 
@@ -1015,9 +1037,12 @@ async function runAIAnalysis(script) {
     var resultEl = document.getElementById('korea-ai-result');
     var btn = document.getElementById('korea-ai-analyze-btn');
 
-    // UI 상태 변경
+    // 원본 버튼 HTML 저장 → finally에서 원복
+    var originalBtnHtml = btn ? btn.innerHTML : '';
+
     if (loadingEl) loadingEl.classList.remove('hidden');
     if (resultEl) resultEl.classList.add('hidden');
+
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>분석 중...';
@@ -1026,51 +1051,50 @@ async function runAIAnalysis(script) {
     showNotification('AI가 대본을 심층 분석하고 있습니다...', 'info');
 
     try {
-        // forceGeminiAnalyze를 통한 단일 API 호출 (analyzeScript 내부에서 호출)
         var analysis = await window.geminiAPI.analyzeScript(script, 'comprehensive');
-
-        console.log('🤖 AI 분석 결과:', analysis);
 
         if (analysis && !analysis.error) {
             AppState.aiAnalysisResult = analysis;
             displayAIAnalysisResult(analysis);
             showNotification('✅ AI 심층 분석이 완료되었습니다!', 'success');
         } else {
-            var errorMsg = analysis && analysis.error ? analysis.error : 'AI 응답 처리 실패';
+            var errorMsg = (analysis && analysis.error) ? analysis.error : 'AI 응답 처리 실패';
 
-            // 키 없음 오류는 forceGeminiAnalyze에서 이미 경고했으므로 추가 알림 생략
+            // 키 없음은 forceGeminiAnalyze에서 이미 경고 처리 → 여기서 추가 알림 최소화
             if (errorMsg !== 'API 키가 설정되지 않았습니다.') {
                 throw new Error(errorMsg);
             }
         }
-
     } catch (error) {
         console.error('AI 분석 오류:', error);
 
-        // forceGeminiAnalyze에서 이미 알림 표시했으므로 중복 방지
-        // 네트워크/파싱 오류만 추가 표시
-        if (error.message && !error.message.includes('API 키')) {
+        // 중복 알림 방지(키 없음/응답 형식 오류는 하위에서 처리될 수 있음)
+        if (error && error.message &&
+            !error.message.includes('API 키') &&
+            !error.message.includes('응답 형식')) {
             showNotification('AI 분석 중 오류 발생: ' + error.message, 'error');
         }
 
-        // 오류 시에도 결과 영역 표시
         if (resultEl) {
             resultEl.classList.remove('hidden');
             var summaryEl = document.getElementById('korea-ai-summary');
             if (summaryEl) {
-                summaryEl.textContent = '분석 중 오류가 발생했습니다: ' + error.message;
+                summaryEl.textContent = '분석 중 오류가 발생했습니다: ' + (error && error.message ? error.message : '');
             }
         }
     } finally {
         AppState.isAIAnalyzing = false;
 
         if (loadingEl) loadingEl.classList.add('hidden');
+
+        // 버튼 원복 책임은 여기서만
         if (btn) {
             btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-brain mr-2"></i>AI 분석 시작';
+            btn.innerHTML = originalBtnHtml;
         }
     }
 }
+
 
 // ========================================
 // AI 분석 결과 표시
