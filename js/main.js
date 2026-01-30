@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initKoreaSeniorReview();
     initAIAnalysis();
     initIssuesSystem();
+    initApiKeyUI(); // API 키 UI 초기화 추가
     console.log('✅ 대본 검수 시스템 vNext (Issues 관리) 초기화 완료');
 });
 
