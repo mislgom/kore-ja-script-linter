@@ -9,6 +9,35 @@
 // 전역 상태 관리
 // ========================================
 const AppState = {
+    // ========================================
+// STEP 3 추가 전역 상태 (AppState 아래에만 추가)
+// ========================================
+var notificationState = {
+    lastMessage: '',
+    lastTimestamp: 0,
+    dedupeInterval: 2000  // 2초
+};
+
+var buttonThrottle = {
+    lastClickTime: {},
+    interval: 300  // 300ms
+};
+
+// ========================================
+// 버튼 쓰로틀 체크
+// ========================================
+function isButtonThrottled(buttonId) {
+    var now = Date.now();
+    var lastTime = buttonThrottle.lastClickTime[buttonId] || 0;
+
+    if (now - lastTime < buttonThrottle.interval) {
+        return true;
+    }
+
+    buttonThrottle.lastClickTime[buttonId] = now;
+    return false;
+}
+
     currentTab: 'korea-senior',
     isReviewing: false,
     isAIAnalyzing: false,
