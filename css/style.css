@@ -567,3 +567,9 @@ textarea:focus-visible {
         right: -8px;
     }
 }
+/* ========================================
+   FIX: API 키 버튼 클릭 불가(overlay/z-index) 방지
+   ======================================== */
+header { position: relative; z-index: 60; }
+#api-key-container { position: relative; z-index: 61; }
+#api-key-toggle-btn { pointer-events: auto; }
