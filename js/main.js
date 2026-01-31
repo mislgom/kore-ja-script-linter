@@ -53,265 +53,89 @@ function isButtonThrottled(buttonId) {
 // ========================================
 // DOM 로드 완료 시 초기화
 // ========================================
-document.addEventListener('DOMContentLoaded', function() {
-    initDarkMode();
-    initTabs();
-    initTextareas();
-    initKoreaSeniorReview();
-    initAIAnalysis();
-    initIssuesSystem();
-    initApiKeyUI(); // API 키 UI 초기화 추가
-    // ========================================
-// API 키 UI 초기화
 // ========================================
-(function () {
-  // 전역 중복 방지(파일 중복 로드까지 방어)
-  if (window.__apiKeyUIBound) return;
-  window.__apiKeyUIBound = true;
+// DEBUG BOOTSTRAP (TEMP)
+// ========================================
+console.log('[BOOT] main.js loaded');
+console.log('[BOOT] location=', location.href);
+console.log('[BOOT] time=', new Date().toISOString());
 
-  window.initApiKeyUI = function initApiKeyUI() {
-    const STORAGE_KEY = 'GEMINI_API_KEY';
+window.addEventListener('error', function (e) {
+  console.error('[GLOBAL ERROR]', e.message, 'at', (e.filename || '') + ':' + e.lineno + ':' + e.colno);
+});
 
-    const container = document.getElementById('api-key-container');
-    const toggleBtn = document.getElementById('api-key-toggle-btn');
-    const panel = document.getElementById('api-key-panel');
-    const closeBtn = document.getElementById('api-key-close-btn');
-    const input = document.getElementById('api-key-input');
-    const saveBtn = document.getElementById('api-key-save-btn');
-    const deleteBtn = document.getElementById('api-key-delete-btn');
-    const statusIcon = document.getElementById('api-key-status-icon');
-    const statusText = document.getElementById('api-key-status-text');
-    const statusEl = document.getElementById('api-key-status');
+window.addEventListener('unhandledrejection', function (e) {
+  console.error('[UNHANDLED REJECTION]', e.reason);
+});
 
-    console.log('[API KEY BTN] found=', !!toggleBtn, 'id=', toggleBtn?.id);
-    console.log('[API KEY PANEL] found=', !!panel, 'id=', panel?.id);
+// ========================================
+// 전역 상태 관리
+// ========================================
+const AppState = {
+  currentTab: 'korea-senior',
+  isReviewing: false,
+  isAIAnalyzing: false,
+  isDarkMode: false,
+  analysisResult: null,
+  lastReviewResult: null,
+  aiAnalysisResult: null,
+  issuesProcessed: false
+};
 
-    if (!toggleBtn || !panel) {
-      console.error('[API KEY UI] required elements missing');
+// ========================================
+// safeInit
+// ========================================
+function safeInit(name, fn) {
+  try {
+    console.log('[INIT] start', name);
+    if (typeof fn !== 'function') {
+      console.error('[INIT FAILED]', name, 'is not a function');
       return;
     }
+    fn();
+    console.log('[INIT] done', name);
+  } catch (e) {
+    console.error('[INIT FAILED]', name, e);
+  }
+}
 
-    function updateStatus(message, type = 'info') {
-      if (statusText) statusText.textContent = message;
+// ========================================
+// API KEY UI (전역 정의)
+// ========================================
+(function () {
+  if (typeof window.initApiKeyUI === 'function') return;
 
-      if (statusIcon) {
-        const iconMap = {
-          saved: 'fa-check-circle',
-          deleted: 'fa-trash-alt',
-          warning: 'fa-exclamation-triangle',
-          info: 'fa-info-circle',
-          error: 'fa-times-circle',
-        };
-        statusIcon.className = `fas ${iconMap[type] || 'fa-info-circle'} mr-1`;
-      }
+  window.initApiKeyUI = function () {
+    var btn = document.getElementById('api-key-toggle-btn');
+    var panel = document.getElementById('api-key-panel');
 
-      if (statusEl) {
-        statusEl.classList.remove('status-saved', 'status-deleted', 'status-warning', 'status-error', 'status-info');
-        statusEl.classList.add('status-' + type);
-      }
-    }
+    if (!btn || !panel) return;
 
-    function updateButtonState() {
-      const hasKey = !!localStorage.getItem(STORAGE_KEY);
-      if (hasKey) {
-        toggleBtn.classList.add('has-key');
-        toggleBtn.title = 'API 키 설정됨';
-      } else {
-        toggleBtn.classList.remove('has-key');
-        toggleBtn.title = 'API 키 설정';
-      }
-    }
-
-    function openPanel() {
-      console.log('[API KEY PANEL] class=', panel.className, '(before open)');
-      panel.classList.remove('hidden');
-      console.log('[API KEY PANEL] class=', panel.className, '(after open)');
-    }
-
-    function closePanel() {
-      console.log('[API KEY PANEL] class=', panel.className, '(before close)');
-      panel.classList.add('hidden');
-      console.log('[API KEY PANEL] class=', panel.className, '(after close)');
-    }
-
-    function togglePanel() {
-      panel.classList.contains('hidden') ? openPanel() : closePanel();
-    }
-
-    function loadSavedKey() {
-      const savedKey = localStorage.getItem(STORAGE_KEY);
-      if (savedKey && input) {
-        input.value = savedKey;
-        updateStatus('키가 저장되어 있습니다.', 'saved');
-      } else {
-        updateStatus('API 키를 입력해주세요.', 'info');
-      }
-      updateButtonState();
-    }
-
-    function handleSave() {
-      const key = input ? input.value.trim() : '';
-      if (!key) {
-        updateStatus('API 키를 입력해주세요.', 'warning');
-        return;
-      }
-      localStorage.setItem(STORAGE_KEY, key);
-      updateStatus('저장되었습니다.', 'saved');
-      updateButtonState();
-      console.log('✅ Gemini API 키 저장 완료');
-    }
-
-    function handleDelete() {
-      localStorage.removeItem(STORAGE_KEY);
-      if (input) input.value = '';
-      updateStatus('삭제되었습니다.', 'deleted');
-      updateButtonState();
-      console.log('🗑️ Gemini API 키 삭제 완료');
-    }
-
-    // ===== 이벤트 바인딩 (중복 방지: dataset 플래그) =====
-    if (toggleBtn.dataset.listenerAttached) return;
-    toggleBtn.dataset.listenerAttached = 'true';
-
-    toggleBtn.addEventListener('click', function (e) {
-      e.preventDefault();
-      console.log('[API KEY BTN] clicked');
-      console.log('[API KEY BTN] target=', e.target);
-      e.stopPropagation();
-      togglePanel();
-    });
-
-    panel.addEventListener('click', function (e) {
-      e.stopPropagation();
-    });
-
-    if (closeBtn) {
-      closeBtn.addEventListener('click', function (e) {
+    if (!btn.dataset.bound) {
+      btn.dataset.bound = '1';
+      btn.addEventListener('click', function (e) {
         e.preventDefault();
-        e.stopPropagation();
-        closePanel();
+        console.log('[API KEY BTN] clicked');
+        panel.classList.toggle('hidden');
       });
     }
-
-    if (saveBtn) saveBtn.addEventListener('click', handleSave);
-    if (deleteBtn) deleteBtn.addEventListener('click', handleDelete);
-
-    if (input) {
-      input.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          handleSave();
-        }
-      });
-    }
-
-    // 외부 클릭 닫기(전역 1회만)
-    if (!window.__apiKeyOutsideClickBound) {
-      window.__apiKeyOutsideClickBound = true;
-      document.addEventListener('click', function (e) {
-        const p = document.getElementById('api-key-panel');
-        const c = document.getElementById('api-key-container');
-        if (p && c && !p.classList.contains('hidden') && !c.contains(e.target)) {
-          p.classList.add('hidden');
-        }
-      });
-
-      document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') {
-          const p = document.getElementById('api-key-panel');
-          if (p) p.classList.add('hidden');
-        }
-      });
-    }
-
-    loadSavedKey();
-    console.log('✅ API 키 UI 초기화 완료');
   };
 })();
 
 // ========================================
-// Issues 시스템 초기화
+// DOMContentLoaded (포함해서 교체)
 // ========================================
-function initIssuesSystem() {
-    // Issues UI 컨트롤러가 이미 초기화되어 있음
-    console.log('✅ Issues 시스템 연동 완료');
-}
+document.addEventListener('DOMContentLoaded', function () {
+  console.log('[BOOT] DOMContentLoaded fired');
 
-// ========================================
-// 다크모드 초기화
-// ========================================
-function initDarkMode() {
-    const toggleBtn = document.getElementById('dark-mode-toggle');
-    const darkIcon = document.getElementById('dark-icon');
-    const lightIcon = document.getElementById('light-icon');
-    
-    // 저장된 설정 불러오기
-    const savedMode = localStorage.getItem('darkMode');
-    if (savedMode === 'true') {
-        enableDarkMode();
-    }
-    
-    if (toggleBtn) {
-        toggleBtn.addEventListener('click', function() {
-            if (AppState.isDarkMode) {
-                disableDarkMode();
-            } else {
-                enableDarkMode();
-            }
-        });
-    }
-    
-    function enableDarkMode() {
-        document.documentElement.classList.add('dark');
-        AppState.isDarkMode = true;
-        localStorage.setItem('darkMode', 'true');
-        if (darkIcon) darkIcon.classList.add('hidden');
-        if (lightIcon) lightIcon.classList.remove('hidden');
-    }
-    
-    function disableDarkMode() {
-        document.documentElement.classList.remove('dark');
-        AppState.isDarkMode = false;
-        localStorage.setItem('darkMode', 'false');
-        if (darkIcon) darkIcon.classList.remove('hidden');
-        if (lightIcon) lightIcon.classList.add('hidden');
-    }
-}
-
-// ========================================
-// 탭 시스템 초기화
-// ========================================
-function initTabs() {
-    const tabButtons = document.querySelectorAll('.tab-btn');
-    const tabContents = document.querySelectorAll('.tab-content');
-    
-    tabButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            const targetTab = this.getAttribute('data-tab');
-            
-            tabButtons.forEach(btn => {
-                btn.classList.remove('active', 'border-primary', 'text-primary', 'bg-blue-50');
-                btn.classList.add('border-transparent', 'text-gray-500');
-            });
-            
-            this.classList.add('active', 'border-primary', 'text-primary', 'bg-blue-50');
-            this.classList.remove('border-transparent', 'text-gray-500');
-            
-            tabContents.forEach(content => {
-                content.classList.add('hidden');
-                content.classList.remove('active');
-            });
-            
-            const targetContent = document.getElementById(targetTab);
-            if (targetContent) {
-                targetContent.classList.remove('hidden');
-                targetContent.classList.add('active');
-            }
-            
-            AppState.currentTab = targetTab;
-        });
-    });
-}
+  safeInit('initDarkMode', initDarkMode);
+  safeInit('initTabs', initTabs);
+  safeInit('initTextareas', initTextareas);
+  safeInit('initKoreaSeniorReview', initKoreaSeniorReview);
+  safeInit('initAIAnalysis', initAIAnalysis);
+  safeInit('initIssuesSystem', initIssuesSystem);
+  safeInit('initApiKeyUI', window.initApiKeyUI);
+});
 
 // ========================================
 // 텍스트에리어 초기화
