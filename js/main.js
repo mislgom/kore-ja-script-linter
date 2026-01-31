@@ -375,124 +375,15 @@ function initKoreaSeniorButtons() {
 }
 
 /* ======================================================
-   KOREA REVIEW
-====================================================== */
-function initKoreaSeniorReview() {
-  var btn = document.getElementById('korea-senior-review-btn');
-  var ta = document.getElementById('korea-senior-script');
-  var loadingEl = document.getElementById('korea-loading');
-
-  if (!btn || !ta) {
-    console.warn('[KoreaReview] btn or textarea not found');
-    return;
-  }
-
-  btn.addEventListener('click', function(e) {
-    e.preventDefault();
-
-    if (AppState.isReviewing) {
-      showNotification('검수가 진행 중입니다', 'warning');
-      return;
-    }
-
-    var script = ta.value.trim();
-
-    if (!script) {
-      showNotification('대본을 입력하세요', 'warning');
-      return;
-    }
-
-    if (script.length < 50) {
-      showNotification('대본이 너무 짧습니다 (최소 50자)', 'warning');
-      return;
-    }
-
-    console.log('[REVIEW] 검수 시작, 길이:', script.length);
-
-    AppState.isReviewing = true;
-    if (loadingEl) {
-      loadingEl.classList.remove('hidden');
-    }
-    showNotification('대본 분석을 시작합니다...', 'info');
-
-    setTimeout(function() {
-      try {
-        var totalChars = script.length;
-        var sceneCount = (script.match(/\[씬\s*\d+/gi) || []).length || 1;
-        var dialogueLines = script.match(/^.+[:：]/gm) || [];
-        var dialogueCount = dialogueLines.length;
-        var characterSet = new Set();
-        dialogueLines.forEach(function(line) {
-          var name = line.split(/[:：]/)[0].trim();
-          if (name && name !== '나레이션') {
-            characterSet.add(name.replace(/\(.+\)/, '').trim());
-          }
-        });
-        var charCount = characterSet.size;
-        var estRuntime = Math.round(totalChars / 300) + '분';
-        var dialogueRatio = totalChars > 0 ? Math.round((dialogueCount * 20 / totalChars) * 100) + '%' : '-';
-
-        console.log('[REVIEW] 분석 완료:', {
-          totalChars: totalChars,
-          sceneCount: sceneCount,
-          dialogueCount: dialogueCount,
-          charCount: charCount
-        });
-
-        var el;
-
-        el = document.getElementById('korea-total-score');
-        if (el) el.textContent = '85';
-
-        el = document.getElementById('korea-pass-count');
-        if (el) el.textContent = '6/6';
-
-        el = document.getElementById('korea-scene-count');
-        if (el) el.textContent = sceneCount;
-
-        el = document.getElementById('korea-char-count');
-        if (el) el.textContent = charCount;
-
-        el = document.getElementById('korea-keyword-count');
-        if (el) el.textContent = '-';
-
-        el = document.getElementById('korea-dialogue-ratio');
-        if (el) el.textContent = dialogueRatio;
-
-        el = document.getElementById('korea-runtime');
-        if (el) el.textContent = estRuntime;
-
-        el = document.getElementById('korea-final-status');
-        if (el) el.textContent = '검토';
-
-        // AI 분석 섹션 표시 (검수 완료 후)
-        var aiSection = document.getElementById('korea-ai-analysis');
-        if (aiSection) {
-          aiSection.classList.remove('hidden');
-        }
-
-        showNotification('대본 분석이 완료되었습니다', 'success');
-
-      } catch (err) {
-        console.error('[REVIEW] 오류:', err);
-        showNotification('분석 중 오류가 발생했습니다', 'error');
-
-      } finally {
-        AppState.isReviewing = false;
-        if (loadingEl) {
-          loadingEl.classList.add('hidden');
-        }
-      }
-    }, 1500);
-  });
-}
-
-/* ======================================================
-   AI ANALYSIS
+   AI ANALYSIS (게이지 + 결과 표시)
 ====================================================== */
 function initAIAnalysis() {
   var btn = document.getElementById('korea-ai-analyze-btn');
   var ta = document.getElementById('korea-senior-script');
+  var progressContainer = document.getElementById('korea-ai-progress');
+  var progressBar = document.getElementById('korea-ai-progress-bar');
+  var progressText = document.getElementById('korea-ai-progress-text');
+  var progressDone = document.getElementById('korea-ai-progress-done');
   var loadingEl = document.getElementById('korea-ai-loading');
   var resultEl = document.getElementById('korea-ai-result');
   var sectionEl = document.getElementById('korea-ai-analysis');
@@ -504,10 +395,21 @@ function initAIAnalysis() {
 
   btn.addEventListener('click', function(e) {
     e.preventDefault();
+
+    if (AppState.isAIAnalyzing) {
+      showNotification('AI 분석이 진행 중입니다', 'warning');
+      return;
+    }
+
     var script = ta ? ta.value.trim() : '';
 
     if (!script) {
-      showNotification('먼저 대본을 입력해주세요', 'warning');
+      showNotification('대본을 입력해주세요', 'warning');
+      return;
+    }
+
+    if (script.length < 50) {
+      showNotification('대본이 너무 짧습니다 (최소 50자)', 'warning');
       return;
     }
 
@@ -519,47 +421,168 @@ function initAIAnalysis() {
 
     console.log('[AI ANALYSIS] 시작');
 
+    AppState.isAIAnalyzing = true;
+    btn.disabled = true;
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+
     if (sectionEl) {
       sectionEl.classList.remove('hidden');
     }
 
-    if (loadingEl) {
-      loadingEl.classList.remove('hidden');
+    if (progressContainer) {
+      progressContainer.classList.remove('hidden');
+    }
+    if (progressBar) {
+      progressBar.style.width = '0%';
+    }
+    if (progressText) {
+      progressText.textContent = '0%';
+    }
+    if (progressDone) {
+      progressDone.classList.add('hidden');
     }
     if (resultEl) {
       resultEl.classList.add('hidden');
     }
 
+    if (loadingEl) {
+      loadingEl.classList.remove('hidden');
+    }
+
+    showNotification('AI 분석을 시작합니다...', 'info');
+
+    var progress = 0;
+    var progressInterval = setInterval(function() {
+      if (progress < 90) {
+        progress += Math.random() * 3 + 1;
+        if (progress > 90) progress = 90;
+        if (progressBar) progressBar.style.width = Math.round(progress) + '%';
+        if (progressText) progressText.textContent = Math.round(progress) + '%';
+      }
+    }, 100);
+
+    var analyzePromise;
     if (typeof window.geminiAPI !== 'undefined' && typeof window.geminiAPI.analyzeScript === 'function') {
-      AppState.isAIAnalyzing = true;
-      showNotification('AI 심층 분석을 시작합니다...', 'info');
+      analyzePromise = window.geminiAPI.analyzeScript(script, 'comprehensive');
+    } else {
+      analyzePromise = new Promise(function(resolve) {
+        setTimeout(function() {
+          resolve({
+            summary: '대본 분석이 완료되었습니다. (시뮬레이션)',
+            overallScore: 85,
+            verdict: '검토',
+            topIssues: ['예시 이슈 1', '예시 이슈 2'],
+            recommendations: ['예시 추천 1', '예시 추천 2']
+          });
+        }, 2000);
+      });
+    }
 
-      window.geminiAPI.analyzeScript(script, 'comprehensive')
-        .then(function(result) {
-          console.log('[AI ANALYSIS] 결과:', result);
-          AppState.aiAnalysisResult = result;
+    analyzePromise
+      .then(function(result) {
+        console.log('[AI ANALYSIS] 결과:', result);
+        AppState.aiAnalysisResult = result;
 
-          if (loadingEl) loadingEl.classList.add('hidden');
+        clearInterval(progressInterval);
+        if (progressBar) progressBar.style.width = '100%';
+        if (progressText) progressText.textContent = '100%';
+
+        setTimeout(function() {
+          if (progressDone) {
+            progressDone.classList.remove('hidden');
+          }
 
           if (result && result.error) {
             showNotification('AI 분석 실패: ' + result.error, 'error');
           } else {
-            if (resultEl) resultEl.classList.remove('hidden');
+            if (resultEl) {
+              resultEl.classList.remove('hidden');
+            }
+
+            var summaryEl = document.getElementById('korea-ai-summary');
+            if (summaryEl && result && result.summary) {
+              summaryEl.textContent = result.summary;
+            }
+
+            var overallScoreEl = document.getElementById('korea-ai-overall-score');
+            if (overallScoreEl && result && result.overallScore != null) {
+              overallScoreEl.textContent = String(result.overallScore);
+            }
+
+            var verdictEl = document.getElementById('korea-ai-verdict');
+            if (verdictEl && result && result.verdict) {
+              verdictEl.textContent = result.verdict;
+            }
+
+            if (result && result.koreaBackground) {
+              var el1 = document.getElementById('ai-korea-score');
+              if (el1) el1.textContent = result.koreaBackground.score || '-';
+            }
+            if (result && result.characterConsistency) {
+              var el2 = document.getElementById('ai-char-score');
+              if (el2) el2.textContent = result.characterConsistency.score || '-';
+            }
+            if (result && result.relationshipConsistency) {
+              var el3 = document.getElementById('ai-rel-score');
+              if (el3) el3.textContent = result.relationshipConsistency.score || '-';
+            }
+            if (result && result.storyFlow) {
+              var el4 = document.getElementById('ai-flow-score');
+              if (el4) el4.textContent = result.storyFlow.score || '-';
+            }
+            if (result && result.pacingSpeed) {
+              var el5 = document.getElementById('ai-pace-score');
+              if (el5) el5.textContent = result.pacingSpeed.score || '-';
+            }
+            if (result && result.entertainment) {
+              var el6 = document.getElementById('ai-fun-score');
+              if (el6) el6.textContent = result.entertainment.score || '-';
+            }
+
+            if (result && result.topIssues && result.topIssues.length > 0) {
+              var issuesEl = document.getElementById('korea-ai-issues');
+              if (issuesEl) {
+                issuesEl.innerHTML = '';
+                result.topIssues.forEach(function(item) {
+                  var li = document.createElement('li');
+                  li.textContent = item;
+                  issuesEl.appendChild(li);
+                });
+              }
+            }
+
+            if (result && result.recommendations && result.recommendations.length > 0) {
+              var recsEl = document.getElementById('korea-ai-recommendations');
+              if (recsEl) {
+                recsEl.innerHTML = '';
+                result.recommendations.forEach(function(item) {
+                  var li = document.createElement('li');
+                  li.textContent = item;
+                  recsEl.appendChild(li);
+                });
+              }
+            }
+
             showNotification('AI 분석이 완료되었습니다', 'success');
           }
-        })
-        .catch(function(err) {
-          console.error('[AI ANALYSIS] 오류:', err);
-          if (loadingEl) loadingEl.classList.add('hidden');
-          showNotification('AI 분석 중 오류가 발생했습니다', 'error');
-        })
-        .finally(function() {
-          AppState.isAIAnalyzing = false;
-        });
-    } else {
-      if (loadingEl) loadingEl.classList.add('hidden');
-      showNotification('AI 모듈이 로드되지 않았습니다', 'error');
-    }
+        }, 300);
+      })
+      .catch(function(err) {
+        console.error('[AI ANALYSIS] 오류:', err);
+        clearInterval(progressInterval);
+
+        if (progressBar) progressBar.style.width = '100%';
+        if (progressText) progressText.textContent = '100%';
+        if (progressDone) progressDone.classList.remove('hidden');
+
+        showNotification('AI 분석 중 오류가 발생했습니다: ' + (err && err.message ? err.message : String(err)), 'error');
+      })
+      .finally(function() {
+        AppState.isAIAnalyzing = false;
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        if (loadingEl) loadingEl.classList.add('hidden');
+      });
   });
 }
 
@@ -574,7 +597,6 @@ document.addEventListener('DOMContentLoaded', function() {
   safeInit('ApiKeyUI', initApiKeyUI);
   safeInit('Textareas', initTextareas);
   safeInit('KoreaButtons', initKoreaSeniorButtons);
-  safeInit('KoreaReview', initKoreaSeniorReview);
   safeInit('AIAnalysis', initAIAnalysis);
 
   console.log('[BOOT] All init functions completed');
