@@ -1,12 +1,24 @@
 /**
  * 대본 검수 시스템 - Main JavaScript
  * Script Review Pro vNext
- *
- * 완전 자동화 검수 시스템 + AI 분석 + Issues 관리 + 인라인 편집
  */
 
 // ========================================
-// 전역 상태 관리 (AppState는 1회만 선언)  ✅ 중복 선언 금지
+// DEBUG BOOTSTRAP (TEMP)
+// ========================================
+console.log('[BOOT] main.js loaded');
+console.log('[BOOT] location=', location.href);
+console.log('[BOOT] time=', new Date().toISOString());
+
+window.addEventListener('error', function (e) {
+  console.error('[GLOBAL ERROR]', e.message, 'at', (e.filename || '') + ':' + e.lineno + ':' + e.colno);
+});
+window.addEventListener('unhandledrejection', function (e) {
+  console.error('[UNHANDLED REJECTION]', e.reason);
+});
+
+// ========================================
+// 전역 상태 관리 (AppState는 1회만 선언) ✅
 // ========================================
 const AppState = {
   currentTab: 'korea-senior',
@@ -48,53 +60,6 @@ function isButtonThrottled(buttonId) {
 }
 
 // ========================================
-// DEBUG BOOTSTRAP (TEMP)
-// ========================================
-console.log('[BOOT] main.js loaded');
-console.log('[BOOT] location=', location.href);
-console.log('[BOOT] time=', new Date().toISOString());
-
-// ========================================
-// CLICK / LOAD PROBE (TEMP)  ✅ 전체 버튼 무반응 원인 분리용
-// ========================================
-(function () {
-  document.addEventListener(
-    'click',
-    function (e) {
-      try {
-        var t = e.target;
-        console.log('[CLICK PROBE] captured click on:', t && (t.id ? ('#' + t.id) : t.tagName), t);
-
-        if (typeof e.clientX === 'number' && typeof e.clientY === 'number') {
-          var topEl = document.elementFromPoint(e.clientX, e.clientY);
-          console.log('[CLICK PROBE] elementFromPoint:', topEl && (topEl.id ? ('#' + topEl.id) : topEl.tagName), topEl);
-        }
-      } catch (err) {
-        console.error('[CLICK PROBE ERROR]', err);
-      }
-    },
-    true
-  );
-
-  document.addEventListener('DOMContentLoaded', function () {
-    console.log('[BOOT] DOMContentLoaded fired (probe)');
-  });
-
-  console.log('[BOOT] readyState at load =', document.readyState);
-  document.addEventListener('readystatechange', function () {
-    console.log('[BOOT] readyState changed =', document.readyState);
-  });
-})();
-
-window.addEventListener('error', function (e) {
-  console.error('[GLOBAL ERROR]', e.message, 'at', (e.filename || '') + ':' + e.lineno + ':' + e.colno);
-});
-
-window.addEventListener('unhandledrejection', function (e) {
-  console.error('[UNHANDLED REJECTION]', e.reason);
-});
-
-// ========================================
 // safeInit
 // ========================================
 function safeInit(name, fn) {
@@ -112,7 +77,7 @@ function safeInit(name, fn) {
 }
 
 // ========================================
-// API 키 UI 초기화 및 관리 (정식 1개만 유지)  ✅ 중복 정의 금지
+// API 키 UI (정식 1개만 유지) ✅
 // ========================================
 let isApiKeyUIInitialized = false;
 
@@ -135,20 +100,13 @@ function initApiKeyUI() {
   const statusIcon = document.getElementById('api-key-status-icon');
   const statusText = document.getElementById('api-key-status-text');
 
-  if (!container) { console.warn('⚠️ API 키 UI: #api-key-container 요소를 찾을 수 없습니다.'); return; }
-  if (!toggleBtn) { console.warn('⚠️ API 키 UI: #api-key-toggle-btn 요소를 찾을 수 없습니다.'); return; }
-  if (!panel) { console.warn('⚠️ API 키 UI: #api-key-panel 요소를 찾을 수 없습니다.'); return; }
-  if (!closeBtn) { console.warn('⚠️ API 키 UI: #api-key-close-btn 요소를 찾을 수 없습니다.'); return; }
-  if (!input) { console.warn('⚠️ API 키 UI: #api-key-input 요소를 찾을 수 없습니다.'); return; }
-  if (!saveBtn) { console.warn('⚠️ API 키 UI: #api-key-save-btn 요소를 찾을 수 없습니다.'); return; }
-  if (!deleteBtn) { console.warn('⚠️ API 키 UI: #api-key-delete-btn 요소를 찾을 수 없습니다.'); return; }
-  if (!statusEl) { console.warn('⚠️ API 키 UI: #api-key-status 요소를 찾을 수 없습니다.'); return; }
-  if (!statusIcon) { console.warn('⚠️ API 키 UI: #api-key-status-icon 요소를 찾을 수 없습니다.'); return; }
-  if (!statusText) { console.warn('⚠️ API 키 UI: #api-key-status-text 요소를 찾을 수 없습니다.'); return; }
+  if (!container || !toggleBtn || !panel || !closeBtn || !input || !saveBtn || !deleteBtn || !statusEl || !statusIcon || !statusText) {
+    console.warn('⚠️ API KEY UI: required elements missing');
+    return;
+  }
 
   function updateStatus(message, type) {
     type = type || 'info';
-
     var icons = {
       info: 'fa-info-circle',
       saved: 'fa-check-circle',
@@ -196,10 +154,6 @@ function initApiKeyUI() {
     else closePanel();
   }
 
-  function handlePanelClick(e) {
-    e.stopPropagation();
-  }
-
   function loadSavedKey() {
     var savedKey = localStorage.getItem(STORAGE_KEY);
     if (savedKey) {
@@ -217,18 +171,8 @@ function initApiKeyUI() {
     e.stopPropagation();
 
     var keyValue = input.value.trim();
-
-    if (!keyValue) {
-      updateStatus('API 키를 입력해주세요.', 'error');
-      input.focus();
-      return;
-    }
-
-    if (!keyValue.startsWith('AIza')) {
-      updateStatus('올바른 API 키 형식이 아닙니다. (AIza...)', 'error');
-      input.focus();
-      return;
-    }
+    if (!keyValue) { updateStatus('API 키를 입력해주세요.', 'error'); input.focus(); return; }
+    if (!keyValue.startsWith('AIza')) { updateStatus('올바른 API 키 형식이 아닙니다. (AIza...)', 'error'); input.focus(); return; }
 
     localStorage.setItem(STORAGE_KEY, keyValue);
     updateStatus('저장 완료! API 키가 저장되었습니다.', 'saved');
@@ -271,7 +215,7 @@ function initApiKeyUI() {
   }
 
   toggleBtn.addEventListener('click', togglePanel);
-  panel.addEventListener('click', handlePanelClick);
+  panel.addEventListener('click', function (e) { e.stopPropagation(); });
   closeBtn.addEventListener('click', handleClose);
   saveBtn.addEventListener('click', handleSave);
   deleteBtn.addEventListener('click', handleDelete);
@@ -285,11 +229,11 @@ function initApiKeyUI() {
   console.log('✅ API 키 UI 초기화 완료');
 }
 
-// ✅ 기존 호출부가 window.initApiKeyUI를 쓰고 있으므로 연결(호환 유지)
+// ✅ 기존 코드가 window.initApiKeyUI로 호출하므로 연결(호환)
 window.initApiKeyUI = initApiKeyUI;
 
 // ========================================
-// DOMContentLoaded (포함해서 교체)
+// DOMContentLoaded (여기서만 init들 호출) ✅
 // ========================================
 document.addEventListener('DOMContentLoaded', function () {
   console.log('[BOOT] DOMContentLoaded fired');
@@ -301,4 +245,6 @@ document.addEventListener('DOMContentLoaded', function () {
   safeInit('initAIAnalysis', initAIAnalysis);
   safeInit('initIssuesSystem', initIssuesSystem);
   safeInit('initApiKeyUI', window.initApiKeyUI);
+
+  console.log('[BOOT] DOMContentLoaded init sequence completed');
 });
