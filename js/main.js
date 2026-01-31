@@ -465,6 +465,12 @@ function initKoreaSeniorReview() {
         el = document.getElementById('korea-final-status');
         if (el) el.textContent = '검토';
 
+        // AI 분석 섹션 표시 (검수 완료 후)
+        var aiSection = document.getElementById('korea-ai-analysis');
+        if (aiSection) {
+          aiSection.classList.remove('hidden');
+        }
+
         showNotification('대본 분석이 완료되었습니다', 'success');
 
       } catch (err) {
