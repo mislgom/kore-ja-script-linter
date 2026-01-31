@@ -102,6 +102,9 @@ function safeInit(name, fn) {
 // ========================================
 // API KEY UI (전역 정의)
 // ========================================
+// ========================================
+// API KEY UI (전역 정의) - 안전 버전
+// ========================================
 (function () {
   if (typeof window.initApiKeyUI === 'function') return;
 
@@ -111,16 +114,25 @@ function safeInit(name, fn) {
 
     if (!btn || !panel) return;
 
+    // 버튼 중복 바인딩 방지
     if (!btn.dataset.bound) {
       btn.dataset.bound = '1';
+
       btn.addEventListener('click', function (e) {
         e.preventDefault();
+        e.stopPropagation(); // ✅ 열렸다가 바로 닫히는 현상 방지
         console.log('[API KEY BTN] clicked');
         panel.classList.toggle('hidden');
+      });
+
+      // 패널 내부 클릭이 document까지 전파되지 않도록 차단
+      panel.addEventListener('click', function (e) {
+        e.stopPropagation();
       });
     }
   };
 })();
+
 
 // ========================================
 // DOMContentLoaded (포함해서 교체)
