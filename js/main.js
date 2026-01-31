@@ -59,6 +59,41 @@ function isButtonThrottled(buttonId) {
 console.log('[BOOT] main.js loaded');
 console.log('[BOOT] location=', location.href);
 console.log('[BOOT] time=', new Date().toISOString());
+// ========================================
+// CLICK / LOAD PROBE (TEMP)  ✅ 전체 버튼 무반응 원인 분리용
+// ========================================
+(function () {
+  // 1) 문서 클릭이 잡히는지 (캡처 단계에서 무조건 잡힘)
+  document.addEventListener(
+    'click',
+    function (e) {
+      try {
+        var t = e.target;
+        console.log('[CLICK PROBE] captured click on:', t && (t.id ? ('#' + t.id) : t.tagName), t);
+
+        // 클릭 지점 최상단 요소 확인 (overlay 의심 시)
+        if (typeof e.clientX === 'number' && typeof e.clientY === 'number') {
+          var topEl = document.elementFromPoint(e.clientX, e.clientY);
+          console.log('[CLICK PROBE] elementFromPoint:', topEl && (topEl.id ? ('#' + topEl.id) : topEl.tagName), topEl);
+        }
+      } catch (err) {
+        console.error('[CLICK PROBE ERROR]', err);
+      }
+    },
+    true // ✅ capture=true
+  );
+
+  // 2) DOMContentLoaded가 실제로 오는지
+  document.addEventListener('DOMContentLoaded', function () {
+    console.log('[BOOT] DOMContentLoaded fired (probe)');
+  });
+
+  // 3) readyState 변화도 확인
+  console.log('[BOOT] readyState at load =', document.readyState);
+  document.addEventListener('readystatechange', function () {
+    console.log('[BOOT] readyState changed =', document.readyState);
+  });
+})();
 
 window.addEventListener('error', function (e) {
   console.error('[GLOBAL ERROR]', e.message, 'at', (e.filename || '') + ':' + e.lineno + ':' + e.colno);
