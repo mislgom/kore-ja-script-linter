@@ -1,4 +1,3 @@
-```javascript
 /**
  * Script Review Pro vNext
  * Main JavaScript - FINAL STABLE VERSION
@@ -575,4 +574,3 @@ document.addEventListener('DOMContentLoaded', function() {
   console.log('[BOOT] All init functions completed');
   console.log('[BOOT] Current tab:', AppState.currentTab);
 });
-```
