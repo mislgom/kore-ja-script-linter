@@ -53,7 +53,10 @@ var apiCallState = {
   isProcessing: false,
   lastCallTime: 0,
   availableModels: null, // ListModels 결과 캐시
-  selectedModel: null    // 선택된 모델 ID
+  selectedModel: null,   // 선택된 모델 ID
+  lastHttpStatus: null,
+  lastHttpStatusText: '',
+  lastHttpErrorText: ''
 };
 
 
@@ -131,6 +134,12 @@ function safeParseJsonResponse(responseText) {
   err._tail = cleaned.slice(-400);   // 뒤 400자
   err._preview = cleaned.slice(0, 800); // 호환성 유지
   throw err;
+}
+
+function _parseProgressWidthToNumber(widthStr) {
+  if (!widthStr) return 0;
+  var n = parseFloat(String(widthStr).replace('%', ''));
+  return isNaN(n) ? 0 : n;
 }
 
 var notificationState = {
@@ -582,13 +591,17 @@ function initAIStartButton() {
 
   // 진행 상태 업데이트 함수
   function updateProgress(step, status, percent) {
-    // [A) 개선] 전체 진행바는 스텝 요소 존재 여부와 무관하게 항상 업데이트
+    if (typeof percent !== 'number' || isNaN(percent)) percent = 0;
+    if (step === 0 && status === 'processing') {
+      percent = Math.max(5, percent); // Step 0에서 0%로 떨어지는 것 방지
+    }
+
+    // 전체 진행바는 스텝 요소 존재 여부와 무관하게 항상 업데이트
     if (progressBar) progressBar.style.width = percent + '%';
     if (progressPercent) progressPercent.textContent = Math.round(percent) + '%';
 
     var stepEl = document.getElementById('progress-step-' + step);
     if (!stepEl) {
-      // Step 0 등 UI가 없는 단계도 로그는 남김
       if (step === 0 && status === 'processing') {
         console.log('[Step 0] UI 요소 없음 - 백그라운드 처리 중');
       }
@@ -627,7 +640,6 @@ function initAIStartButton() {
         if (icon) icon.classList.remove('text-gray-400');
       }
     } else if (status === 'error') {
-      // [A) 추가] error 상태 처리 - 실패 UI 표시
       stepEl.classList.add('border-red-300', 'bg-red-50');
       stepEl.classList.remove('border-indigo-300', 'bg-indigo-50', 'border-gray-200', 'border-green-300', 'bg-green-50');
       if (statusSpan) {
@@ -639,7 +651,6 @@ function initAIStartButton() {
         iconDiv.classList.remove('bg-indigo-500', 'bg-gray-200', 'bg-green-500');
         var icon = iconDiv.querySelector('i');
         if (icon) {
-          // [C) 개선] 아이콘 class 강제 교체 대신 색상만 변경
           icon.classList.add('text-white');
           icon.classList.remove('text-gray-400', 'text-indigo-500', 'text-green-500');
         }
@@ -728,9 +739,10 @@ function initAIStartButton() {
     resetProgress();
     showNotification('AI 분석을 시작합니다...', 'info');
 
-    // [FIX] Watchdog: 20초간 0%면 강제 리셋 (무한 대기 방지)
+    // Watchdog: 20초간 0%면 강제 리셋 (무한 대기 방지)
     setTimeout(function () {
-      if (AppState.isAIAnalyzing && (!progressBar || progressBar.style.width === '0%' || progressBar.style.width === '')) {
+      var w = progressBar ? _parseProgressWidthToNumber(progressBar.style.width) : 0;
+      if (AppState.isAIAnalyzing && (!progressBar || w <= 0.1)) {
         console.warn('[Watchdog] 분석 시작 후 20초간 반응 없음 - 강제 리셋');
         AppState.isAIAnalyzing = false;
         btn.disabled = false;
@@ -777,16 +789,14 @@ function initAIStartButton() {
         category: 'immersion',
         prompt: '중요: 반드시 JSON만 출력. 코드블록(```)·설명·주석·추가 텍스트 금지.\\n\\n갈등, 대화, 시니어 공감 요소를 분석하고 점수(0-100)를 매겨주세요.\\n\\nJSON 형식:\\n{\\n  \\"score\\": 0-100,\\n  \\"issues\\": [\\n    {\\"text\\": \\"문제 설명\\", \\"reason\\": \\"근거/발췌\\", \\"type\\": \\"몰입 저하\\"}\\n  ],\\n  \\"fixes\\": [\\n    {\\"before\\": \\"수정 전\\", \\"after\\": \\"수정 후\\", \\"reason\\": \\"수정 이유\\"}\\n  ]\\n}'
       }
-    ]
-
-      ;
+    ];
 
     var results = {};
     var comprehensionResult = null;
     var currentStep = 0;
     var stepRetryCount = {}; // 스텝별 재시도 횟수 추적
 
-    // [필수 수정 2] ListModels 프리플라이트 (1회만 실행)
+    // ListModels 프리플라이트 (1회만 실행)
     console.log('[AI ANALYSIS] ListModels 프리플라이트 시작...');
     listAvailableModels(apiKey)
       .then(function (models) {
@@ -795,21 +805,18 @@ function initAIStartButton() {
         } else {
           console.warn('[AI ANALYSIS] ListModels 실패 - 폴백 모델 사용');
         }
-        // ListModels 완료 후 분석 시작
-        updateProgress(0, 'processing', 5); // [FIX] Step 0 시작 시 5% (Watchdog 회피)
+        updateProgress(0, 'processing', 5);
         analyzeNextStep();
       })
       .catch(function (err) {
         console.error('[AI ANALYSIS] ListModels 오류:', err);
         console.warn('[AI ANALYSIS] 폴백 모델로 계속 진행');
-        // 오류가 있어도 폴백 모델로 계속 진행
-        updateProgress(0, 'processing', 5); // [FIX] Step 0 시작 시 5%
+        updateProgress(0, 'processing', 5);
         analyzeNextStep();
       });
 
     function analyzeNextStep() {
       if (currentStep >= analysisSteps.length) {
-        // 모든 분석 완료
         completeAnalysis();
         return;
       }
@@ -817,12 +824,13 @@ function initAIStartButton() {
       var stepInfo = analysisSteps[currentStep];
       var stepKey = 'step' + stepInfo.step;
 
-      // 재시도 횟수 초기화
       if (!stepRetryCount[stepKey]) {
         stepRetryCount[stepKey] = 0;
       }
 
-      updateProgress(stepInfo.step, 'processing', (currentStep / analysisSteps.length) * 100);
+      var percent = (currentStep / analysisSteps.length) * 100;
+      if (stepInfo.step === 0) percent = Math.max(5, percent);
+      updateProgress(stepInfo.step, 'processing', percent);
 
       var prompt = stepInfo.prompt.replace('{SCRIPT}', script.substring(0, 30000));
 
@@ -832,6 +840,8 @@ function initAIStartButton() {
       }
 
       console.log('[STEP ' + stepInfo.step + '] 요청 시작 (시도 ' + (stepRetryCount[stepKey] + 1) + '회)');
+      console.log('[STEP ' + stepInfo.step + '] modelId:', (apiCallState.selectedModel || 'gemini-1.5-flash'));
+      console.log('[STEP ' + stepInfo.step + '] promptLength:', prompt.length);
 
       callGeminiWithRetry(prompt)
         .then(function (responseText) {
@@ -839,10 +849,7 @@ function initAIStartButton() {
           console.log('[STEP ' + stepInfo.step + '] 응답 마지막 200자:', responseText.slice(-200));
 
           try {
-            // 강건한 JSON 파싱 (3단계 폴백)
             var result = safeParseJsonResponse(responseText);
-
-            // 파싱 성공 - 재시도 카운터 리셋
             stepRetryCount[stepKey] = 0;
 
             if (stepInfo.step === 0) {
@@ -850,39 +857,27 @@ function initAIStartButton() {
             } else {
               results['step' + stepInfo.step] = result;
             }
+
             updateProgress(stepInfo.step, 'complete', ((currentStep + 1) / analysisSteps.length) * 100);
             currentStep++;
-            setTimeout(analyzeNextStep, 4000); // 다음 단계 전 4초 대기
+            setTimeout(analyzeNextStep, 4000);
 
           } catch (e) {
             console.error('[STEP ' + stepInfo.step + '] JSON Parse Error (시도 ' + (stepRetryCount[stepKey] + 1) + '회):', e);
 
-            // [C) 추가] head/tail 프리뷰 출력 (앞뒤 400자씩)
-            if (e._fullLength) {
-              console.error('[RESPONSE FULL LENGTH]', e._fullLength, '자');
-            }
-            if (e._head) {
-              console.error('[RESPONSE HEAD 400]', e._head);
-            }
-            if (e._tail) {
-              console.error('[RESPONSE TAIL 400]', e._tail);
-            }
-            // 호환성: 기존 preview도 출력
-            if (e._preview) {
-              console.error('[JSON PARSE PREVIEW 800]', e._preview);
-            }
+            if (e._fullLength) console.error('[RESPONSE FULL LENGTH]', e._fullLength, '자');
+            if (e._head) console.error('[RESPONSE HEAD 400]', e._head);
+            if (e._tail) console.error('[RESPONSE TAIL 400]', e._tail);
+            if (e._preview) console.error('[JSON PARSE PREVIEW 800]', e._preview);
 
             stepRetryCount[stepKey]++;
 
-            // 재시도 로직
             if (stepRetryCount[stepKey] <= 2) {
-              // 1~2회 실패: 자동 재시도
               console.warn('[AUTO RETRY] Step ' + stepInfo.step + ' 자동 재시도 중... (' + stepRetryCount[stepKey] + '/2)');
-              setTimeout(analyzeNextStep, 2000); // 2초 후 재시도
-              return; // catch 블록 종료 (에러 토스트 표시 안 함)
+              setTimeout(analyzeNextStep, 2000);
+              return;
 
             } else if (stepRetryCount[stepKey] === 3) {
-              // 3회 실패: Repair Prompt 시도
               console.warn('[REPAIR PROMPT] Step ' + stepInfo.step + ' Repair Prompt 시도 중...');
 
               var repairPrompt = '중요: 아래 내용을 순수 JSON만 출력하세요. 코드블록(```)·설명·주석·추가 텍스트 절대 금지.\\n\\n';
@@ -890,8 +885,8 @@ function initAIStartButton() {
               repairPrompt += '\\n\\n참고: 직전 응답이 형식 오류였습니다. 반드시 JSON만 출력하세요.';
 
               if (stepInfo.step > 0 && comprehensionResult) {
-                var context = "## 대본 파악 정보 (참고용):\\n" + JSON.stringify(comprehensionResult, null, 2) + "\\n\\n";
-                repairPrompt = context + repairPrompt;
+                var ctx = "## 대본 파악 정보 (참고용):\\n" + JSON.stringify(comprehensionResult, null, 2) + "\\n\\n";
+                repairPrompt = ctx + repairPrompt;
               }
 
               callGeminiWithRetry(repairPrompt)
@@ -899,7 +894,6 @@ function initAIStartButton() {
                   try {
                     var repairResult = safeParseJsonResponse(repairResponse);
 
-                    // Repair 성공
                     console.log('[REPAIR SUCCESS] Step ' + stepInfo.step + ' Repair Prompt 성공!');
                     stepRetryCount[stepKey] = 0;
 
@@ -908,12 +902,12 @@ function initAIStartButton() {
                     } else {
                       results['step' + stepInfo.step] = repairResult;
                     }
+
                     updateProgress(stepInfo.step, 'complete', ((currentStep + 1) / analysisSteps.length) * 100);
                     currentStep++;
                     setTimeout(analyzeNextStep, 4000);
 
                   } catch (repairError) {
-                    // Repair도 실패 - 최종 실패
                     console.error('[REPAIR FAILED] Step ' + stepInfo.step + ' 최종 실패');
                     handleFinalFailure(stepInfo, repairError);
                   }
@@ -923,10 +917,9 @@ function initAIStartButton() {
                   handleFinalFailure(stepInfo, repairErr);
                 });
 
-              return; // Repair 시도 중이므로 여기서 종료
+              return;
 
             } else {
-              // 4회 이상 실패: 최종 실패
               handleFinalFailure(stepInfo, e);
             }
           }
@@ -934,7 +927,6 @@ function initAIStartButton() {
         .catch(function (err) {
           console.error('[STEP ' + stepInfo.step + '] API 오류:', err);
 
-          // API 오류도 재시도
           stepRetryCount[stepKey]++;
 
           if (stepRetryCount[stepKey] <= 2) {
@@ -942,65 +934,87 @@ function initAIStartButton() {
             setTimeout(analyzeNextStep, 3000);
             return;
           } else {
-            // 최종 실패
             handleFinalFailure(stepInfo, err);
           }
         });
     }
 
-    // 최종 실패 처리 함수
     function handleFinalFailure(stepInfo, error) {
       console.error('[FINAL FAILURE] Step ' + stepInfo.step + ' 모든 재시도 실패');
-      updateProgress(stepInfo.step, 'error', (currentStep / analysisSteps.length) * 100);
 
-      // [B) 개선] 에러 원인 정밀 분석 (사용자 요청 반영)
+      var p = (currentStep / analysisSteps.length) * 100;
+      if (stepInfo.step === 0) p = Math.max(5, p);
+      updateProgress(stepInfo.step, 'error', p);
+
       var failReason = '알 수 없는 오류';
       var errStr = '';
 
       try {
-        errStr = (error.message || (error && error.toString ? error.toString() : String(error))) || '';
-      } catch (e) { errStr = 'Error parsing failed'; }
+        errStr = (error && error.message) ? String(error.message) : String(error);
+      } catch (e) {
+        errStr = 'Error parsing failed';
+      }
 
-      // 1. 타임아웃/Abort (최우선 확인)
-      if (error.name === 'AbortError' || errStr.includes('AbortError') || errStr.includes('timeout') || errStr.includes('시간 초과')) {
+      // 상세 로그(항상)
+      console.error('[FAIL DETAIL] modelId:', (apiCallState.selectedModel || 'gemini-1.5-flash'));
+      console.error('[FAIL DETAIL] lastHttpStatus:', apiCallState.lastHttpStatus, apiCallState.lastHttpStatusText);
+      if (apiCallState.lastHttpErrorText) {
+        console.error('[FAIL DETAIL] lastHttpErrorText(300):', String(apiCallState.lastHttpErrorText).slice(0, 300));
+      }
+      console.error('[ORIGINAL ERROR]', errStr);
+
+      if (error && (error.name === 'AbortError' || errStr.includes('AbortError') || errStr.includes('timeout') || errStr.includes('시간 초과'))) {
         failReason = '서버 응답 시간 초과';
-      }
-      // 2. 네트워크/Fetch/CORS
-      else if (errStr.includes('Failed to fetch') || errStr.includes('NetworkError') || errStr.includes('fetch')) {
+      } else if (errStr.includes('Failed to fetch') || errStr.includes('NetworkError') || errStr.includes('CORS') || errStr.includes('fetch')) {
         failReason = '네트워크/CORS(fetch) 오류';
+      } else if (errStr.includes('HTTP 400') || errStr.includes('400')) {
+        failReason = '요청 오류 (400)';
+      } else if (errStr.includes('HTTP 404') || errStr.includes('404')) {
+        failReason = '모델/엔드포인트 없음 (404)';
+      } else if (errStr.includes('INVALID_ARGUMENT') || errStr.includes('invalid argument')) {
+        failReason = '요청 인자 오류 (INVALID_ARGUMENT)';
+      } else if (errStr.includes('model') && errStr.includes('not found')) {
+        failReason = '모델 없음 (model not found)';
+      } else if (errStr.includes('responseMimeType') && (errStr.includes('not') || errStr.includes('지원'))) {
+        failReason = '응답 포맷 미지원 (responseMimeType)';
+      } else if (errStr.includes('payload') && (errStr.includes('too large') || errStr.includes('크기'))) {
+        failReason = '요청 크기 초과 (payload too large)';
+      } else if (errStr.includes('JSON')) {
+        failReason = '형식 오류 (JSON)';
+      } else if (errStr.includes('429')) {
+        failReason = '사용량 초과 (429)';
+      } else if (errStr.includes('401') || errStr.includes('key')) {
+        failReason = 'API 키 인증 실패';
+      } else if (errStr.includes('403')) {
+        failReason = '권한 없음 (403)';
+      } else if (errStr.includes('Safety') || errStr.includes('blocked')) {
+        failReason = '안전 필터 차단';
+      } else if (errStr.includes('finishReason')) {
+        failReason = '응답 중단됨';
+      } else if (errStr.includes('500') || errStr.includes('503')) {
+        failReason = '서버 오류 (5xx)';
+      } else if (errStr.includes('비어있음') || errStr.includes('Empty')) {
+        failReason = '빈 응답';
       }
-      // 3. 기존 분류 유지
-      else if (errStr.includes('JSON')) failReason = '형식 오류 (JSON)';
-      else if (errStr.includes('429')) failReason = '사용량 초과 (429)';
-      else if (errStr.includes('401') || errStr.includes('key')) failReason = 'API 키 인증 실패';
-      else if (errStr.includes('403')) failReason = '권한 없음 (403)';
-      else if (errStr.includes('Safety') || errStr.includes('blocked')) failReason = '안전 필터 차단';
-      else if (errStr.includes('finishReason')) failReason = '응답 중단됨';
-      else if (errStr.includes('500') || errStr.includes('503')) failReason = '서버 오류 (5xx)';
-      else if (errStr.includes('비어있음') || errStr.includes('Empty')) failReason = '빈 응답';
 
       var displayMsg = '❌ Step ' + stepInfo.step + ' 분석 실패 [' + failReason + ']';
-
+      if (apiCallState.lastHttpStatus) {
+        displayMsg += ' (HTTP ' + apiCallState.lastHttpStatus + ')';
+      }
       showNotification(displayMsg, 'error');
 
-      console.error('[FINAL FAIL REASON]', failReason);
-      console.error('[ORIGINAL ERROR]', errStr);
-      if (error.stack) {
+      if (error && error.stack) {
         console.error('[ERROR STACK]', error.stack);
       }
 
-      // 상태 복구 (필수)
       AppState.isAIAnalyzing = false;
       btn.disabled = false;
       btn.classList.remove('opacity-50', 'cursor-not-allowed');
     }
 
-    // 카테고리 상태는 이제 전역 변수로 관리됨 (파일 상단 참조)
-
     function completeAnalysis() {
       console.log('[AI ANALYSIS] 전체 결과:', results);
 
-      // 기존 results를 analysisByCategory로 변환
       analysisByCategory = {
         background: parseStepResult(results.step1, "배경확인"),
         character: parseStepResult(results.step2, "등장인물 일관성"),
@@ -1009,7 +1023,6 @@ function initAIStartButton() {
         immersion: parseStepResult(results.step5, "재미/몰입 요소")
       };
 
-      // 점수 표시 (5개 항목)
       var categories = ['background', 'character', 'distortion', 'twistPace', 'immersion'];
       var ids = ['ai-background-score', 'ai-character-score', 'ai-distortion-score', 'ai-twistPace-score', 'ai-immersion-score'];
 
@@ -1020,13 +1033,9 @@ function initAIStartButton() {
         }
       });
 
-      // 합격/불합격 판정
       var passed = calculateOverallVerdict();
-
-      // 기본 카테고리 선택
       selectCategory('background');
 
-      // 결과 표시
       if (resultEl) resultEl.classList.remove('hidden');
 
       var summaryEl = document.getElementById('korea-ai-summary');
@@ -1040,7 +1049,6 @@ function initAIStartButton() {
         }
       }
 
-      // 종합 점수 계산
       var scores = [];
       for (var i = 1; i <= 5; i++) {
         var stepResult = results['step' + i];
@@ -1048,7 +1056,9 @@ function initAIStartButton() {
           scores.push(stepResult.score);
         }
       }
-      var overallScore = scores.length > 0 ? Math.round(scores.reduce(function (a, b) { return a + b; }, 0) / scores.length) : 0;
+      var overallScore = scores.length > 0
+        ? Math.round(scores.reduce(function (a, b) { return a + b; }, 0) / scores.length)
+        : 0;
 
       var overallScoreEl = document.getElementById('korea-ai-overall-score');
       if (overallScoreEl) overallScoreEl.textContent = overallScore;
@@ -1064,32 +1074,20 @@ function initAIStartButton() {
       btn.disabled = false;
       btn.classList.remove('opacity-50', 'cursor-not-allowed');
 
-      var message = passed
-        ? 'AI 분석 완료: 합격 ✓'
-        : 'AI 분석 완료: 실패 - 수정 필요';
+      var message = passed ? 'AI 분석 완료: 합격 ✓' : 'AI 분석 완료: 실패 - 수정 필요';
       showNotification(message, passed ? 'success' : 'warning');
     }
 
     function parseStepResult(stepData, categoryName) {
       if (!stepData) {
-        return {
-          name: categoryName,
-          score: 0,
-          issues: [],
-          fixes: []
-        };
+        return { name: categoryName, score: 0, issues: [], fixes: [] };
       }
 
-      // [FIX] issues/fixes 누락 문제 해결
       var issues = Array.isArray(stepData.issues) ? stepData.issues : [];
       var fixes = Array.isArray(stepData.fixes) ? stepData.fixes : [];
 
-      // 호환성: feedback만 있는 구버전 데이터 처리
       if (issues.length === 0 && stepData.feedback) {
-        issues.push({
-          text: stepData.feedback,
-          reason: "AI 분석 결과"
-        });
+        issues.push({ text: stepData.feedback, reason: "AI 분석 결과" });
       }
 
       return {
@@ -1119,13 +1117,10 @@ function initAIStartButton() {
           });
         }
 
-        // 점수 카드에 아이콘 표시
         updateScoreCardStatus(key, score, req.required);
       });
 
-      // 종합 판정 배너 표시
       showVerdictBanner(allPassed, failedCategories);
-
       return allPassed;
     }
 
@@ -1139,13 +1134,11 @@ function initAIStartButton() {
       icon.classList.remove('hidden', 'fa-check-circle', 'fa-times-circle', 'text-green-600', 'text-red-600');
 
       if (score >= required) {
-        // 합격
         icon.classList.add('fa-check-circle', 'text-green-600');
         icon.classList.remove('hidden');
         card.classList.add('border-green-500');
         card.classList.remove('border-red-500');
       } else {
-        // 불합격
         icon.classList.add('fa-times-circle', 'text-red-600');
         icon.classList.remove('hidden');
         card.classList.add('border-red-500');
@@ -1163,19 +1156,16 @@ function initAIStartButton() {
       banner.classList.remove('hidden');
 
       if (passed) {
-        // 합격
         passDiv.classList.remove('hidden');
         failDiv.classList.add('hidden');
         banner.classList.add('bg-green-50', 'border-green-500');
         banner.classList.remove('bg-red-50', 'border-red-500');
       } else {
-        // 불합격
         passDiv.classList.add('hidden');
         failDiv.classList.remove('hidden');
         banner.classList.add('bg-red-50', 'border-red-500');
         banner.classList.remove('bg-green-50', 'border-green-500');
 
-        // 실패 이유 표시
         var failReason = document.getElementById('fail-reason');
         if (failReason && failedCategories.length > 0) {
           var reasons = failedCategories.map(function (cat) {
@@ -1185,8 +1175,6 @@ function initAIStartButton() {
         }
       }
     }
-
-    // [필수 수정 1] 중복 호출 제거 - ListModels 완료 후에만 analyzeNextStep() 실행됨
   });
 }
 
@@ -1198,7 +1186,6 @@ function initAIStartButton() {
 
 // ListModels API - 사용 가능한 모델 목록 가져오기 (1회만 실행)
 async function listAvailableModels(apiKey) {
-  // 이미 캐시된 결과가 있으면 재사용
   if (apiCallState.availableModels) {
     console.log('[LIST MODELS] 캐시된 모델 목록 사용:', apiCallState.availableModels);
     return apiCallState.availableModels;
@@ -1213,7 +1200,6 @@ async function listAvailableModels(apiKey) {
   console.groupEnd();
 
   try {
-    // [FIX] 10초 타임아웃 추가
     var controller = new AbortController();
     var timeoutId = setTimeout(function () { controller.abort(); }, 10000);
 
@@ -1236,7 +1222,6 @@ async function listAvailableModels(apiKey) {
       return null;
     }
 
-    // generateContent를 지원하는 모델만 필터링
     var generativeModels = data.models.filter(function (model) {
       return model.supportedGenerationMethods &&
         model.supportedGenerationMethods.includes('generateContent');
@@ -1251,38 +1236,31 @@ async function listAvailableModels(apiKey) {
     });
     console.groupEnd();
 
-    // 캐시 저장
     apiCallState.availableModels = generativeModels;
 
-    // 우선순위: gemini-2.0 > gemini-1.5 > 기타
     var preferredModel = null;
 
-    // 1순위: gemini-2.0-flash-exp
     preferredModel = generativeModels.find(function (m) {
       return m.name.includes('gemini-2.0-flash-exp');
     });
 
-    // 2순위: gemini-2.5-flash
     if (!preferredModel) {
       preferredModel = generativeModels.find(function (m) {
         return m.name.includes('gemini-2.5-flash') && !m.name.includes('lite');
       });
     }
 
-    // 3순위: gemini-1.5-flash
     if (!preferredModel) {
       preferredModel = generativeModels.find(function (m) {
         return m.name.includes('gemini-1.5-flash');
       });
     }
 
-    // 4순위: 첫 번째 사용 가능한 모델
     if (!preferredModel && generativeModels.length > 0) {
       preferredModel = generativeModels[0];
     }
 
     if (preferredModel) {
-      // "models/" 접두사 제거
       var modelId = preferredModel.name.replace('models/', '');
       apiCallState.selectedModel = modelId;
       console.log('[LIST MODELS] 선택된 모델:', modelId, '(' + preferredModel.displayName + ')');
@@ -1296,17 +1274,16 @@ async function listAvailableModels(apiKey) {
   }
 }
 
-// API 호출 유틸리티 (레이트 리밋 및 재시도) - [FIX] 타임아웃 & 상태잠금 방지 강화
+// API 호출 유틸리티 (레이트 리밋 및 재시도)
 async function callGeminiWithRetry(prompt, isJson = true, retries = 2) {
   if (apiCallState.isProcessing) {
     throw new Error('API 호출이 진행 중입니다. 잠시만 기다려주세요.');
   }
 
-  // 최소 호출 간격 (4초)
   var now = Date.now();
   var timeSinceLastCall = now - apiCallState.lastCallTime;
   if (timeSinceLastCall < 4000) {
-    await new Promise(resolve => setTimeout(resolve, 4000 - timeSinceLastCall));
+    await new Promise(function (resolve) { setTimeout(resolve, 4000 - timeSinceLastCall); });
   }
 
   apiCallState.isProcessing = true;
@@ -1315,9 +1292,6 @@ async function callGeminiWithRetry(prompt, isJson = true, retries = 2) {
   try {
     var apiKey = localStorage.getItem('GEMINI_API_KEY');
     if (!apiKey) throw new Error('API 키가 없습니다.');
-
-    // API 키 마스킹
-    var maskedKey = apiKey.substring(0, 4) + '****' + apiKey.substring(apiKey.length - 4);
 
     var modelId = apiCallState.selectedModel || 'gemini-1.5-flash';
     var apiVersion = 'v1beta';
@@ -1343,34 +1317,40 @@ async function callGeminiWithRetry(prompt, isJson = true, retries = 2) {
 
         if (isJson) bodyConfig.generationConfig.responseMimeType = "application/json";
 
-        // [FIX] 40초 타임아웃 설정
         var controller = new AbortController();
         var timeoutId = setTimeout(function () { controller.abort(); }, 40000);
+
+        apiCallState.lastHttpStatus = null;
+        apiCallState.lastHttpStatusText = '';
+        apiCallState.lastHttpErrorText = '';
 
         var response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(bodyConfig),
-          signal: controller.signal // 타임아웃 신호
+          signal: controller.signal
         });
 
-        clearTimeout(timeoutId); // 성공 시 타이머 해제
+        clearTimeout(timeoutId);
 
         if (!response.ok) {
           var errorText = await response.text().catch(function () { return ''; });
+          apiCallState.lastHttpStatus = response.status;
+          apiCallState.lastHttpStatusText = response.statusText || '';
+          apiCallState.lastHttpErrorText = errorText || '';
 
           if (response.status === 429) {
             console.warn('[API DEBUG] 429 Rate Limit - 10초 대기 후 재시도');
-            await new Promise(resolve => setTimeout(resolve, 10000));
+            await new Promise(function (resolve) { setTimeout(resolve, 10000); });
             continue;
           }
 
-          throw new Error('API 오류 (' + response.status + '): ' + errorText.substring(0, 200));
+          var snippet = (errorText || '').slice(0, 200);
+          throw new Error('HTTP ' + response.status + ' ' + (response.statusText || '') + ': ' + snippet);
         }
 
         var data = await response.json();
 
-        // 응답 검증
         if (!data.candidates || data.candidates.length === 0) {
           throw new Error('응답이 비어있거나 차단되었습니다. (Safety Filter)');
         }
@@ -1392,19 +1372,18 @@ async function callGeminiWithRetry(prompt, isJson = true, retries = 2) {
         return text;
 
       } catch (err) {
-        if (err.name === 'AbortError') {
+        if (err && err.name === 'AbortError') {
           console.error('[API TIMEOUT] 요청 시간 초과 (40초)');
           err = new Error('서버 응답 시간 초과 (40초)');
         }
 
         console.error('[API DEBUG] 시도 ' + (i + 1) + ' 실패:', err);
         if (i === retries) throw err;
-        // 재시도 대기
-        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        await new Promise(function (resolve) { setTimeout(resolve, 2000); });
       }
     }
   } finally {
-    // [FIX] 핵심: 어떤 상황에서도(성공/실패/에러) 처리 상태 해제 보장
     apiCallState.isProcessing = false;
   }
 }
@@ -1432,18 +1411,15 @@ function initAutoFixAllButton() {
       return;
     }
 
-    // analysisByCategory 확인
     if (typeof analysisByCategory === 'undefined' || Object.keys(analysisByCategory).length === 0) {
       alert('먼저 AI 분석을 실행해주세요.');
       return;
     }
 
-    // 모든 카테고리의 fixes 병합
     var allFixes = [];
     Object.keys(analysisByCategory).forEach(function (key) {
       var category = analysisByCategory[key];
       if (category.fixes && category.fixes.length > 0) {
-        // 카테고리 정보 추가
         var fixesWithCat = category.fixes.map(function (f) {
           f.category = key;
           return f;
@@ -1457,7 +1433,6 @@ function initAutoFixAllButton() {
       return;
     }
 
-    // 중복 제거 및 우선순위 정렬
     var mergedFixes = deduplicateAndPrioritizeFixes(allFixes);
 
     var confirmMsg = '총 ' + mergedFixes.length + '개의 수정 사항(중복 제거됨)을 반영하여 전체 대본을 100점으로 자동 수정하시겠습니까?\\n\\n수정 후 TXT 파일로 다운로드됩니다.';
@@ -1467,7 +1442,6 @@ function initAutoFixAllButton() {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>100점 반영 수정 중...';
 
     try {
-      // 수정 사항 요약 생성
       var fixSummary = mergedFixes.map(function (fix, idx) {
         return (idx + 1) + '. [' + fix.category + '] "' + fix.before + '" → "' + fix.after + '" (' + fix.reason + ')';
       }).join('\\n');
@@ -1480,10 +1454,8 @@ function initAutoFixAllButton() {
         '3. 원본의 형식을 유지하세요.\\n\\n' +
         '## 원본 대본:\\n' + scriptText;
 
-      // API 호출 (JSON 아님, 텍스트 반환)
       var fixedScript = await callGeminiWithRetry(prompt, false);
 
-      // 다운로드
       downloadScript(fixedScript);
 
       btn.disabled = false;
@@ -1500,12 +1472,10 @@ function initAutoFixAllButton() {
 }
 
 function deduplicateAndPrioritizeFixes(fixes) {
-  // 중복 제거 (before 텍스트 기준)
   var seen = {};
   var unique = [];
 
   fixes.forEach(function (fix) {
-    // 공백 제거 후 비교
     var key = fix.before ? fix.before.trim() : '';
     if (key && !seen[key]) {
       seen[key] = true;
@@ -1513,7 +1483,6 @@ function deduplicateAndPrioritizeFixes(fixes) {
     }
   });
 
-  // 우선순위 정렬: character > distortion > twistPace > immersion > background
   var priority = {
     'character': 1,
     'distortion': 2,
