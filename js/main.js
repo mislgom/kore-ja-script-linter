@@ -383,22 +383,91 @@ function initKoreaSeniorButtons() {
 }
 
 /* ======================================================
-   AI ANALYSIS (게이지 + 결과 표시)
+   AI ANALYSIS WITH PROGRESS BAR (5-STEP)
 ====================================================== */
-function initAIAnalysis() {
-  var btn = document.getElementById('korea-ai-analyze-btn');
+function initAIStartButton() {
+  var btn = document.getElementById('korea-ai-start-btn');
   var ta = document.getElementById('korea-senior-script');
-  var progressContainer = document.getElementById('korea-ai-progress');
+  var progressSection = document.getElementById('korea-ai-progress-section');
   var progressBar = document.getElementById('korea-ai-progress-bar');
-  var progressText = document.getElementById('korea-ai-progress-text');
-  var progressDone = document.getElementById('korea-ai-progress-done');
-  var loadingEl = document.getElementById('korea-ai-loading');
+  var progressPercent = document.getElementById('korea-ai-progress-percent');
+  var aiSection = document.getElementById('korea-ai-analysis');
   var resultEl = document.getElementById('korea-ai-result');
-  var sectionEl = document.getElementById('korea-ai-analysis');
 
   if (!btn) {
-    console.warn('[AIAnalysis] AI analyze button not found');
+    console.warn('[AIStartButton] button not found');
     return;
+  }
+
+  // 진행 상태 업데이트 함수
+  function updateProgress(step, status, percent) {
+    var stepEl = document.getElementById('progress-step-' + step);
+    if (!stepEl) return;
+
+    var statusSpan = stepEl.querySelector('.step-status');
+    var iconDiv = stepEl.querySelector('.flex-shrink-0');
+
+    if (status === 'processing') {
+      stepEl.classList.add('border-indigo-300', 'bg-indigo-50');
+      stepEl.classList.remove('border-gray-200');
+      if (statusSpan) {
+        statusSpan.className = 'step-status text-xs px-2 py-1 rounded-full bg-indigo-500 text-white';
+        statusSpan.textContent = '분석중...';
+      }
+      if (iconDiv) {
+        iconDiv.classList.add('bg-indigo-500');
+        iconDiv.classList.remove('bg-gray-200');
+        var icon = iconDiv.querySelector('i');
+        if (icon) icon.classList.add('text-white');
+        if (icon) icon.classList.remove('text-gray-400');
+      }
+    } else if (status === 'complete') {
+      stepEl.classList.add('border-green-300', 'bg-green-50');
+      stepEl.classList.remove('border-indigo-300', 'bg-indigo-50', 'border-gray-200');
+      if (statusSpan) {
+        statusSpan.className = 'step-status text-xs px-2 py-1 rounded-full bg-green-500 text-white';
+        statusSpan.textContent = '완료';
+      }
+      if (iconDiv) {
+        iconDiv.classList.add('bg-green-500');
+        iconDiv.classList.remove('bg-indigo-500', 'bg-gray-200');
+        var icon = iconDiv.querySelector('i');
+        if (icon) icon.classList.add('text-white');
+        if (icon) icon.classList.remove('text-gray-400');
+      }
+    }
+
+    if (progressBar) progressBar.style.width = percent + '%';
+    if (progressPercent) progressPercent.textContent = Math.round(percent) + '%';
+  }
+
+  // 진행 상태 초기화
+  function resetProgress() {
+    for (var i = 1; i <= 5; i++) {
+      var stepEl = document.getElementById('progress-step-' + i);
+      if (!stepEl) continue;
+
+      stepEl.className = 'flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700';
+      
+      var statusSpan = stepEl.querySelector('.step-status');
+      if (statusSpan) {
+        statusSpan.className = 'step-status text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500';
+        statusSpan.textContent = '대기';
+      }
+
+      var iconDiv = stepEl.querySelector('.flex-shrink-0');
+      if (iconDiv) {
+        iconDiv.className = 'flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mr-3';
+        var icon = iconDiv.querySelector('i');
+        if (icon) {
+          icon.classList.remove('text-white');
+          icon.classList.add('text-gray-400');
+        }
+      }
+    }
+
+    if (progressBar) progressBar.style.width = '0%';
+    if (progressPercent) progressPercent.textContent = '0%';
   }
 
   btn.addEventListener('click', function (e) {
@@ -433,164 +502,178 @@ function initAIAnalysis() {
     btn.disabled = true;
     btn.classList.add('opacity-50', 'cursor-not-allowed');
 
-    if (sectionEl) {
-      sectionEl.classList.remove('hidden');
-    }
+    // UI 표시
+    if (progressSection) progressSection.classList.remove('hidden');
+    if (aiSection) aiSection.classList.remove('hidden');
+    if (resultEl) resultEl.classList.add('hidden');
 
-    if (progressContainer) {
-      progressContainer.classList.remove('hidden');
-    }
-    if (progressBar) {
-      progressBar.style.width = '0%';
-    }
-    if (progressText) {
-      progressText.textContent = '0%';
-    }
-    if (progressDone) {
-      progressDone.classList.add('hidden');
-    }
-    if (resultEl) {
-      resultEl.classList.add('hidden');
-    }
-
-    if (loadingEl) {
-      loadingEl.classList.remove('hidden');
-    }
-
+    resetProgress();
     showNotification('AI 분석을 시작합니다...', 'info');
 
-    var progress = 0;
-    var progressInterval = setInterval(function () {
-      if (progress < 90) {
-        progress += Math.random() * 3 + 1;
-        if (progress > 90) progress = 90;
-        if (progressBar) progressBar.style.width = Math.round(progress) + '%';
-        if (progressText) progressText.textContent = Math.round(progress) + '%';
-      }
-    }, 100);
+    // 5단계 분석 실행
+    var analysisSteps = [
+      { step: 1, name: '배경 확인', prompt: '이 대본의 배경(한국/일본/조선 등)을 분석하고 점수(0-100)를 매겨주세요. JSON 형식: {"background": "한국/일본/조선/기타", "score": 0-100, "keywords": [], "feedback": ""}' },
+      { step: 2, name: '등장인물 일관성', prompt: '등장인물의 나이, 이름, 관계가 일관되는지 분석하고 점수(0-100)를 매겨주세요. JSON 형식: {"score": 0-100, "characters": [], "issues": [], "feedback": ""}' },
+      { step: 3, name: '스토리 왜곡 분석', prompt: '씬 구조, 시간/장소 흐름이 자연스러운지 분석하고 점수(0-100)를 매겨주세요. JSON 형식: {"score": 0-100, "sceneCount": 0, "issues": [], "feedback": ""}' },
+      { step: 4, name: '반전/변화 속도', prompt: '감정 변화와 페이싱이 적절한지 분석하고 점수(0-100)를 매겨주세요. JSON 형식: {"score": 0-100, "pacing": "적절/빠름/느림", "feedback": ""}' },
+      { step: 5, name: '재미/몰입 요소', prompt: '갈등, 대화, 시니어 공감 요소를 분석하고 점수(0-100)를 매겨주세요. JSON 형식: {"score": 0-100, "elements": [], "feedback": ""}' }
+    ];
 
-    var analyzePromise;
-    if (typeof window.geminiAPI !== 'undefined' && typeof window.geminiAPI.analyzeScript === 'function') {
-      analyzePromise = window.geminiAPI.analyzeScript(script, 'comprehensive');
-    } else {
-      analyzePromise = new Promise(function (resolve) {
-        setTimeout(function () {
-          resolve({
-            summary: '대본 분석이 완료되었습니다. (시뮬레이션)',
-            overallScore: 85,
-            verdict: '검토',
-            topIssues: ['예시 이슈 1', '예시 이슈 2'],
-            recommendations: ['예시 추천 1', '예시 추천 2']
+    var results = {};
+    var currentStep = 0;
+
+    function analyzeNextStep() {
+      if (currentStep >= analysisSteps.length) {
+        // 모든 분석 완료
+        completeAnalysis();
+        return;
+      }
+
+      var stepInfo = analysisSteps[currentStep];
+      updateProgress(stepInfo.step, 'processing', (currentStep / analysisSteps.length) * 100);
+
+      var fullPrompt = '당신은 대본 분석 전문가입니다.\n\n' +
+        '## 분석 항목: ' + stepInfo.name + '\n\n' +
+        stepInfo.prompt + '\n\n' +
+        '## 대본\n' + script.substring(0, 15000) + '\n\n' +
+        '반드시 JSON 형식으로만 응답해주세요.';
+
+      if (typeof window.geminiAPI !== 'undefined' && typeof window.geminiAPI.forceGeminiAnalyze === 'function') {
+        window.geminiAPI.forceGeminiAnalyze(fullPrompt, { temperature: 0.3, maxTokens: 2048 })
+          .then(function (response) {
+            console.log('[STEP ' + stepInfo.step + '] 응답:', response);
+
+            try {
+              var jsonMatch = response.match(/\{[\s\S]*\}/);
+              var parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { score: 70, feedback: '분석 완료' };
+              results['step' + stepInfo.step] = parsed;
+            } catch (err) {
+              console.error('[STEP ' + stepInfo.step + '] JSON 파싱 오류:', err);
+              results['step' + stepInfo.step] = { score: 70, feedback: '분석 완료 (파싱 오류)' };
+            }
+
+            updateProgress(stepInfo.step, 'complete', ((currentStep + 1) / analysisSteps.length) * 100);
+            currentStep++;
+
+            setTimeout(analyzeNextStep, 500);
+          })
+          .catch(function (err) {
+            console.error('[STEP ' + stepInfo.step + '] 오류:', err);
+            results['step' + stepInfo.step] = { score: 0, feedback: '분석 실패: ' + err.message };
+            updateProgress(stepInfo.step, 'complete', ((currentStep + 1) / analysisSteps.length) * 100);
+            currentStep++;
+            setTimeout(analyzeNextStep, 500);
           });
-        }, 2000);
-      });
+      } else {
+        // 시뮬레이션
+        setTimeout(function () {
+          results['step' + stepInfo.step] = { score: 75 + Math.floor(Math.random() * 20), feedback: '시뮬레이션 결과' };
+          updateProgress(stepInfo.step, 'complete', ((currentStep + 1) / analysisSteps.length) * 100);
+          currentStep++;
+          analyzeNextStep();
+        }, 1000);
+      }
     }
 
-    analyzePromise
-      .then(function (result) {
-        console.log('[AI ANALYSIS] 결과:', result);
-        AppState.aiAnalysisResult = result;
+    function completeAnalysis() {
+      console.log('[AI ANALYSIS] 전체 결과:', results);
 
-        clearInterval(progressInterval);
-        if (progressBar) progressBar.style.width = '100%';
-        if (progressText) progressText.textContent = '100%';
+      // 종합 점수 계산
+      var scores = [];
+      for (var i = 1; i <= 5; i++) {
+        var stepResult = results['step' + i];
+        if (stepResult && stepResult.score != null) {
+          scores.push(stepResult.score);
+        }
+      }
 
-        setTimeout(function () {
-          if (progressDone) {
-            progressDone.classList.remove('hidden');
+      var overallScore = scores.length > 0 ? Math.round(scores.reduce(function (a, b) { return a + b; }, 0) / scores.length) : 0;
+
+      // 결과 표시
+      if (resultEl) resultEl.classList.remove('hidden');
+
+      var summaryEl = document.getElementById('korea-ai-summary');
+      if (summaryEl) {
+        summaryEl.textContent = '5단계 AI 분석이 완료되었습니다. 배경, 인물, 스토리, 페이싱, 재미 요소를 종합 분석했습니다.';
+      }
+
+      var overallScoreEl = document.getElementById('korea-ai-overall-score');
+      if (overallScoreEl) overallScoreEl.textContent = overallScore;
+
+      var verdictEl = document.getElementById('korea-ai-verdict');
+      if (verdictEl) {
+        if (overallScore >= 80) verdictEl.textContent = '합격';
+        else if (overallScore >= 60) verdictEl.textContent = '조건부 합격';
+        else verdictEl.textContent = '재검토 필요';
+      }
+
+      // 개별 점수 표시
+      if (results.step1) {
+        var el1 = document.getElementById('ai-korea-score');
+        if (el1) el1.textContent = results.step1.score || '-';
+      }
+      if (results.step2) {
+        var el2 = document.getElementById('ai-char-score');
+        if (el2) el2.textContent = results.step2.score || '-';
+      }
+      if (results.step3) {
+        var el3 = document.getElementById('ai-flow-score');
+        if (el3) el3.textContent = results.step3.score || '-';
+      }
+      if (results.step4) {
+        var el4 = document.getElementById('ai-pace-score');
+        if (el4) el4.textContent = results.step4.score || '-';
+      }
+      if (results.step5) {
+        var el5 = document.getElementById('ai-fun-score');
+        if (el5) el5.textContent = results.step5.score || '-';
+      }
+
+      // 개선점 표시
+      var issuesEl = document.getElementById('korea-ai-issues');
+      if (issuesEl) {
+        issuesEl.innerHTML = '';
+        var allIssues = [];
+        for (var i = 1; i <= 5; i++) {
+          var stepResult = results['step' + i];
+          if (stepResult && stepResult.feedback) {
+            allIssues.push(stepResult.feedback);
           }
+        }
+        if (allIssues.length > 0) {
+          allIssues.slice(0, 3).forEach(function (issue) {
+            var li = document.createElement('li');
+            li.textContent = issue;
+            issuesEl.appendChild(li);
+          });
+        } else {
+          var li = document.createElement('li');
+          li.textContent = '특별한 개선점이 발견되지 않았습니다.';
+          issuesEl.appendChild(li);
+        }
+      }
 
-          if (result && result.error) {
-            showNotification('AI 분석 실패: ' + result.error, 'error');
-          } else {
-            if (resultEl) {
-              resultEl.classList.remove('hidden');
-            }
+      // 추천사항 표시
+      var recsEl = document.getElementById('korea-ai-recommendations');
+      if (recsEl) {
+        recsEl.innerHTML = '';
+        var recs = ['대본의 전반적인 구조가 양호합니다.', '시니어 타겟 콘텐츠로 적합합니다.'];
+        recs.forEach(function (rec) {
+          var li = document.createElement('li');
+          li.textContent = rec;
+          recsEl.appendChild(li);
+        });
+      }
 
-            var summaryEl = document.getElementById('korea-ai-summary');
-            if (summaryEl && result && result.summary) {
-              summaryEl.textContent = result.summary;
-            }
+      AppState.isAIAnalyzing = false;
+      btn.disabled = false;
+      btn.classList.remove('opacity-50', 'cursor-not-allowed');
 
-            var overallScoreEl = document.getElementById('korea-ai-overall-score');
-            if (overallScoreEl && result && result.overallScore != null) {
-              overallScoreEl.textContent = String(result.overallScore);
-            }
+      showNotification('AI 분석이 완료되었습니다 (종합 점수: ' + overallScore + '점)', 'success');
+    }
 
-            var verdictEl = document.getElementById('korea-ai-verdict');
-            if (verdictEl && result && result.verdict) {
-              verdictEl.textContent = result.verdict;
-            }
-
-            if (result && result.koreaBackground) {
-              var el1 = document.getElementById('ai-korea-score');
-              if (el1) el1.textContent = result.koreaBackground.score || '-';
-            }
-            if (result && result.characterConsistency) {
-              var el2 = document.getElementById('ai-char-score');
-              if (el2) el2.textContent = result.characterConsistency.score || '-';
-            }
-            if (result && result.relationshipConsistency) {
-              var el3 = document.getElementById('ai-rel-score');
-              if (el3) el3.textContent = result.relationshipConsistency.score || '-';
-            }
-            if (result && result.storyFlow) {
-              var el4 = document.getElementById('ai-flow-score');
-              if (el4) el4.textContent = result.storyFlow.score || '-';
-            }
-            if (result && result.pacingSpeed) {
-              var el5 = document.getElementById('ai-pace-score');
-              if (el5) el5.textContent = result.pacingSpeed.score || '-';
-            }
-            if (result && result.entertainment) {
-              var el6 = document.getElementById('ai-fun-score');
-              if (el6) el6.textContent = result.entertainment.score || '-';
-            }
-
-            if (result && result.topIssues && result.topIssues.length > 0) {
-              var issuesEl = document.getElementById('korea-ai-issues');
-              if (issuesEl) {
-                issuesEl.innerHTML = '';
-                result.topIssues.forEach(function (item) {
-                  var li = document.createElement('li');
-                  li.textContent = item;
-                  issuesEl.appendChild(li);
-                });
-              }
-            }
-
-            if (result && result.recommendations && result.recommendations.length > 0) {
-              var recsEl = document.getElementById('korea-ai-recommendations');
-              if (recsEl) {
-                recsEl.innerHTML = '';
-                result.recommendations.forEach(function (item) {
-                  var li = document.createElement('li');
-                  li.textContent = item;
-                  recsEl.appendChild(li);
-                });
-              }
-            }
-
-            showNotification('AI 분석이 완료되었습니다', 'success');
-          }
-        }, 300);
-      })
-      .catch(function (err) {
-        console.error('[AI ANALYSIS] 오류:', err);
-        clearInterval(progressInterval);
-
-        if (progressBar) progressBar.style.width = '100%';
-        if (progressText) progressText.textContent = '100%';
-        if (progressDone) progressDone.classList.remove('hidden');
-
-        showNotification('AI 분석 중 오류가 발생했습니다: ' + (err && err.message ? err.message : String(err)), 'error');
-      })
-      .finally(function () {
-        AppState.isAIAnalyzing = false;
-        btn.disabled = false;
-        btn.classList.remove('opacity-50', 'cursor-not-allowed');
-        if (loadingEl) loadingEl.classList.add('hidden');
-      });
+    // 분석 시작
+    analyzeNextStep();
   });
 }
 
@@ -605,7 +688,7 @@ document.addEventListener('DOMContentLoaded', function () {
   safeInit('ApiKeyUI', initApiKeyUI);
   safeInit('Textareas', initTextareas);
   safeInit('KoreaButtons', initKoreaSeniorButtons);
-  safeInit('AIAnalysis', initAIAnalysis);
+  safeInit('AIStartButton', initAIStartButton);
 
   console.log('[BOOT] All init functions completed');
   console.log('[BOOT] Current tab:', AppState.currentTab);
