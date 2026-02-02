@@ -891,7 +891,8 @@ function initAIStartButton() {
       callGeminiWithRetry(prompt)
         .then(function (responseText) {
           // [FIX] 사용자 요청 4: null/undefined 응답 시 에러 던져서 재시도 유도
-          if (!responseText) {
+          if (responseText == null || !String(responseText).trim()) {
+            console.error('[STEP ' + stepInfo.step + '] EMPTY responseText (null/blank).');
             throw new Error('응답이 비어있습니다 (Step ' + stepInfo.step + ' 재시도 필요)');
           }
 
@@ -1038,8 +1039,7 @@ function initAIStartButton() {
       var failReason = '알 수 없는 오류';
       var errStr = '';
 
-      // [HOTFIX] error 객체/문자열/기타를 무조건 사람이 읽을 수 있는 문자열로 정규화
-      // [HOTFIX] error 객체/문자열/기타를 무조건 사람이 읽을 수 있는 문자열로 정규화
+      // error 객체/문자열/기타를 사람이 읽을 수 있는 문자열로 정규화
       try {
         if (typeof error === 'string') {
           errStr = error;
@@ -1054,7 +1054,7 @@ function initAIStartButton() {
         errStr = 'Error stringify failed';
       }
 
-      // (추가) 브라우저별 TypeError 케이스도 네트워크로 분류
+      // 브라우저별 TypeError/Load failed 케이스를 네트워크로 분류
       if (errStr && (errStr.includes('TypeError') || errStr.includes('Load failed'))) {
         failReason = '네트워크/CORS(fetch) 오류';
       }
@@ -1487,32 +1487,49 @@ async function callGeminiWithRetry(prompt, isJson = true, retries = 2) {
 
         var data = await response.json();
 
-        // 응답 검증
-        if (!data.candidates || data.candidates.length === 0) {
-          throw new Error('응답이 비어있거나 차단되었습니다. (Safety Filter)');
+        // ===== 응답 검증(강화) =====
+        if (!data || !data.candidates || data.candidates.length === 0) {
+          throw new Error('응답이 비어있거나 후보(candidates)가 없습니다. (Safety/Quota/Empty)');
         }
 
         var candidate = data.candidates[0];
-        if (!candidate.content || !candidate.content.parts) {
-          throw new Error('응답 포맷 오류 (content/parts 누락)');
+
+        // finishReason/안전정보 로그 (디버그용)
+        try {
+          console.log('[API DEBUG] finishReason:', candidate.finishReason);
+          if (candidate.safetyRatings) console.log('[API DEBUG] safetyRatings:', candidate.safetyRatings);
+          if (candidate.promptFeedback) console.log('[API DEBUG] promptFeedback:', candidate.promptFeedback);
+        } catch (_) { }
+
+        // ===== 텍스트 추출(강화) =====
+        var textParts = [];
+        if (candidate && candidate.content && Array.isArray(candidate.content.parts)) {
+          candidate.content.parts.forEach(function (p) {
+            if (!p) return;
+            if (typeof p.text === 'string') textParts.push(p.text);
+          });
         }
 
-        // [FIX] 사용자 요청 2: 실제 응답 텍스트 확보 로직 보강
-        var text = '';
-        if (candidate.content.parts && candidate.content.parts.length > 0) {
-          // a) parts 배열 전체 순회하며 join
-          text = candidate.content.parts.map(function (p) {
-            return p.text || '';
-          }).join('');
+        var text = textParts.join('');
+
+        // 1) text가 비어있으면 원인 파악용으로 content를 덤프하되, 결과는 실패 처리해야 함
+        if (!text || !String(text).trim()) {
+          var debugPayload = '';
+          try { debugPayload = JSON.stringify(candidate && candidate.content ? candidate.content : candidate, null, 2); } catch (_) { }
+
+          // 모델이 JSON MIME을 무시/부분응답/차단한 케이스 포함
+          var reason = candidate && candidate.finishReason ? ('finishReason=' + candidate.finishReason) : 'finishReason=unknown';
+          console.error('[API DEBUG] EMPTY TEXT. ' + reason);
+          if (debugPayload) console.error('[API DEBUG] candidate/content dump:', debugPayload.slice(0, 2000));
+
+          throw new Error('응답 텍스트가 비어있습니다. (' + reason + ')');
         }
 
-        // b) 그래도 비면 raw string 변환 시도 (최후의 수단)
-        if (!text) {
-          console.warn('[API DEBUG] 텍스트 추출 실패, raw JSON 확인');
-          text = JSON.stringify(candidate.content);
+        // 2) "{}" 같은 무의미 응답도 실패 처리
+        if (String(text).trim() === '{}' || String(text).trim() === '[]') {
+          console.error('[API DEBUG] EMPTY JSON BODY:', text);
+          throw new Error('의미 없는 빈 JSON 응답({}/[])');
         }
-
-        if (!text || text === '{}') throw new Error('응답 텍스트가 비어있습니다.');
 
         return text;
 
