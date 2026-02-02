@@ -1,8 +1,36 @@
 // ============================================
 // 탭별 분석 시스템 - Tab Analysis System
+// API 레이트 리밋 최적화 버전
 // ============================================
 
+// ============================================
+// API 호출 상태 관리
+// ============================================
+const apiCallState = {
+    isProcessing: false,           // 현재 API 호출 중인지
+    activeTab: null,                // 현재 처리 중인 탭
+    lastCallTime: 0,                // 마지막 API 호출 시간
+    minInterval: 4000,              // 최소 호출 간격 (4초)
+    requestCount: 0                 // 총 API 호출 횟수 (디버깅용)
+};
+
+// ============================================
+// 유틸리티 함수
+// ============================================
+
+// 대기 함수
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// 현재 시간 포맷팅
+function getTimestamp() {
+    return new Date().toISOString().slice(11, 19);
+}
+
+// ============================================
 // 탭별 분석 설정
+// ============================================
 const analysisConfig = {
     1: {
         name: '배경 확인',
@@ -133,44 +161,48 @@ function showTabResult(stepNumber) {
 }
 
 // ============================================
-// 탭별 분석 함수
+// API 호출 래퍼 (레이트 리밋 관리)
 // ============================================
-async function analyzeTab(stepNumber) {
-    const config = analysisConfig[stepNumber];
-    const script = document.getElementById('korea-senior-script').value;
-
-    if (!script || script.trim() === '') {
-        alert('대본을 먼저 입력해주세요.');
-        return;
+async function callGeminiAPI(prompt, script, tabNumber) {
+    // 중복 호출 방지
+    if (apiCallState.isProcessing) {
+        console.warn(`[API BLOCKED] Tab ${tabNumber} - Already processing Tab ${apiCallState.activeTab}`);
+        throw new Error('이미 다른 분석이 진행 중입니다. 잠시 후 다시 시도해주세요.');
     }
 
+    // 최소 호출 간격 보장
+    const now = Date.now();
+    const timeSinceLastCall = now - apiCallState.lastCallTime;
+    if (timeSinceLastCall < apiCallState.minInterval) {
+        const waitTime = apiCallState.minInterval - timeSinceLastCall;
+        console.log(`[API THROTTLE] Waiting ${Math.ceil(waitTime / 1000)}s before next call...`);
+        await sleep(waitTime);
+    }
+
+    // 상태 업데이트
+    apiCallState.isProcessing = true;
+    apiCallState.activeTab = tabNumber;
+    apiCallState.lastCallTime = Date.now();
+    apiCallState.requestCount++;
+
+    console.log(`[API CALL #${apiCallState.requestCount}] Tab ${tabNumber} - ${getTimestamp()}`);
+
     try {
-        // Gemini API 호출
-        const result = await callGeminiForTabAnalysis(config.prompt, script);
-
-        // 결과 표시
-        document.getElementById(`summary-step-${stepNumber}`).textContent = result.summary || '분석 결과를 가져올 수 없습니다.';
-        document.getElementById(`score-step-${stepNumber}`).textContent = `${result.score || 0}/100`;
-
-        // 오류 목록 표시
-        const issuesList = document.getElementById(`issues-step-${stepNumber}`);
-        if (result.issues && result.issues.length > 0) {
-            issuesList.innerHTML = result.issues.map(issue =>
-                `<li><strong>${issue.text}</strong> - ${issue.reason}</li>`
-            ).join('');
-        } else {
-            issuesList.innerHTML = '<li>발견된 문제가 없습니다.</li>';
-        }
-
+        const result = await callGeminiForTabAnalysis(prompt, script);
+        console.log(`[API SUCCESS] Tab ${tabNumber} - Score: ${result.score}/100`);
         return result;
     } catch (error) {
-        console.error('분석 오류:', error);
-        alert('분석 중 오류가 발생했습니다: ' + error.message);
+        console.error(`[API ERROR] Tab ${tabNumber} - ${error.message}`);
+        throw error;
+    } finally {
+        // 상태 초기화
+        apiCallState.isProcessing = false;
+        apiCallState.activeTab = null;
     }
 }
 
 // ============================================
-// Gemini API 호출 (탭 분석용)
+// Gemini API 호출 (실제 네트워크 요청)
 // ============================================
 async function callGeminiForTabAnalysis(prompt, script) {
     const apiKey = localStorage.getItem('gemini_api_key');
@@ -203,8 +235,22 @@ async function callGeminiForTabAnalysis(prompt, script) {
         body: JSON.stringify(requestBody)
     });
 
+    // 레이트 리밋 오류 처리
     if (!response.ok) {
-        throw new Error(`API 요청 실패: ${response.status} ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+
+        // Retry-After 헤더 확인
+        const retryAfter = response.headers.get('Retry-After');
+
+        if (response.status === 429) {
+            const waitTime = retryAfter ? parseInt(retryAfter) : 60;
+            const error = new Error(`API 호출 제한 초과. ${waitTime}초 후 다시 시도해주세요.`);
+            error.retryAfter = waitTime;
+            error.isRateLimit = true;
+            throw error;
+        }
+
+        throw new Error(`API 호출 실패: ${response.status} ${errorData.error?.message || response.statusText}`);
     }
 
     const data = await response.json();
@@ -226,26 +272,97 @@ async function callGeminiForTabAnalysis(prompt, script) {
 }
 
 // ============================================
-// 자동 수정 함수
+// 재시도 로직이 포함된 API 호출
 // ============================================
-async function autoFixTab(stepNumber) {
+async function callGeminiWithRetry(prompt, script, tabNumber, maxRetries = 2) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            return await callGeminiAPI(prompt, script, tabNumber);
+        } catch (error) {
+            // 레이트 리밋 오류이고 재시도 가능한 경우
+            if (error.isRateLimit && attempt < maxRetries) {
+                const waitTime = Math.max(error.retryAfter * 1000, 40000); // 최소 40초
+                console.log(`[RETRY ${attempt + 1}/${maxRetries}] Waiting ${waitTime / 1000}s before retry...`);
+
+                // 사용자에게 알림
+                alert(`API 호출 제한에 도달했습니다.\n${Math.ceil(waitTime / 1000)}초 후 자동으로 재시도합니다.`);
+
+                await sleep(waitTime);
+                continue;
+            }
+
+            // 재시도 불가능하거나 최대 재시도 횟수 초과
+            throw error;
+        }
+    }
+}
+
+// ============================================
+// 탭별 분석 함수
+// ============================================
+async function analyzeTab(stepNumber) {
     const config = analysisConfig[stepNumber];
-    let script = document.getElementById('korea-senior-script').value;
+    const script = document.getElementById('korea-senior-script').value;
 
     if (!script || script.trim() === '') {
         alert('대본을 먼저 입력해주세요.');
         return;
     }
 
-    const confirmFix = confirm(`"${config.name}" 항목을 100점까지 자동 수정하시겠습니까?\n\n수정 기준: ${config.criteria.join(', ')}\n\n※ 이 작업은 시간이 걸릴 수 있습니다.`);
+    // 중복 실행 방지
+    if (apiCallState.isProcessing) {
+        alert(`현재 탭 ${apiCallState.activeTab} 분석이 진행 중입니다.\n잠시 후 다시 시도해주세요.`);
+        return;
+    }
+
+    try {
+        // 재시도 로직이 포함된 API 호출
+        const result = await callGeminiWithRetry(config.prompt, script, stepNumber);
+
+        // 결과 표시
+        document.getElementById(`summary-step-${stepNumber}`).textContent = result.summary || '분석 결과를 가져올 수 없습니다.';
+        document.getElementById(`score-step-${stepNumber}`).textContent = `${result.score || 0}/100`;
+
+        // 오류 목록 표시
+        const issuesList = document.getElementById(`issues-step-${stepNumber}`);
+        if (result.issues && result.issues.length > 0) {
+            issuesList.innerHTML = result.issues.map(issue =>
+                `<li><strong>${issue.text}</strong> - ${issue.reason}</li>`
+            ).join('');
+        } else {
+            issuesList.innerHTML = '<li>발견된 문제가 없습니다.</li>';
+        }
+
+        return result;
+    } catch (error) {
+        console.error('분석 오류:', error);
+        alert('분석 중 오류가 발생했습니다:\n' + error.message);
+    }
+}
+
+// ============================================
+// 자동 수정 함수 (단일 API 호출)
+// ============================================
+async function autoFixTab(stepNumber) {
+    const config = analysisConfig[stepNumber];
+    const script = document.getElementById('korea-senior-script').value;
+
+    if (!script || script.trim() === '') {
+        alert('대본을 먼저 입력해주세요.');
+        return;
+    }
+
+    // 중복 실행 방지
+    if (apiCallState.isProcessing) {
+        alert(`현재 탭 ${apiCallState.activeTab} 작업이 진행 중입니다.\n잠시 후 다시 시도해주세요.`);
+        return;
+    }
+
+    const confirmFix = confirm(`"${config.name}" 항목을 자동 수정하시겠습니까?\n\n수정 기준: ${config.criteria.join(', ')}\n\n※ 1회 API 호출로 분석 및 수정을 진행합니다.`);
 
     if (!confirmFix) {
         return;
     }
-
-    let score = 0;
-    let iterations = 0;
-    const maxIterations = 3; // 최대 3회 반복
 
     // 로딩 표시
     const button = document.getElementById(`autofix-step-${stepNumber}`);
@@ -254,42 +371,64 @@ async function autoFixTab(stepNumber) {
     button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>수정 중...';
 
     try {
-        while (score < 100 && iterations < maxIterations) {
-            iterations++;
+        // 단일 API 호출로 분석 + 수정 + 평가
+        const fixPrompt = `다음 대본을 "${config.name}" 기준으로 분석하고 100점이 되도록 수정하세요.
 
-            // 수정 프롬프트
-            const fixPrompt = `${config.prompt}\n\n점수가 100점이 되도록 대본을 수정하세요. 수정 기준: ${config.criteria.join(', ')}\n\n수정된 대본 전체를 반환하고, 분석 결과도 함께 제공하세요.`;
+평가 기준: ${config.criteria.join(', ')}
 
-            const result = await callGeminiForTabAnalysis(fixPrompt, script);
+응답 형식 (JSON):
+{
+    "summary": "분석 요약 (수정 전 문제점과 수정 내용 포함)",
+    "issues": [
+        {"text": "수정된 부분", "reason": "수정 이유"}
+    ],
+    "fixedScript": "수정된 전체 대본 (원본 형식 유지)",
+    "score": 100
+}
 
-            // 수정된 대본 추출 (응답에서 대본 부분 찾기)
-            if (result.fixedScript) {
-                script = result.fixedScript;
-            }
+중요: fixedScript에는 반드시 수정된 전체 대본을 포함해야 합니다.
 
-            score = result.score || 0;
+대본:
+${script}`;
 
-            // 진행 상황 업데이트
-            button.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>수정 중... (${iterations}/${maxIterations}) - 점수: ${score}/100`;
+        console.log(`[AUTO-FIX] Tab ${stepNumber} - Starting single-call fix`);
 
-            // 결과 업데이트
-            document.getElementById(`summary-step-${stepNumber}`).textContent = result.summary || '수정 중...';
-            document.getElementById(`score-step-${stepNumber}`).textContent = `${score}/100`;
+        const result = await callGeminiWithRetry(fixPrompt, script, stepNumber);
+
+        // 수정된 대본 저장
+        if (result.fixedScript && result.fixedScript.trim() !== '') {
+            window.fixedScripts[stepNumber] = result.fixedScript;
+            console.log(`[AUTO-FIX] Tab ${stepNumber} - Fixed script saved (${result.fixedScript.length} chars)`);
+        } else {
+            // fixedScript가 없으면 원본 유지
+            window.fixedScripts[stepNumber] = script;
+            console.warn(`[AUTO-FIX] Tab ${stepNumber} - No fixedScript in response, using original`);
         }
 
-        // 수정 완료된 대본 저장
-        window.fixedScripts[stepNumber] = script;
+        // 결과 업데이트
+        document.getElementById(`summary-step-${stepNumber}`).textContent = result.summary || '수정 완료';
+        document.getElementById(`score-step-${stepNumber}`).textContent = `${result.score || 0}/100`;
+
+        // 수정 내역 표시
+        const issuesList = document.getElementById(`issues-step-${stepNumber}`);
+        if (result.issues && result.issues.length > 0) {
+            issuesList.innerHTML = result.issues.map(issue =>
+                `<li><strong>${issue.text}</strong> - ${issue.reason}</li>`
+            ).join('');
+        } else {
+            issuesList.innerHTML = '<li>수정 사항이 없습니다.</li>';
+        }
 
         button.disabled = false;
         button.innerHTML = originalText;
 
-        alert(`수정 완료!\n\n최종 점수: ${score}/100\n반복 횟수: ${iterations}회\n\n"다운로드" 버튼을 클릭하여 수정된 대본을 저장하세요.`);
+        alert(`수정 완료!\n\n최종 점수: ${result.score || 0}/100\n\n"다운로드" 버튼을 클릭하여 수정된 대본을 저장하세요.`);
 
     } catch (error) {
         console.error('자동 수정 오류:', error);
         button.disabled = false;
         button.innerHTML = originalText;
-        alert('자동 수정 중 오류가 발생했습니다: ' + error.message);
+        alert('자동 수정 중 오류가 발생했습니다:\n' + error.message);
     }
 }
 
@@ -324,9 +463,17 @@ function downloadTab(stepNumber) {
 }
 
 // ============================================
-// 이벤트 리스너 등록
+// 이벤트 리스너 등록 (중복 방지)
 // ============================================
-document.addEventListener('DOMContentLoaded', function () {
+let eventListenersRegistered = false;
+
+function registerEventListeners() {
+    // 중복 등록 방지
+    if (eventListenersRegistered) {
+        console.log('[TAB-ANALYSIS] Event listeners already registered, skipping');
+        return;
+    }
+
     // 자동 수정 버튼 이벤트
     for (let i = 1; i <= 5; i++) {
         const autofixBtn = document.getElementById(`autofix-step-${i}`);
@@ -340,5 +487,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    console.log('탭 분석 시스템 초기화 완료');
+    eventListenersRegistered = true;
+    console.log('[TAB-ANALYSIS] Event listeners registered successfully');
+}
+
+// ============================================
+// 초기화
+// ============================================
+document.addEventListener('DOMContentLoaded', function () {
+    registerEventListeners();
+    console.log('[TAB-ANALYSIS] System initialized');
+    console.log(`[TAB-ANALYSIS] API call interval: ${apiCallState.minInterval / 1000}s`);
 });
