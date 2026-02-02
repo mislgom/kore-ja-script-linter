@@ -930,8 +930,7 @@ function initAIStartButton() {
       }
     }
 
-    // 분석 시작
-    analyzeNextStep();
+    // [필수 수정 1] 중복 호출 제거 - ListModels 완료 후에만 analyzeNextStep() 실행됨
   });
 }
 
@@ -1048,170 +1047,174 @@ async function callGeminiWithRetry(prompt, isJson = true, retries = 2) {
     await new Promise(resolve => setTimeout(resolve, 4000 - timeSinceLastCall));
   }
 
+  // [필수 수정 2] try/finally로 isProcessing 보호
   apiCallState.isProcessing = true;
   apiCallState.lastCallTime = Date.now();
 
-  var apiKey = localStorage.getItem('GEMINI_API_KEY');
-  if (!apiKey) {
-    apiCallState.isProcessing = false;
-    throw new Error('API 키가 없습니다.');
-  }
-
-  // API 키 마스킹 (앞 4글자만 표시)
-  var maskedKey = apiKey.substring(0, 4) + '****' + apiKey.substring(apiKey.length - 4);
-
-  // [필수 수정 1] 모델 ID - ListModels 결과 사용 또는 폴백
-  var modelId = apiCallState.selectedModel || 'gemini-1.5-flash'; // 폴백: gemini-1.5-flash
-  var apiVersion = 'v1beta';
-  var endpoint = 'generateContent';
-
-  // 전체 URL 구성
-  var baseUrl = 'https://generativelanguage.googleapis.com';
-  var path = '/' + apiVersion + '/models/' + modelId + ':' + endpoint;
-  var url = baseUrl + path + '?key=' + apiKey;
-
-  // [필수 1] 요청 직전 로그 (민감정보 마스킹)
-  console.group('[API DEBUG] 요청 정보');
-  console.log('Method:', 'POST');
-  console.log('Base URL:', baseUrl);
-  console.log('API Version:', apiVersion);
-  console.log('Model ID:', modelId);
-  console.log('Model Source:', apiCallState.selectedModel ? 'ListModels' : 'Fallback');
-  console.log('Endpoint:', endpoint);
-  console.log('Full Path:', path);
-  console.log('Full URL (without key):', baseUrl + path);
-  console.log('API Key (masked):', maskedKey);
-  console.log('Prompt Length:', prompt.length, 'chars');
-  console.log('Prompt Preview:', prompt.substring(0, 100) + '...');
-  console.log('Is JSON Response:', isJson);
-  console.groupEnd();
-
-  for (var i = 0; i <= retries; i++) {
-    try {
-      var bodyConfig = {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 8192
-        }
-      };
-
-      if (isJson) {
-        bodyConfig.generationConfig.responseMimeType = "application/json";
-      }
-
-      console.log('[API DEBUG] Request Body Config:', JSON.stringify(bodyConfig, null, 2).substring(0, 500) + '...');
-
-      var response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bodyConfig)
-      });
-
-      // [필수 1] 응답 로그
-      console.group('[API DEBUG] 응답 정보');
-      console.log('Status Code:', response.status);
-      console.log('Status Text:', response.statusText);
-      console.log('OK:', response.ok);
-      console.groupEnd();
-
-      // [필수 2] 엔드포인트/라우팅 점검
-      if (response.status === 404) {
-        var errorBody = '';
-        try {
-          errorBody = await response.text();
-          console.error('[API DEBUG] 404 Response Body:', errorBody);
-        } catch (e) {
-          console.error('[API DEBUG] 404 응답 본문 읽기 실패:', e);
-        }
-
-        // [필수 3] 오류 메시지 개선 - 모델 ID/retired 가능성 명시
-        var errorMsg = '❌ API 엔드포인트 오류 (404)\n\n';
-        errorMsg += '호출 URL: ' + baseUrl + path + '\n';
-        errorMsg += '모델: ' + modelId + '\n';
-        errorMsg += 'API 버전: ' + apiVersion + '\n\n';
-        errorMsg += '가능한 원인:\n';
-        errorMsg += '1. 모델 ID 불일치 또는 retired 모델 (가장 가능성 높음)\n';
-        errorMsg += '2. API 버전 불일치 (v1beta 확인 필요)\n';
-        errorMsg += '3. 엔드포인트 경로 오류 (:generateContent 확인 필요)\n\n';
-
-        // [필수 수정 3] ListModels 결과가 있으면 사용 가능한 모델 표시
-        if (apiCallState.availableModels && apiCallState.availableModels.length > 0) {
-          errorMsg += '✅ 현재 프로젝트에서 사용 가능한 모델:\n';
-          apiCallState.availableModels.slice(0, 5).forEach(function (model) {
-            var modelName = model.name.replace('models/', '');
-            errorMsg += '  - ' + modelName + ' (' + model.displayName + ')\n';
-          });
-          if (apiCallState.availableModels.length > 5) {
-            errorMsg += '  ... 외 ' + (apiCallState.availableModels.length - 5) + '개\n';
-          }
-          errorMsg += '\n';
-        } else {
-          errorMsg += '⚠️ ListModels 조회 실패 - 사용 가능한 모델 목록을 가져올 수 없습니다.\n\n';
-        }
-
-        if (errorBody) {
-          try {
-            var errorJson = JSON.parse(errorBody);
-            if (errorJson.error && errorJson.error.message) {
-              errorMsg += 'API 오류 메시지: ' + errorJson.error.message;
-            }
-          } catch (e) {
-            errorMsg += 'Response Body: ' + errorBody.substring(0, 200);
-          }
-        }
-
-        apiCallState.isProcessing = false;
-        throw new Error(errorMsg);
-      }
-
-      // [필수 3] 다른 HTTP 오류 구분
-      if (response.status === 429) {
-        console.warn('[API DEBUG] Rate limit (429) - 40초 대기');
-        await new Promise(resolve => setTimeout(resolve, 40000));
-        continue;
-      }
-
-      if (response.status === 401) {
-        apiCallState.isProcessing = false;
-        throw new Error('❌ API 키 인증 실패 (401)\n\nAPI 키가 유효하지 않거나 권한이 없습니다.\n우측 상단 🔑 버튼에서 API 키를 확인해주세요.');
-      }
-
-      if (response.status === 403) {
-        apiCallState.isProcessing = false;
-        throw new Error('❌ API 접근 거부 (403)\n\nAPI 키에 이 모델을 사용할 권한이 없습니다.\nGemini API 콘솔에서 권한을 확인해주세요.');
-      }
-
-      if (!response.ok) {
-        var genericErrorBody = '';
-        try {
-          genericErrorBody = await response.text();
-          console.error('[API DEBUG] Error Response Body:', genericErrorBody);
-        } catch (e) {
-          console.error('[API DEBUG] 오류 응답 본문 읽기 실패:', e);
-        }
-        throw new Error('API Error: ' + response.status + '\n\n' + genericErrorBody.substring(0, 200));
-      }
-
-      var data = await response.json();
-      console.log('[API DEBUG] Response Data:', JSON.stringify(data, null, 2).substring(0, 500) + '...');
-
-      apiCallState.isProcessing = false;
-
-      if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-        throw new Error('Invalid API response format');
-      }
-
-      return data.candidates[0].content.parts[0].text;
-
-    } catch (err) {
-      console.error('[API DEBUG] Attempt ' + (i + 1) + ' failed:', err);
-      if (i === retries) {
-        apiCallState.isProcessing = false;
-        throw err;
-      }
-      await new Promise(resolve => setTimeout(resolve, 2000));
+  try {
+    var apiKey = localStorage.getItem('GEMINI_API_KEY');
+    if (!apiKey) {
+      throw new Error('API 키가 없습니다.');
     }
+
+    // API 키 마스킹 (앞 4글자만 표시)
+    var maskedKey = apiKey.substring(0, 4) + '****' + apiKey.substring(apiKey.length - 4);
+
+    // [필수 수정 1] 모델 ID - ListModels 결과 사용 또는 폴백
+    var modelId = apiCallState.selectedModel || 'gemini-1.5-flash'; // 폴백: gemini-1.5-flash
+    var apiVersion = 'v1beta';
+    var endpoint = 'generateContent';
+
+    // 전체 URL 구성
+    var baseUrl = 'https://generativelanguage.googleapis.com';
+    var path = '/' + apiVersion + '/models/' + modelId + ':' + endpoint;
+    var url = baseUrl + path + '?key=' + apiKey;
+
+    // [필수 1] 요청 직전 로그 (민감정보 마스킹)
+    console.group('[API DEBUG] 요청 정보');
+    console.log('Method:', 'POST');
+    console.log('Base URL:', baseUrl);
+    console.log('API Version:', apiVersion);
+    console.log('Model ID:', modelId);
+    console.log('Model Source:', apiCallState.selectedModel ? 'ListModels' : 'Fallback');
+    console.log('Endpoint:', endpoint);
+    console.log('Full Path:', path);
+    console.log('Full URL (without key):', baseUrl + path);
+    console.log('API Key (masked):', maskedKey);
+    console.log('Prompt Length:', prompt.length, 'chars');
+    console.log('Prompt Preview:', prompt.substring(0, 100) + '...');
+    console.log('Is JSON Response:', isJson);
+    console.groupEnd();
+
+    for (var i = 0; i <= retries; i++) {
+      try {
+        var bodyConfig = {
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 8192
+          }
+        };
+
+        if (isJson) {
+          bodyConfig.generationConfig.responseMimeType = "application/json";
+        }
+
+        console.log('[API DEBUG] Request Body Config:', JSON.stringify(bodyConfig, null, 2).substring(0, 500) + '...');
+
+        var response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bodyConfig)
+        });
+
+        // [필수 1] 응답 로그
+        console.group('[API DEBUG] 응답 정보');
+        console.log('Status Code:', response.status);
+        console.log('Status Text:', response.statusText);
+        console.log('OK:', response.ok);
+        console.groupEnd();
+
+        // [필수 2] 엔드포인트/라우팅 점검
+        if (response.status === 404) {
+          var errorBody = '';
+          try {
+            errorBody = await response.text();
+            console.error('[API DEBUG] 404 Response Body:', errorBody);
+          } catch (e) {
+            console.error('[API DEBUG] 404 응답 본문 읽기 실패:', e);
+          }
+
+          // [필수 3] 오류 메시지 개선 - 모델 ID/retired 가능성 명시
+          var errorMsg = '❌ API 엔드포인트 오류 (404)\n\n';
+          errorMsg += '호출 URL: ' + baseUrl + path + '\n';
+          errorMsg += '모델: ' + modelId + '\n';
+          errorMsg += 'API 버전: ' + apiVersion + '\n\n';
+          errorMsg += '가능한 원인:\n';
+          errorMsg += '1. 모델 ID 불일치 또는 retired 모델 (가장 가능성 높음)\n';
+          errorMsg += '2. API 버전 불일치 (v1beta 확인 필요)\n';
+          errorMsg += '3. 엔드포인트 경로 오류 (:generateContent 확인 필요)\n\n';
+
+          // [필수 수정 3] ListModels 결과가 있으면 사용 가능한 모델 표시
+          if (apiCallState.availableModels && apiCallState.availableModels.length > 0) {
+            errorMsg += '✅ 현재 프로젝트에서 사용 가능한 모델:\n';
+            apiCallState.availableModels.slice(0, 5).forEach(function (model) {
+              var modelName = model.name.replace('models/', '');
+              errorMsg += '  - ' + modelName + ' (' + model.displayName + ')\n';
+            });
+            if (apiCallState.availableModels.length > 5) {
+              errorMsg += '  ... 외 ' + (apiCallState.availableModels.length - 5) + '개\n';
+            }
+            errorMsg += '\n';
+          } else {
+            errorMsg += '⚠️ ListModels 조회 실패 - 사용 가능한 모델 목록을 가져올 수 없습니다.\n\n';
+          }
+
+          if (errorBody) {
+            try {
+              var errorJson = JSON.parse(errorBody);
+              if (errorJson.error && errorJson.error.message) {
+                errorMsg += 'API 오류 메시지: ' + errorJson.error.message;
+              }
+            } catch (e) {
+              errorMsg += 'Response Body: ' + errorBody.substring(0, 200);
+            }
+          }
+
+          apiCallState.isProcessing = false;
+          throw new Error(errorMsg);
+        }
+
+        // [필수 3] 다른 HTTP 오류 구분
+        if (response.status === 429) {
+          console.warn('[API DEBUG] Rate limit (429) - 40초 대기');
+          await new Promise(resolve => setTimeout(resolve, 40000));
+          continue;
+        }
+
+        if (response.status === 401) {
+          apiCallState.isProcessing = false;
+          throw new Error('❌ API 키 인증 실패 (401)\n\nAPI 키가 유효하지 않거나 권한이 없습니다.\n우측 상단 🔑 버튼에서 API 키를 확인해주세요.');
+        }
+
+        if (response.status === 403) {
+          apiCallState.isProcessing = false;
+          throw new Error('❌ API 접근 거부 (403)\n\nAPI 키에 이 모델을 사용할 권한이 없습니다.\nGemini API 콘솔에서 권한을 확인해주세요.');
+        }
+
+        if (!response.ok) {
+          var genericErrorBody = '';
+          try {
+            genericErrorBody = await response.text();
+            console.error('[API DEBUG] Error Response Body:', genericErrorBody);
+          } catch (e) {
+            console.error('[API DEBUG] 오류 응답 본문 읽기 실패:', e);
+          }
+          throw new Error('API Error: ' + response.status + '\n\n' + genericErrorBody.substring(0, 200));
+        }
+
+        var data = await response.json();
+        console.log('[API DEBUG] Response Data:', JSON.stringify(data, null, 2).substring(0, 500) + '...');
+
+        apiCallState.isProcessing = false;
+
+        if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+          throw new Error('Invalid API response format');
+        }
+
+        return data.candidates[0].content.parts[0].text;
+
+      } catch (err) {
+        console.error('[API DEBUG] Attempt ' + (i + 1) + ' failed:', err);
+        if (i === retries) {
+          throw err;
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
+  } finally {
+    // [필수 수정 2] 어떤 경로든 반드시 isProcessing 해제
+    apiCallState.isProcessing = false;
   }
 }
 
