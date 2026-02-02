@@ -510,16 +510,48 @@ function initAIStartButton() {
     resetProgress();
     showNotification('AI 분석을 시작합니다...', 'info');
 
-    // 5단계 분석 실행
+    // Step 0 + 5단계 분석 실행 (총 6단계)
     var analysisSteps = [
-      { step: 1, name: '배경 확인', prompt: '이 대본의 배경(한국/일본/조선 등)을 분석하고 점수(0-100)를 매겨주세요. JSON 형식: {"background": "한국/일본/조선/기타", "score": 0-100, "keywords": [], "feedback": ""}' },
-      { step: 2, name: '등장인물 일관성', prompt: '등장인물의 나이, 이름, 관계가 일관되는지 분석하고 점수(0-100)를 매겨주세요. JSON 형식: {"score": 0-100, "characters": [], "issues": [], "feedback": ""}' },
-      { step: 3, name: '스토리 왜곡 분석', prompt: '씬 구조, 시간/장소 흐름이 자연스러운지 분석하고 점수(0-100)를 매겨주세요. JSON 형식: {"score": 0-100, "sceneCount": 0, "issues": [], "feedback": ""}' },
-      { step: 4, name: '반전/변화 속도', prompt: '감정 변화와 페이싱이 적절한지 분석하고 점수(0-100)를 매겨주세요. JSON 형식: {"score": 0-100, "pacing": "적절/빠름/느림", "feedback": ""}' },
-      { step: 5, name: '재미/몰입 요소', prompt: '갈등, 대화, 시니어 공감 요소를 분석하고 점수(0-100)를 매겨주세요. JSON 형식: {"score": 0-100, "elements": [], "feedback": ""}' }
+      {
+        step: 0,
+        name: '대본 파악/숙지',
+        category: 'comprehension',
+        prompt: '당신은 대본 분석 전문가입니다. 먼저 아래 대본을 끝까지 읽고 완전히 이해하세요.\n\n대본:\n{SCRIPT}\n\n위 대본을 읽고 다음 정보를 파악하세요:\n1. 주요 등장인물과 관계\n2. 시간적/공간적 배경\n3. 핵심 플롯과 갈등\n4. 전체 스토리 흐름\n\nJSON 형식으로 응답:\n{\n  "comprehended": true,\n  "summary": "대본 핵심 요약 (2-3문장, 결말 노출 금지)",\n  "characters": ["인물1", "인물2"],\n  "setting": "배경 정보",\n  "plotPoints": ["주요 사건1", "주요 사건2"]\n}'
+      },
+      {
+        step: 1,
+        name: '배경확인',
+        category: 'background',
+        prompt: '[대본 파악 완료] 이제 배경을 분석합니다.\n\n이 대본의 배경(한국/일본/조선 등)을 분석하고 점수(0-100)를 매겨주세요.\n\nJSON 형식:\n{\n  "score": 0-100,\n  "issues": [\n    {"text": "문제 설명", "reason": "근거/발췌", "type": "배경충돌"}\n  ],\n  "fixes": [\n    {"before": "수정 전", "after": "수정 후", "reason": "수정 이유"}\n  ]\n}'
+      },
+      {
+        step: 2,
+        name: '등장인물 일관성',
+        category: 'character',
+        prompt: '등장인물의 나이, 이름, 관계가 일관되는지 분석하고 점수(0-100)를 매겨주세요.\n\nJSON 형식:\n{\n  "score": 0-100,\n  "issues": [\n    {"text": "문제 설명", "reason": "근거/발췌", "type": "인물명 불일치"}\n  ],\n  "fixes": [\n    {"before": "수정 전", "after": "수정 후", "reason": "수정 이유"}\n  ]\n}'
+      },
+      {
+        step: 3,
+        name: '스토리 왜곡 분석',
+        category: 'distortion',
+        prompt: '씬 구조, 시간/장소 흐름이 자연스러운지 분석하고 점수(0-100)를 매겨주세요.\n\nJSON 형식:\n{\n  "score": 0-100,\n  "issues": [\n    {"text": "문제 설명", "reason": "근거/발췌", "type": "시간흐름 단절"}\n  ],\n  "fixes": [\n    {"before": "수정 전", "after": "수정 후", "reason": "수정 이유"}\n  ]\n}'
+      },
+      {
+        step: 4,
+        name: '반전/변화 속도',
+        category: 'twistPace',
+        prompt: '감정 변화와 페이싱이 적절한지 분석하고 점수(0-100)를 매겨주세요.\n\nJSON 형식:\n{\n  "score": 0-100,\n  "issues": [\n    {"text": "문제 설명", "reason": "근거/발췌", "type": "페이싱 급변"}\n  ],\n  "fixes": [\n    {"before": "수정 전", "after": "수정 후", "reason": "수정 이유"}\n  ]\n}'
+      },
+      {
+        step: 5,
+        name: '재미/몰입 요소',
+        category: 'immersion',
+        prompt: '갈등, 대화, 시니어 공감 요소를 분석하고 점수(0-100)를 매겨주세요.\n\nJSON 형식:\n{\n  "score": 0-100,\n  "issues": [\n    {"text": "문제 설명", "reason": "근거/발췌", "type": "몰입 저하"}\n  ],\n  "fixes": [\n    {"before": "수정 전", "after": "수정 후", "reason": "수정 이유"}\n  ]\n}'
+      }
     ];
 
     var results = {};
+    var comprehensionResult = null;
     var currentStep = 0;
 
     function analyzeNextStep() {
@@ -532,61 +564,57 @@ function initAIStartButton() {
       var stepInfo = analysisSteps[currentStep];
       updateProgress(stepInfo.step, 'processing', (currentStep / analysisSteps.length) * 100);
 
-      var fullPrompt = '당신은 대본 분석 전문가입니다.\n\n' +
-        '## 분석 항목: ' + stepInfo.name + '\n\n' +
-        stepInfo.prompt + '\n\n' +
-        '## 대본\n' + script.substring(0, 15000) + '\n\n' +
-        '반드시 JSON 형식으로만 응답해주세요.';
+      var prompt = stepInfo.prompt.replace('{SCRIPT}', script.substring(0, 30000));
 
-      if (typeof window.geminiAPI !== 'undefined' && typeof window.geminiAPI.forceGeminiAnalyze === 'function') {
-        window.geminiAPI.forceGeminiAnalyze(fullPrompt, { temperature: 0.3, maxTokens: 2048 })
-          .then(function (response) {
-            console.log('[STEP ' + stepInfo.step + '] 응답:', response);
-
-            try {
-              var jsonMatch = response.match(/\{[\s\S]*\}/);
-              var parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : { score: 70, feedback: '분석 완료' };
-              results['step' + stepInfo.step] = parsed;
-            } catch (err) {
-              console.error('[STEP ' + stepInfo.step + '] JSON 파싱 오류:', err);
-              results['step' + stepInfo.step] = { score: 70, feedback: '분석 완료 (파싱 오류)' };
-            }
-
-            updateProgress(stepInfo.step, 'complete', ((currentStep + 1) / analysisSteps.length) * 100);
-            currentStep++;
-
-            setTimeout(analyzeNextStep, 500);
-          })
-          .catch(function (err) {
-            console.error('[STEP ' + stepInfo.step + '] 오류:', err);
-            results['step' + stepInfo.step] = { score: 0, feedback: '분석 실패: ' + err.message };
-            updateProgress(stepInfo.step, 'complete', ((currentStep + 1) / analysisSteps.length) * 100);
-            currentStep++;
-            setTimeout(analyzeNextStep, 500);
-          });
-      } else {
-        // 시뮬레이션
-        setTimeout(function () {
-          results['step' + stepInfo.step] = { score: 75 + Math.floor(Math.random() * 20), feedback: '시뮬레이션 결과' };
-          updateProgress(stepInfo.step, 'complete', ((currentStep + 1) / analysisSteps.length) * 100);
-          currentStep++;
-          analyzeNextStep();
-        }, 1000);
+      if (stepInfo.step > 0 && comprehensionResult) {
+        var context = "## 대본 파악 정보 (참고용):\n" + JSON.stringify(comprehensionResult, null, 2) + "\n\n";
+        prompt = context + prompt;
       }
+
+      console.log('[STEP ' + stepInfo.step + '] 요청 시작');
+
+      callGeminiWithRetry(prompt)
+        .then(function (responseText) {
+          console.log('[STEP ' + stepInfo.step + '] 응답:', responseText);
+          try {
+            // JSON 파싱 (마크다운 코드 블록 제거)
+            var jsonStr = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+            var result = JSON.parse(jsonStr);
+
+            if (stepInfo.step === 0) {
+              comprehensionResult = result;
+            } else {
+              results['step' + stepInfo.step] = result;
+            }
+            updateProgress(stepInfo.step, 'complete', ((currentStep + 1) / analysisSteps.length) * 100);
+            currentStep++;
+            setTimeout(analyzeNextStep, 4000); // 다음 단계 전 4초 대기
+          } catch (e) {
+            console.error('[STEP ' + stepInfo.step + '] JSON Parse Error:', e);
+            throw new Error('응답 처리 실패 (JSON 파싱 오류)');
+          }
+        })
+        .catch(function (err) {
+          console.error('[STEP ' + stepInfo.step + '] 오류:', err);
+          updateProgress(stepInfo.step, 'error', ((currentStep) / analysisSteps.length) * 100);
+          showNotification('분석 중 오류 발생: ' + err.message, 'error');
+          AppState.isAIAnalyzing = false;
+          btn.disabled = false;
+          btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        });
     }
 
     // 전역 변수: 카테고리별 분석 데이터
     var analysisByCategory = {};
-    var selectedCategory = 'korea';
+    var selectedCategory = 'background';
 
-    // 카테고리별 요구 점수
+    // 카테고리별 요구 점수 (모두 100점 목표)
     var categoryRequirements = {
-      korea: { name: "한국배경", required: 100, type: "필수" },
-      character: { name: "인물일관성", required: 100, type: "필수" },
-      relationship: { name: "관계일관성", required: 100, type: "필수" },
-      flow: { name: "이야기흐름", required: 90, type: "권장" },
-      pacing: { name: "페이싱", required: 100, type: "필수" },
-      fun: { name: "재미요소", required: 90, type: "권장" }
+      background: { name: "배경확인", required: 100, type: "필수" },
+      character: { name: "등장인물 일관성", required: 100, type: "필수" },
+      distortion: { name: "스토리 왜곡 분석", required: 100, type: "필수" },
+      twistPace: { name: "반전/변화 속도", required: 100, type: "권장" },
+      immersion: { name: "재미/몰입 요소", required: 100, type: "권장" }
     };
 
     function completeAnalysis() {
@@ -594,57 +622,45 @@ function initAIStartButton() {
 
       // 기존 results를 analysisByCategory로 변환
       analysisByCategory = {
-        korea: parseStepResult(results.step1, "한국배경"),
-        character: parseStepResult(results.step2, "인물일관성"),
-        relationship: parseStepResult(results.step3, "관계일관성"),
-        flow: parseStepResult(results.step4, "이야기흐름"),
-        pacing: parseStepResult(results.step5, "페이싱"),
-        fun: { name: "재미요소", score: 0, issues: [], fixes: [] } // step6 없으므로 기본값
+        background: parseStepResult(results.step1, "배경확인"),
+        character: parseStepResult(results.step2, "등장인물 일관성"),
+        distortion: parseStepResult(results.step3, "스토리 왜곡 분석"),
+        twistPace: parseStepResult(results.step4, "반전/변화 속도"),
+        immersion: parseStepResult(results.step5, "재미/몰입 요소")
       };
 
-      // 점수 표시
-      if (analysisByCategory.korea) {
-        var el1 = document.getElementById('ai-korea-score');
-        if (el1) el1.textContent = analysisByCategory.korea.score || 0;
-      }
-      if (analysisByCategory.character) {
-        var el2 = document.getElementById('ai-char-score');
-        if (el2) el2.textContent = analysisByCategory.character.score || 0;
-      }
-      if (analysisByCategory.relationship) {
-        var el3 = document.getElementById('ai-rel-score');
-        if (el3) el3.textContent = analysisByCategory.relationship.score || 0;
-      }
-      if (analysisByCategory.flow) {
-        var el4 = document.getElementById('ai-flow-score');
-        if (el4) el4.textContent = analysisByCategory.flow.score || 0;
-      }
-      if (analysisByCategory.pacing) {
-        var el5 = document.getElementById('ai-pace-score');
-        if (el5) el5.textContent = analysisByCategory.pacing.score || 0;
-      }
-      if (analysisByCategory.fun) {
-        var el6 = document.getElementById('ai-fun-score');
-        if (el6) el6.textContent = analysisByCategory.fun.score || 0;
-      }
+      // 점수 표시 (5개 항목)
+      var categories = ['background', 'character', 'distortion', 'twistPace', 'immersion'];
+      var ids = ['ai-background-score', 'ai-character-score', 'ai-distortion-score', 'ai-twistPace-score', 'ai-immersion-score'];
+
+      categories.forEach(function (cat, idx) {
+        if (analysisByCategory[cat]) {
+          var el = document.getElementById(ids[idx]);
+          if (el) el.textContent = analysisByCategory[cat].score || 0;
+        }
+      });
 
       // 합격/불합격 판정
       var passed = calculateOverallVerdict();
 
       // 기본 카테고리 선택
-      selectCategory('korea');
+      selectCategory('background');
 
       // 결과 표시
       if (resultEl) resultEl.classList.remove('hidden');
 
       var summaryEl = document.getElementById('korea-ai-summary');
       if (summaryEl) {
-        summaryEl.textContent = passed
-          ? '모든 항목이 기준을 충족했습니다. 대본이 승인되었습니다.'
-          : '일부 항목이 기준에 미달했습니다. 수정이 필요합니다.';
+        if (comprehensionResult && comprehensionResult.summary) {
+          summaryEl.textContent = '[대본 파악] ' + comprehensionResult.summary;
+        } else {
+          summaryEl.textContent = passed
+            ? '모든 항목이 기준을 충족했습니다. 대본이 승인되었습니다.'
+            : '일부 항목이 기준에 미달했습니다. 수정이 필요합니다.';
+        }
       }
 
-      // 종합 점수 계산 (기존 로직 유지)
+      // 종합 점수 계산
       var scores = [];
       for (var i = 1; i <= 5; i++) {
         var stepResult = results['step' + i];
@@ -867,6 +883,84 @@ function updateCategoryFeedback(category) {
 /* ======================================================
    FULL SCRIPT AUTO-FIX
 ====================================================== */
+/* ======================================================
+   FULL SCRIPT AUTO-FIX & API UTILS
+====================================================== */
+
+// API 호출 유틸리티 (레이트 리밋 및 재시도)
+async function callGeminiWithRetry(prompt, isJson = true, retries = 2) {
+  if (apiCallState.isProcessing) {
+    throw new Error('API 호출이 진행 중입니다. 잠시만 기다려주세요.');
+  }
+
+  // 최소 호출 간격 (4초)
+  var now = Date.now();
+  var timeSinceLastCall = now - apiCallState.lastCallTime;
+  if (timeSinceLastCall < 4000) {
+    await new Promise(resolve => setTimeout(resolve, 4000 - timeSinceLastCall));
+  }
+
+  apiCallState.isProcessing = true;
+  apiCallState.lastCallTime = Date.now();
+
+  var apiKey = localStorage.getItem('GEMINI_API_KEY');
+  if (!apiKey) {
+    apiCallState.isProcessing = false;
+    throw new Error('API 키가 없습니다.');
+  }
+
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=' + apiKey;
+
+  for (var i = 0; i <= retries; i++) {
+    try {
+      var bodyConfig = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 8192
+        }
+      };
+
+      if (isJson) {
+        bodyConfig.generationConfig.responseMimeType = "application/json";
+      }
+
+      var response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyConfig)
+      });
+
+      if (response.status === 429) {
+        console.warn('[API] Rate limit exceeded. Waiting...');
+        await new Promise(resolve => setTimeout(resolve, 40000)); // 40초 대기
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error('API Error: ' + response.status);
+      }
+
+      var data = await response.json();
+      apiCallState.isProcessing = false;
+
+      if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+        throw new Error('Invalid API response format');
+      }
+
+      return data.candidates[0].content.parts[0].text;
+
+    } catch (err) {
+      console.error('[API] Attempt ' + (i + 1) + ' failed:', err);
+      if (i === retries) {
+        apiCallState.isProcessing = false;
+        throw err;
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
+}
+
 function initAutoFixAllButton() {
   var btn = document.getElementById('auto-fix-all-btn');
   if (!btn) {
@@ -885,7 +979,6 @@ function initAutoFixAllButton() {
 
     var scriptText = originalScript.value.trim();
 
-    // 중복 클릭 방지
     if (btn.disabled) {
       alert('이미 수정 작업이 진행 중입니다.');
       return;
@@ -902,7 +995,12 @@ function initAutoFixAllButton() {
     Object.keys(analysisByCategory).forEach(function (key) {
       var category = analysisByCategory[key];
       if (category.fixes && category.fixes.length > 0) {
-        allFixes = allFixes.concat(category.fixes);
+        // 카테고리 정보 추가
+        var fixesWithCat = category.fixes.map(function (f) {
+          f.category = key;
+          return f;
+        });
+        allFixes = allFixes.concat(fixesWithCat);
       }
     });
 
@@ -911,73 +1009,78 @@ function initAutoFixAllButton() {
       return;
     }
 
-    // 사용자 확인
-    var confirmMsg = '총 ' + allFixes.length + '개의 수정 사항을 반영하여 전체 대본을 자동 수정하시겠습니까?\n\n수정 후 TXT 파일로 다운로드됩니다.';
+    // 중복 제거 및 우선순위 정렬
+    var mergedFixes = deduplicateAndPrioritizeFixes(allFixes);
+
+    var confirmMsg = '총 ' + mergedFixes.length + '개의 수정 사항(중복 제거됨)을 반영하여 전체 대본을 100점으로 자동 수정하시겠습니까?\n\n수정 후 TXT 파일로 다운로드됩니다.';
     if (!confirm(confirmMsg)) return;
 
-    // 로딩 상태
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>수정 중...';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>100점 반영 수정 중...';
 
     try {
-      // Gemini API 호출
-      var fixedScript = await callGeminiForFullFix(scriptText, allFixes);
+      // 수정 사항 요약 생성
+      var fixSummary = mergedFixes.map(function (fix, idx) {
+        return (idx + 1) + '. [' + fix.category + '] "' + fix.before + '" → "' + fix.after + '" (' + fix.reason + ')';
+      }).join('\n');
+
+      var prompt = '다음 대본을 아래 수정 사항에 따라 전체적으로 수정하여 100점짜리 대본으로 만드세요.\n\n' +
+        '## 수정 사항:\n' + fixSummary + '\n\n' +
+        '## 중요:\n' +
+        '1. 수정된 전체 대본만 반환하세요.\n' +
+        '2. 설명이나 주석 없이 대본 텍스트만 출력하세요.\n' +
+        '3. 원본의 형식을 유지하세요.\n\n' +
+        '## 원본 대본:\n' + scriptText;
+
+      // API 호출 (JSON 아님, 텍스트 반환)
+      var fixedScript = await callGeminiWithRetry(prompt, false);
 
       // 다운로드
       downloadScript(fixedScript);
 
       btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-magic mr-2"></i>전체 대본 자동 수정 및 다운로드';
-
-      showNotification('대본 수정이 완료되어 다운로드되었습니다.', 'success');
+      btn.innerHTML = '<i class="fas fa-magic mr-2"></i>전체 100점 반영 자동 수정';
+      showNotification('100점 반영 수정이 완료되어 다운로드되었습니다.', 'success');
 
     } catch (error) {
       console.error('[AUTO-FIX-ALL] 오류:', error);
       btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-magic mr-2"></i>전체 대본 자동 수정 및 다운로드';
+      btn.innerHTML = '<i class="fas fa-magic mr-2"></i>전체 100점 반영 자동 수정';
       alert('수정 중 오류가 발생했습니다:\n' + error.message);
     }
   });
 }
 
-async function callGeminiForFullFix(script, fixes) {
-  var apiKey = localStorage.getItem('GEMINI_API_KEY');
-  if (!apiKey || !apiKey.trim()) {
-    throw new Error('API 키가 설정되지 않았습니다.');
-  }
+function deduplicateAndPrioritizeFixes(fixes) {
+  // 중복 제거 (before 텍스트 기준)
+  var seen = {};
+  var unique = [];
 
-  // 수정 사항 요약
-  var fixSummary = fixes.map(function (fix, idx) {
-    return (idx + 1) + '. "' + fix.before + '" → "' + fix.after + '" (' + fix.reason + ')';
-  }).join('\n');
-
-  var prompt = '다음 대본을 아래 수정 사항에 따라 전체적으로 수정하세요.\n\n수정 사항:\n' + fixSummary + '\n\n중요: 수정된 전체 대본만 반환하세요. 설명이나 주석 없이 대본 텍스트만 출력하세요.\n\n원본 대본:\n' + script;
-
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=' + apiKey;
-
-  var response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: 4096
-      }
-    })
+  fixes.forEach(function (fix) {
+    // 공백 제거 후 비교
+    var key = fix.before ? fix.before.trim() : '';
+    if (key && !seen[key]) {
+      seen[key] = true;
+      unique.push(fix);
+    }
   });
 
-  if (!response.ok) {
-    var errorData = await response.json().catch(function () { return {}; });
-    throw new Error('API 호출 실패: ' + response.status + ' ' + (errorData.error ? errorData.error.message : ''));
-  }
+  // 우선순위 정렬: character > distortion > twistPace > immersion > background
+  var priority = {
+    'character': 1,
+    'distortion': 2,
+    'twistPace': 3,
+    'immersion': 4,
+    'background': 5
+  };
 
-  var data = await response.json();
-  if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-    throw new Error('API 응답 형식 오류');
-  }
+  unique.sort(function (a, b) {
+    var aPriority = priority[a.category] || 999;
+    var bPriority = priority[b.category] || 999;
+    return aPriority - bPriority;
+  });
 
-  return data.candidates[0].content.parts[0].text.trim();
+  return unique;
 }
 
 function downloadScript(content) {
@@ -986,7 +1089,7 @@ function downloadScript(content) {
   var a = document.createElement('a');
   a.href = url;
   var date = new Date().toISOString().slice(0, 10);
-  a.download = 'revised_script_' + date + '.txt';
+  a.download = 'revised_script_100_' + date + '.txt';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
