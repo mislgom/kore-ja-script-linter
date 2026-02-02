@@ -877,6 +877,17 @@ function initAIStartButton() {
 
       console.log('[STEP ' + stepInfo.step + '] 요청 시작 (시도 ' + (stepRetryCount[stepKey] + 1) + '회)');
 
+      // [FIX] Step 1 강제 통과 (원인 파악용)
+      if (stepInfo.step === 1) {
+        console.warn('[DEBUG] Step 1 강제 통과 (API 호출 생략)');
+        var dummyResult = { score: 100, issues: [], fixes: [] };
+        results['step1'] = dummyResult;
+        updateProgress(1, 'complete', ((1 + 1) / analysisSteps.length) * 100);
+        currentStep++;
+        setTimeout(analyzeNextStep, 1000); // 1초 후 다음 단계
+        return;
+      }
+
       callGeminiWithRetry(prompt)
         .then(function (responseText) {
           // [FIX] 사용자 요청 4: null/undefined 응답 시 에러 던져서 재시도 유도
