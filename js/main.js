@@ -448,7 +448,7 @@ function initAIStartButton() {
       if (!stepEl) continue;
 
       stepEl.className = 'flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700';
-      
+
       var statusSpan = stepEl.querySelector('.step-status');
       if (statusSpan) {
         statusSpan.className = 'step-status text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500';
@@ -575,10 +575,76 @@ function initAIStartButton() {
       }
     }
 
+    // 전역 변수: 카테고리별 분석 데이터
+    var analysisByCategory = {};
+    var selectedCategory = 'korea';
+
+    // 카테고리별 요구 점수
+    var categoryRequirements = {
+      korea: { name: "한국배경", required: 100, type: "필수" },
+      character: { name: "인물일관성", required: 100, type: "필수" },
+      relationship: { name: "관계일관성", required: 100, type: "필수" },
+      flow: { name: "이야기흐름", required: 90, type: "권장" },
+      pacing: { name: "페이싱", required: 100, type: "필수" },
+      fun: { name: "재미요소", required: 90, type: "권장" }
+    };
+
     function completeAnalysis() {
       console.log('[AI ANALYSIS] 전체 결과:', results);
 
-      // 종합 점수 계산
+      // 기존 results를 analysisByCategory로 변환
+      analysisByCategory = {
+        korea: parseStepResult(results.step1, "한국배경"),
+        character: parseStepResult(results.step2, "인물일관성"),
+        relationship: parseStepResult(results.step3, "관계일관성"),
+        flow: parseStepResult(results.step4, "이야기흐름"),
+        pacing: parseStepResult(results.step5, "페이싱"),
+        fun: { name: "재미요소", score: 0, issues: [], fixes: [] } // step6 없으므로 기본값
+      };
+
+      // 점수 표시
+      if (analysisByCategory.korea) {
+        var el1 = document.getElementById('ai-korea-score');
+        if (el1) el1.textContent = analysisByCategory.korea.score || 0;
+      }
+      if (analysisByCategory.character) {
+        var el2 = document.getElementById('ai-char-score');
+        if (el2) el2.textContent = analysisByCategory.character.score || 0;
+      }
+      if (analysisByCategory.relationship) {
+        var el3 = document.getElementById('ai-rel-score');
+        if (el3) el3.textContent = analysisByCategory.relationship.score || 0;
+      }
+      if (analysisByCategory.flow) {
+        var el4 = document.getElementById('ai-flow-score');
+        if (el4) el4.textContent = analysisByCategory.flow.score || 0;
+      }
+      if (analysisByCategory.pacing) {
+        var el5 = document.getElementById('ai-pace-score');
+        if (el5) el5.textContent = analysisByCategory.pacing.score || 0;
+      }
+      if (analysisByCategory.fun) {
+        var el6 = document.getElementById('ai-fun-score');
+        if (el6) el6.textContent = analysisByCategory.fun.score || 0;
+      }
+
+      // 합격/불합격 판정
+      var passed = calculateOverallVerdict();
+
+      // 기본 카테고리 선택
+      selectCategory('korea');
+
+      // 결과 표시
+      if (resultEl) resultEl.classList.remove('hidden');
+
+      var summaryEl = document.getElementById('korea-ai-summary');
+      if (summaryEl) {
+        summaryEl.textContent = passed
+          ? '모든 항목이 기준을 충족했습니다. 대본이 승인되었습니다.'
+          : '일부 항목이 기준에 미달했습니다. 수정이 필요합니다.';
+      }
+
+      // 종합 점수 계산 (기존 로직 유지)
       var scores = [];
       for (var i = 1; i <= 5; i++) {
         var stepResult = results['step' + i];
@@ -586,16 +652,7 @@ function initAIStartButton() {
           scores.push(stepResult.score);
         }
       }
-
       var overallScore = scores.length > 0 ? Math.round(scores.reduce(function (a, b) { return a + b; }, 0) / scores.length) : 0;
-
-      // 결과 표시
-      if (resultEl) resultEl.classList.remove('hidden');
-
-      var summaryEl = document.getElementById('korea-ai-summary');
-      if (summaryEl) {
-        summaryEl.textContent = '5단계 AI 분석이 완료되었습니다. 배경, 인물, 스토리, 페이싱, 재미 요소를 종합 분석했습니다.';
-      }
 
       var overallScoreEl = document.getElementById('korea-ai-overall-score');
       if (overallScoreEl) overallScoreEl.textContent = overallScore;
@@ -607,74 +664,333 @@ function initAIStartButton() {
         else verdictEl.textContent = '재검토 필요';
       }
 
-      // 개별 점수 표시
-      if (results.step1) {
-        var el1 = document.getElementById('ai-korea-score');
-        if (el1) el1.textContent = results.step1.score || '-';
-      }
-      if (results.step2) {
-        var el2 = document.getElementById('ai-char-score');
-        if (el2) el2.textContent = results.step2.score || '-';
-      }
-      if (results.step3) {
-        var el3 = document.getElementById('ai-flow-score');
-        if (el3) el3.textContent = results.step3.score || '-';
-      }
-      if (results.step4) {
-        var el4 = document.getElementById('ai-pace-score');
-        if (el4) el4.textContent = results.step4.score || '-';
-      }
-      if (results.step5) {
-        var el5 = document.getElementById('ai-fun-score');
-        if (el5) el5.textContent = results.step5.score || '-';
-      }
-
-      // 개선점 표시
-      var issuesEl = document.getElementById('korea-ai-issues');
-      if (issuesEl) {
-        issuesEl.innerHTML = '';
-        var allIssues = [];
-        for (var i = 1; i <= 5; i++) {
-          var stepResult = results['step' + i];
-          if (stepResult && stepResult.feedback) {
-            allIssues.push(stepResult.feedback);
-          }
-        }
-        if (allIssues.length > 0) {
-          allIssues.slice(0, 3).forEach(function (issue) {
-            var li = document.createElement('li');
-            li.textContent = issue;
-            issuesEl.appendChild(li);
-          });
-        } else {
-          var li = document.createElement('li');
-          li.textContent = '특별한 개선점이 발견되지 않았습니다.';
-          issuesEl.appendChild(li);
-        }
-      }
-
-      // 추천사항 표시
-      var recsEl = document.getElementById('korea-ai-recommendations');
-      if (recsEl) {
-        recsEl.innerHTML = '';
-        var recs = ['대본의 전반적인 구조가 양호합니다.', '시니어 타겟 콘텐츠로 적합합니다.'];
-        recs.forEach(function (rec) {
-          var li = document.createElement('li');
-          li.textContent = rec;
-          recsEl.appendChild(li);
-        });
-      }
-
       AppState.isAIAnalyzing = false;
       btn.disabled = false;
       btn.classList.remove('opacity-50', 'cursor-not-allowed');
 
-      showNotification('AI 분석이 완료되었습니다 (종합 점수: ' + overallScore + '점)', 'success');
+      var message = passed
+        ? 'AI 분석 완료: 합격 ✓'
+        : 'AI 분석 완료: 실패 - 수정 필요';
+      showNotification(message, passed ? 'success' : 'warning');
+    }
+
+    function parseStepResult(stepData, categoryName) {
+      if (!stepData) {
+        return {
+          name: categoryName,
+          score: 0,
+          issues: [],
+          fixes: []
+        };
+      }
+
+      // feedback을 issues로 변환
+      var issues = [];
+      var fixes = [];
+
+      if (stepData.feedback) {
+        issues.push({
+          text: stepData.feedback,
+          reason: "AI 분석 결과"
+        });
+      }
+
+      return {
+        name: categoryName,
+        score: stepData.score || 0,
+        issues: issues,
+        fixes: fixes
+      };
+    }
+
+    function calculateOverallVerdict() {
+      var failedCategories = [];
+      var allPassed = true;
+
+      Object.keys(categoryRequirements).forEach(function (key) {
+        var req = categoryRequirements[key];
+        var category = analysisByCategory[key];
+        var score = category ? category.score : 0;
+
+        if (score < req.required) {
+          allPassed = false;
+          failedCategories.push({
+            name: req.name,
+            score: score,
+            required: req.required,
+            type: req.type
+          });
+        }
+
+        // 점수 카드에 아이콘 표시
+        updateScoreCardStatus(key, score, req.required);
+      });
+
+      // 종합 판정 배너 표시
+      showVerdictBanner(allPassed, failedCategories);
+
+      return allPassed;
+    }
+
+    function updateScoreCardStatus(category, score, required) {
+      var card = document.querySelector('[data-category="' + category + '"]');
+      if (!card) return;
+
+      var icon = card.querySelector('.score-status-icon');
+      if (!icon) return;
+
+      icon.classList.remove('hidden', 'fa-check-circle', 'fa-times-circle', 'text-green-600', 'text-red-600');
+
+      if (score >= required) {
+        // 합격
+        icon.classList.add('fa-check-circle', 'text-green-600');
+        icon.classList.remove('hidden');
+        card.classList.add('border-green-500');
+        card.classList.remove('border-red-500');
+      } else {
+        // 불합격
+        icon.classList.add('fa-times-circle', 'text-red-600');
+        icon.classList.remove('hidden');
+        card.classList.add('border-red-500');
+        card.classList.remove('border-green-500');
+      }
+    }
+
+    function showVerdictBanner(passed, failedCategories) {
+      var banner = document.getElementById('overall-verdict-banner');
+      var passDiv = document.getElementById('verdict-pass');
+      var failDiv = document.getElementById('verdict-fail');
+
+      if (!banner || !passDiv || !failDiv) return;
+
+      banner.classList.remove('hidden');
+
+      if (passed) {
+        // 합격
+        passDiv.classList.remove('hidden');
+        failDiv.classList.add('hidden');
+        banner.classList.add('bg-green-50', 'border-green-500');
+        banner.classList.remove('bg-red-50', 'border-red-500');
+      } else {
+        // 불합격
+        passDiv.classList.add('hidden');
+        failDiv.classList.remove('hidden');
+        banner.classList.add('bg-red-50', 'border-red-500');
+        banner.classList.remove('bg-green-50', 'border-green-500');
+
+        // 실패 이유 표시
+        var failReason = document.getElementById('fail-reason');
+        if (failReason && failedCategories.length > 0) {
+          var reasons = failedCategories.map(function (cat) {
+            return cat.name + ': ' + cat.score + '점 (' + cat.type + ' ' + cat.required + '점)';
+          }).join(', ');
+          failReason.textContent = '미달 항목: ' + reasons;
+        }
+      }
     }
 
     // 분석 시작
     analyzeNextStep();
   });
+}
+
+/* ======================================================
+   CATEGORY TAB SELECTION
+====================================================== */
+function selectCategory(category) {
+  console.log('[CATEGORY] 선택:', category);
+
+  // 전역 변수 접근
+  if (typeof analysisByCategory === 'undefined' || !analysisByCategory[category]) {
+    console.warn('[CATEGORY] 데이터 없음:', category);
+    return;
+  }
+
+  selectedCategory = category;
+
+  // 모든 카드에서 active 제거
+  document.querySelectorAll('.score-card').forEach(function (card) {
+    card.classList.remove('active', 'border-indigo-500', 'bg-indigo-50');
+  });
+
+  // 선택된 카드에 active 추가
+  var selectedCard = document.querySelector('[data-category="' + category + '"]');
+  if (selectedCard) {
+    selectedCard.classList.add('active', 'border-indigo-500', 'bg-indigo-50');
+  }
+
+  // 피드백 영역 업데이트
+  updateCategoryFeedback(category);
+}
+
+function updateCategoryFeedback(category) {
+  var data = analysisByCategory[category];
+  if (!data) return;
+
+  // 제목 업데이트
+  var issuesTitle = document.getElementById('category-issues-title');
+  var fixesTitle = document.getElementById('category-fixes-title');
+  if (issuesTitle) issuesTitle.textContent = data.name + ' - 분석 결과';
+  if (fixesTitle) fixesTitle.textContent = data.name + ' - 수정 반영';
+
+  // 분석 결과 (빨강)
+  var issuesList = document.getElementById('category-issues-list');
+  if (issuesList) {
+    issuesList.innerHTML = '';
+    if (data.issues && data.issues.length > 0) {
+      data.issues.forEach(function (issue) {
+        var li = document.createElement('li');
+        li.innerHTML = '<strong>' + issue.text + '</strong> - ' + issue.reason;
+        issuesList.appendChild(li);
+      });
+    } else {
+      issuesList.innerHTML = '<li>발견된 문제가 없습니다.</li>';
+    }
+  }
+
+  // 수정 반영 (초록)
+  var fixesList = document.getElementById('category-fixes-list');
+  if (fixesList) {
+    fixesList.innerHTML = '';
+    if (data.fixes && data.fixes.length > 0) {
+      data.fixes.forEach(function (fix) {
+        var li = document.createElement('li');
+        li.innerHTML = '<span class="line-through">' + fix.before + '</span> → <strong>' + fix.after + '</strong> (' + fix.reason + ')';
+        fixesList.appendChild(li);
+      });
+    } else {
+      fixesList.innerHTML = '<li>수정 사항이 없습니다.</li>';
+    }
+  }
+}
+
+/* ======================================================
+   FULL SCRIPT AUTO-FIX
+====================================================== */
+function initAutoFixAllButton() {
+  var btn = document.getElementById('auto-fix-all-btn');
+  if (!btn) {
+    console.warn('[AUTO-FIX-ALL] 버튼 없음');
+    return;
+  }
+
+  btn.addEventListener('click', async function (e) {
+    e.preventDefault();
+
+    var originalScript = document.getElementById('korea-senior-script');
+    if (!originalScript || !originalScript.value.trim()) {
+      alert('대본을 먼저 입력해주세요.');
+      return;
+    }
+
+    var scriptText = originalScript.value.trim();
+
+    // 중복 클릭 방지
+    if (btn.disabled) {
+      alert('이미 수정 작업이 진행 중입니다.');
+      return;
+    }
+
+    // analysisByCategory 확인
+    if (typeof analysisByCategory === 'undefined' || Object.keys(analysisByCategory).length === 0) {
+      alert('먼저 AI 분석을 실행해주세요.');
+      return;
+    }
+
+    // 모든 카테고리의 fixes 병합
+    var allFixes = [];
+    Object.keys(analysisByCategory).forEach(function (key) {
+      var category = analysisByCategory[key];
+      if (category.fixes && category.fixes.length > 0) {
+        allFixes = allFixes.concat(category.fixes);
+      }
+    });
+
+    if (allFixes.length === 0) {
+      alert('수정할 항목이 없습니다.');
+      return;
+    }
+
+    // 사용자 확인
+    var confirmMsg = '총 ' + allFixes.length + '개의 수정 사항을 반영하여 전체 대본을 자동 수정하시겠습니까?\n\n수정 후 TXT 파일로 다운로드됩니다.';
+    if (!confirm(confirmMsg)) return;
+
+    // 로딩 상태
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>수정 중...';
+
+    try {
+      // Gemini API 호출
+      var fixedScript = await callGeminiForFullFix(scriptText, allFixes);
+
+      // 다운로드
+      downloadScript(fixedScript);
+
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-magic mr-2"></i>전체 대본 자동 수정 및 다운로드';
+
+      showNotification('대본 수정이 완료되어 다운로드되었습니다.', 'success');
+
+    } catch (error) {
+      console.error('[AUTO-FIX-ALL] 오류:', error);
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-magic mr-2"></i>전체 대본 자동 수정 및 다운로드';
+      alert('수정 중 오류가 발생했습니다:\n' + error.message);
+    }
+  });
+}
+
+async function callGeminiForFullFix(script, fixes) {
+  var apiKey = localStorage.getItem('GEMINI_API_KEY');
+  if (!apiKey || !apiKey.trim()) {
+    throw new Error('API 키가 설정되지 않았습니다.');
+  }
+
+  // 수정 사항 요약
+  var fixSummary = fixes.map(function (fix, idx) {
+    return (idx + 1) + '. "' + fix.before + '" → "' + fix.after + '" (' + fix.reason + ')';
+  }).join('\n');
+
+  var prompt = '다음 대본을 아래 수정 사항에 따라 전체적으로 수정하세요.\n\n수정 사항:\n' + fixSummary + '\n\n중요: 수정된 전체 대본만 반환하세요. 설명이나 주석 없이 대본 텍스트만 출력하세요.\n\n원본 대본:\n' + script;
+
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=' + apiKey;
+
+  var response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 4096
+      }
+    })
+  });
+
+  if (!response.ok) {
+    var errorData = await response.json().catch(function () { return {}; });
+    throw new Error('API 호출 실패: ' + response.status + ' ' + (errorData.error ? errorData.error.message : ''));
+  }
+
+  var data = await response.json();
+  if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+    throw new Error('API 응답 형식 오류');
+  }
+
+  return data.candidates[0].content.parts[0].text.trim();
+}
+
+function downloadScript(content) {
+  var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  var date = new Date().toISOString().slice(0, 10);
+  a.download = 'revised_script_' + date + '.txt';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 /* ======================================================
@@ -689,6 +1005,7 @@ document.addEventListener('DOMContentLoaded', function () {
   safeInit('Textareas', initTextareas);
   safeInit('KoreaButtons', initKoreaSeniorButtons);
   safeInit('AIStartButton', initAIStartButton);
+  safeInit('AutoFixAllButton', initAutoFixAllButton);
 
   console.log('[BOOT] All init functions completed');
   console.log('[BOOT] Current tab:', AppState.currentTab);
