@@ -1,24 +1,26 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>대본 검수 시스템 | Script Review Pro</title>
-    
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
-    
+
     <!-- Custom Styles -->
     <link rel="stylesheet" href="css/style.css">
-    
+
     <!-- Tailwind Config -->
     <script>
         tailwind.config = {
@@ -43,8 +45,9 @@
         }
     </script>
 </head>
+
 <body class="font-korean bg-gray-50 min-h-screen transition-colors duration-300 dark:bg-gray-900">
-    
+
     <!-- Header -->
     <header class="bg-dark text-white shadow-lg dark:bg-gray-800">
         <div class="container mx-auto px-4 py-4">
@@ -63,68 +66,76 @@
                         <i class="fas fa-circle text-success text-xs mr-1"></i> 시스템 정상
                     </span>
                     <!-- API 키 설정 버튼 + 드롭다운 패널 -->
-<div class="relative" id="api-key-container">
-    <button id="api-key-toggle-btn" class="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors" title="API 키 설정">
-        <i class="fas fa-key text-amber-400"></i>
-    </button>
+                    <div class="relative" id="api-key-container">
+                        <button id="api-key-toggle-btn"
+                            class="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors"
+                            title="API 키 설정">
+                            <i class="fas fa-key text-amber-400"></i>
+                        </button>
 
-    <!-- API 키 입력 패널 (드롭다운) -->
-    <div id="api-key-panel" class="api-key-panel hidden absolute right-0 top-12 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 z-50">
-        <!-- 패널 헤더 -->
-        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-            <h4 class="font-semibold text-gray-800 dark:text-white flex items-center">
-                <i class="fas fa-key text-amber-500 mr-2"></i>
-                Gemini API 키 설정
-            </h4>
-            <button id="api-key-close-btn" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
+                        <!-- API 키 입력 패널 (드롭다운) -->
+                        <div id="api-key-panel"
+                            class="api-key-panel hidden absolute right-0 top-12 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 z-50">
+                            <!-- 패널 헤더 -->
+                            <div
+                                class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                                <h4 class="font-semibold text-gray-800 dark:text-white flex items-center">
+                                    <i class="fas fa-key text-amber-500 mr-2"></i>
+                                    Gemini API 키 설정
+                                </h4>
+                                <button id="api-key-close-btn"
+                                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
 
-        <!-- 패널 본문 -->
-        <div class="p-4">
-            <!-- API 키 입력창 -->
-            <div class="mb-3">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    API Key
-                </label>
-                <input
-                    type="password"
-                    id="api-key-input"
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    placeholder="AIzaSy... 형식의 API 키 입력"
-                >
-            </div>
+                            <!-- 패널 본문 -->
+                            <div class="p-4">
+                                <!-- API 키 입력창 -->
+                                <div class="mb-3">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        API Key
+                                    </label>
+                                    <input type="password" id="api-key-input"
+                                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                                        placeholder="AIzaSy... 형식의 API 키 입력">
+                                </div>
 
-            <!-- 버튼 그룹 -->
-            <div class="flex space-x-2 mb-3">
-                <button id="api-key-save-btn" class="flex-1 bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors">
-                    <i class="fas fa-save mr-1"></i>저장
-                </button>
-                <button id="api-key-delete-btn" class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                    <i class="fas fa-trash-alt mr-1"></i>삭제
-                </button>
-            </div>
+                                <!-- 버튼 그룹 -->
+                                <div class="flex space-x-2 mb-3">
+                                    <button id="api-key-save-btn"
+                                        class="flex-1 bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors">
+                                        <i class="fas fa-save mr-1"></i>저장
+                                    </button>
+                                    <button id="api-key-delete-btn"
+                                        class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                        <i class="fas fa-trash-alt mr-1"></i>삭제
+                                    </button>
+                                </div>
 
-            <!-- 상태 메시지 (아이콘과 텍스트 분리) -->
-            <div id="api-key-status" class="text-xs text-center py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 flex items-center justify-center">
-                <i id="api-key-status-icon" class="fas fa-info-circle mr-1"></i>
-                <span id="api-key-status-text">API 키가 설정되지 않았습니다.</span>
-            </div>
-        </div>
+                                <!-- 상태 메시지 (아이콘과 텍스트 분리) -->
+                                <div id="api-key-status"
+                                    class="text-xs text-center py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 flex items-center justify-center">
+                                    <i id="api-key-status-icon" class="fas fa-info-circle mr-1"></i>
+                                    <span id="api-key-status-text">API 키가 설정되지 않았습니다.</span>
+                                </div>
+                            </div>
 
-        <!-- 패널 푸터 (안내) -->
-        <div class="px-4 py-2 bg-gray-50 dark:bg-gray-900 rounded-b-xl border-t border-gray-200 dark:border-gray-700">
-            <p class="text-xs text-gray-500 dark:text-gray-400">
-                <i class="fas fa-lightbulb text-amber-500 mr-1"></i>
-                Google AI Studio에서 API 키를 발급받으세요.
-            </p>
-        </div>
-    </div>
-</div>
+                            <!-- 패널 푸터 (안내) -->
+                            <div
+                                class="px-4 py-2 bg-gray-50 dark:bg-gray-900 rounded-b-xl border-t border-gray-200 dark:border-gray-700">
+                                <p class="text-xs text-gray-500 dark:text-gray-400">
+                                    <i class="fas fa-lightbulb text-amber-500 mr-1"></i>
+                                    Google AI Studio에서 API 키를 발급받으세요.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
 
                     <!-- 다크모드 토글 버튼 -->
-                    <button id="dark-mode-toggle" class="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors" title="다크모드 전환">
+                    <button id="dark-mode-toggle"
+                        class="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors"
+                        title="다크모드 전환">
                         <i class="fas fa-moon text-yellow-300" id="dark-icon"></i>
                         <i class="fas fa-sun text-yellow-400 hidden" id="light-icon"></i>
                     </button>
@@ -137,12 +148,11 @@
     <nav class="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50 dark:bg-gray-800 dark:border-gray-700">
         <div class="container mx-auto px-4">
             <div class="flex space-x-1 overflow-x-auto" id="main-tabs">
-                
+
                 <!-- Tab 1: 한국 배경 시니어 낭독 -->
-                <button 
+                <button
                     class="tab-btn active flex items-center space-x-2 px-6 py-4 text-sm font-medium border-b-2 border-primary text-primary bg-blue-50 transition-all duration-200 whitespace-nowrap"
-                    data-tab="korea-senior"
-                >
+                    data-tab="korea-senior">
                     <span class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
                         <i class="fas fa-book-open text-red-500"></i>
                     </span>
@@ -150,10 +160,9 @@
                 </button>
 
                 <!-- Tab 2: 한국 조선 배경 야담 -->
-                <button 
+                <button
                     class="tab-btn flex items-center space-x-2 px-6 py-4 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-all duration-200 whitespace-nowrap"
-                    data-tab="joseon-yadam"
-                >
+                    data-tab="joseon-yadam">
                     <span class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
                         <i class="fas fa-scroll text-amber-600"></i>
                     </span>
@@ -161,10 +170,9 @@
                 </button>
 
                 <!-- Tab 3: 일본 배경 시니어 낭독 -->
-                <button 
+                <button
                     class="tab-btn flex items-center space-x-2 px-6 py-4 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-all duration-200 whitespace-nowrap"
-                    data-tab="japan-senior"
-                >
+                    data-tab="japan-senior">
                     <span class="w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center">
                         <i class="fas fa-torii-gate text-pink-500"></i>
                     </span>
@@ -172,10 +180,9 @@
                 </button>
 
                 <!-- Tab 4: 전세계 뉴스 관련 -->
-                <button 
+                <button
                     class="tab-btn flex items-center space-x-2 px-6 py-4 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-all duration-200 whitespace-nowrap"
-                    data-tab="world-news"
-                >
+                    data-tab="world-news">
                     <span class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
                         <i class="fas fa-globe text-blue-500"></i>
                     </span>
@@ -188,7 +195,7 @@
 
     <!-- Main Content Area -->
     <main class="container mx-auto px-4 py-6">
-        
+
         <!-- Tab Content: 한국 시니어 낭독 -->
         <section id="korea-senior" class="tab-content active">
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -202,12 +209,13 @@
                                 <p class="text-red-100 text-sm">한국 현대/근대 배경의 시니어 타겟 낭독 콘텐츠</p>
                             </div>
                         </div>
-                        <div id="korea-senior-overall-status" class="bg-white/20 text-white px-3 py-1 rounded-full text-sm">
+                        <div id="korea-senior-overall-status"
+                            class="bg-white/20 text-white px-3 py-1 rounded-full text-sm">
                             <i class="fas fa-clock mr-1"></i> 검수 대기
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Content Body -->
                 <div class="p-6">
                     <!-- 대본 입력 영역 -->
@@ -219,11 +227,9 @@
                             </h3>
                             <span id="korea-char-counter" class="text-xs text-gray-400">0자 / 무제한</span>
                         </div>
-                        <textarea 
-                            id="korea-senior-script"
+                        <textarea id="korea-senior-script"
                             class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent font-mono text-sm leading-relaxed"
-                            style="min-height: 200px; max-height: 500px; resize: vertical;"
-                            placeholder="검수할 대본을 입력하세요... (10만자 이상 입력 가능)
+                            style="min-height: 200px; max-height: 500px; resize: vertical;" placeholder="검수할 대본을 입력하세요... (10만자 이상 입력 가능)
 
 예시 형식:
 [씬 1. 서울 강남 아파트 / 낮]
@@ -238,16 +244,20 @@
 네, 어머니. 요즘 프로젝트가 많아서요.
 
 영희(딸, 28세, 대학원생):
-오빠, 저녁 같이 먹어요!"
-                        ></textarea>
+오빠, 저녁 같이 먹어요!"></textarea>
                         <div class="flex space-x-2 mt-3">
-                            <button id="korea-senior-review-btn" class="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-lg font-medium transition-colors">
-                                <i class="fas fa-robot mr-2"></i>전체 자동 검수 시작
+                            <button id="korea-ai-start-btn"
+                                class="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-3 rounded-lg font-medium transition-colors">
+                                <i class="fas fa-brain mr-2"></i>AI 분석 및 검수 시작
                             </button>
-                            <button id="korea-senior-clear-btn" class="px-4 py-3 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors" title="내용 지우기">
+                            <button id="korea-senior-clear-btn"
+                                class="px-4 py-3 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+                                title="내용 지우기">
                                 <i class="fas fa-eraser"></i>
                             </button>
-                            <button id="korea-senior-sample-btn" class="px-4 py-3 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors" title="샘플 대본 불러오기">
+                            <button id="korea-senior-sample-btn"
+                                class="px-4 py-3 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+                                title="샘플 대본 불러오기">
                                 <i class="fas fa-file-import"></i>
                             </button>
                         </div>
@@ -261,6 +271,108 @@
                         </div>
                     </div>
 
+                    <!-- AI 분석 진행도 표시 -->
+                    <div id="korea-ai-progress-section" class="hidden mb-6">
+                        <div
+                            class="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 rounded-xl p-6 border border-indigo-200 dark:border-indigo-700">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="font-semibold text-indigo-800 dark:text-indigo-300 flex items-center">
+                                    <i class="fas fa-brain mr-2 text-indigo-500"></i>
+                                    AI 분석 진행 중
+                                </h3>
+                                <span id="korea-ai-progress-percent"
+                                    class="text-2xl font-bold text-indigo-600 dark:text-indigo-400">0%</span>
+                            </div>
+
+                            <!-- 전체 진행 바 -->
+                            <div class="mb-6">
+                                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                                    <div id="korea-ai-progress-bar"
+                                        class="bg-gradient-to-r from-indigo-500 to-purple-500 h-3 rounded-full transition-all duration-500"
+                                        style="width: 0%"></div>
+                                </div>
+                            </div>
+
+                            <!-- 5단계 분석 항목 -->
+                            <div class="space-y-3">
+                                <!-- 1. 배경 확인 -->
+                                <div id="progress-step-1"
+                                    class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <div
+                                        class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mr-3">
+                                        <i class="fas fa-map-marker-alt text-gray-400 text-sm"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-gray-700 dark:text-gray-300">1. 배경 확인</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">한국/일본/조선 등 배경 분석</p>
+                                    </div>
+                                    <span
+                                        class="step-status text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500">대기</span>
+                                </div>
+
+                                <!-- 2. 등장인물 일관성 -->
+                                <div id="progress-step-2"
+                                    class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <div
+                                        class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mr-3">
+                                        <i class="fas fa-users text-gray-400 text-sm"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-gray-700 dark:text-gray-300">2. 등장인물 일관성</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">나이, 이름, 관계 일관성</p>
+                                    </div>
+                                    <span
+                                        class="step-status text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500">대기</span>
+                                </div>
+
+                                <!-- 3. 스토리 왜곡 분석 -->
+                                <div id="progress-step-3"
+                                    class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <div
+                                        class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mr-3">
+                                        <i class="fas fa-project-diagram text-gray-400 text-sm"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-gray-700 dark:text-gray-300">3. 스토리 왜곡 분석</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">씬 구조, 시간/장소 흐름</p>
+                                    </div>
+                                    <span
+                                        class="step-status text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500">대기</span>
+                                </div>
+
+                                <!-- 4. 반전/변화 속도 -->
+                                <div id="progress-step-4"
+                                    class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <div
+                                        class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mr-3">
+                                        <i class="fas fa-tachometer-alt text-gray-400 text-sm"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-gray-700 dark:text-gray-300">4. 반전/변화 속도</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">감정 변화, 페이싱 분석</p>
+                                    </div>
+                                    <span
+                                        class="step-status text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500">대기</span>
+                                </div>
+
+                                <!-- 5. 재미/몰입 요소 -->
+                                <div id="progress-step-5"
+                                    class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <div
+                                        class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mr-3">
+                                        <i class="fas fa-star text-gray-400 text-sm"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-gray-700 dark:text-gray-300">5. 재미/몰입 요소</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">갈등, 대화, 시니어 공감</p>
+                                    </div>
+                                    <span
+                                        class="step-status text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500">대기</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- 등장인물 분석 결과 (검수 전 표시) -->
                     <div id="korea-character-analysis" class="hidden mb-6">
                         <div class="border-2 border-blue-200 rounded-xl overflow-hidden dark:border-blue-800">
@@ -270,7 +382,8 @@
                                         <i class="fas fa-users mr-2"></i>
                                         대본 분석 완료 - 등장인물 확인
                                     </h3>
-                                    <span id="korea-analysis-char-count" class="bg-white/20 text-white px-2 py-1 rounded text-xs">
+                                    <span id="korea-analysis-char-count"
+                                        class="bg-white/20 text-white px-2 py-1 rounded text-xs">
                                         0명 감지
                                     </span>
                                 </div>
@@ -282,11 +395,12 @@
                                         <i class="fas fa-user-friends text-blue-500 mr-1"></i>
                                         등장인물 목록
                                     </h4>
-                                    <div id="korea-character-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                    <div id="korea-character-list"
+                                        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                                         <!-- 동적으로 채워짐 -->
                                     </div>
                                 </div>
-                                
+
                                 <!-- 관계도 요약 -->
                                 <div class="mb-4">
                                     <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -306,30 +420,36 @@
                                     </h4>
                                     <div class="grid grid-cols-2 md:grid-cols-4 gap-2" id="korea-script-stats">
                                         <div class="bg-white dark:bg-gray-700 rounded p-2 text-center">
-                                            <p class="text-lg font-bold text-gray-800 dark:text-white" id="stat-total-chars">-</p>
+                                            <p class="text-lg font-bold text-gray-800 dark:text-white"
+                                                id="stat-total-chars">-</p>
                                             <p class="text-xs text-gray-500 dark:text-gray-400">총 글자수</p>
                                         </div>
                                         <div class="bg-white dark:bg-gray-700 rounded p-2 text-center">
-                                            <p class="text-lg font-bold text-gray-800 dark:text-white" id="stat-scene-count">-</p>
+                                            <p class="text-lg font-bold text-gray-800 dark:text-white"
+                                                id="stat-scene-count">-</p>
                                             <p class="text-xs text-gray-500 dark:text-gray-400">씬 개수</p>
                                         </div>
                                         <div class="bg-white dark:bg-gray-700 rounded p-2 text-center">
-                                            <p class="text-lg font-bold text-gray-800 dark:text-white" id="stat-dialogue-count">-</p>
+                                            <p class="text-lg font-bold text-gray-800 dark:text-white"
+                                                id="stat-dialogue-count">-</p>
                                             <p class="text-xs text-gray-500 dark:text-gray-400">대사 수</p>
                                         </div>
                                         <div class="bg-white dark:bg-gray-700 rounded p-2 text-center">
-                                            <p class="text-lg font-bold text-gray-800 dark:text-white" id="stat-est-runtime">-</p>
+                                            <p class="text-lg font-bold text-gray-800 dark:text-white"
+                                                id="stat-est-runtime">-</p>
                                             <p class="text-xs text-gray-500 dark:text-gray-400">예상 시간</p>
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <!-- 확인 및 검수 시작 버튼 -->
                                 <div class="flex space-x-2">
-                                    <button id="korea-confirm-review-btn" class="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-lg font-medium transition-colors">
+                                    <button id="korea-confirm-review-btn"
+                                        class="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-lg font-medium transition-colors">
                                         <i class="fas fa-check-circle mr-2"></i>확인 완료, 검수 시작
                                     </button>
-                                    <button id="korea-cancel-review-btn" class="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                    <button id="korea-cancel-review-btn"
+                                        class="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                                         <i class="fas fa-times mr-1"></i>취소
                                     </button>
                                 </div>
@@ -344,16 +464,18 @@
                             기본 검수 (자동)
                             <span class="ml-2 text-xs text-gray-400 font-normal">배경, 인물, 관계 일관성</span>
                         </h3>
-                        
+
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="korea-senior-auto-results">
                             <!-- 1. 한국 배경 확인 -->
                             <div class="border border-gray-200 rounded-lg p-4 bg-gray-50" id="korea-bg-result">
                                 <div class="flex items-center justify-between mb-2">
                                     <span class="font-medium text-gray-700 text-sm">1. 한국 배경 확인</span>
-                                    <span class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">대기</span>
+                                    <span
+                                        class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">대기</span>
                                 </div>
                                 <div class="text-xs text-gray-500 mb-2">지명, 장소, 문화 요소 검사</div>
-                                <div class="result-detail text-xs text-gray-400 min-h-[60px] max-h-[100px] overflow-y-auto">
+                                <div
+                                    class="result-detail text-xs text-gray-400 min-h-[60px] max-h-[100px] overflow-y-auto">
                                     검수를 시작하면 결과가 표시됩니다.
                                 </div>
                             </div>
@@ -362,10 +484,12 @@
                             <div class="border border-gray-200 rounded-lg p-4 bg-gray-50" id="korea-char-result">
                                 <div class="flex items-center justify-between mb-2">
                                     <span class="font-medium text-gray-700 text-sm">2. 인물 설정 일관성</span>
-                                    <span class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">대기</span>
+                                    <span
+                                        class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">대기</span>
                                 </div>
                                 <div class="text-xs text-gray-500 mb-2">이름, 나이, 특성 변경 감지</div>
-                                <div class="result-detail text-xs text-gray-400 min-h-[60px] max-h-[100px] overflow-y-auto">
+                                <div
+                                    class="result-detail text-xs text-gray-400 min-h-[60px] max-h-[100px] overflow-y-auto">
                                     검수를 시작하면 결과가 표시됩니다.
                                 </div>
                             </div>
@@ -374,10 +498,12 @@
                             <div class="border border-gray-200 rounded-lg p-4 bg-gray-50" id="korea-rel-result">
                                 <div class="flex items-center justify-between mb-2">
                                     <span class="font-medium text-gray-700 text-sm">3. 인물 관계 일관성</span>
-                                    <span class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">대기</span>
+                                    <span
+                                        class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">대기</span>
                                 </div>
                                 <div class="text-xs text-gray-500 mb-2">가족/사회 관계 변경 감지</div>
-                                <div class="result-detail text-xs text-gray-400 min-h-[60px] max-h-[100px] overflow-y-auto">
+                                <div
+                                    class="result-detail text-xs text-gray-400 min-h-[60px] max-h-[100px] overflow-y-auto">
                                     검수를 시작하면 결과가 표시됩니다.
                                 </div>
                             </div>
@@ -391,16 +517,18 @@
                             스토리 분석 (자동)
                             <span class="ml-2 text-xs text-gray-400 font-normal">흐름, 페이싱, 재미요소</span>
                         </h3>
-                        
+
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <!-- 4. 이야기 흐름 -->
                             <div class="border border-gray-200 rounded-lg p-4 bg-gray-50" id="korea-flow-result">
                                 <div class="flex items-center justify-between mb-2">
                                     <span class="font-medium text-gray-700 text-sm">4. 이야기 흐름</span>
-                                    <span class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">대기</span>
+                                    <span
+                                        class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">대기</span>
                                 </div>
                                 <div class="text-xs text-gray-500 mb-2">씬 구조, 시간/장소 흐름 분석</div>
-                                <div class="result-detail text-xs text-gray-400 min-h-[80px] max-h-[120px] overflow-y-auto">
+                                <div
+                                    class="result-detail text-xs text-gray-400 min-h-[80px] max-h-[120px] overflow-y-auto">
                                     검수를 시작하면 결과가 표시됩니다.
                                 </div>
                             </div>
@@ -409,10 +537,12 @@
                             <div class="border border-gray-200 rounded-lg p-4 bg-gray-50" id="korea-pace-result">
                                 <div class="flex items-center justify-between mb-2">
                                     <span class="font-medium text-gray-700 text-sm">5. 반전/변화 속도</span>
-                                    <span class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">대기</span>
+                                    <span
+                                        class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">대기</span>
                                 </div>
                                 <div class="text-xs text-gray-500 mb-2">감정 변화, 페이싱 분석</div>
-                                <div class="result-detail text-xs text-gray-400 min-h-[80px] max-h-[120px] overflow-y-auto">
+                                <div
+                                    class="result-detail text-xs text-gray-400 min-h-[80px] max-h-[120px] overflow-y-auto">
                                     검수를 시작하면 결과가 표시됩니다.
                                 </div>
                             </div>
@@ -421,10 +551,12 @@
                             <div class="border border-gray-200 rounded-lg p-4 bg-gray-50" id="korea-fun-result">
                                 <div class="flex items-center justify-between mb-2">
                                     <span class="font-medium text-gray-700 text-sm">6. 재미/몰입 요소</span>
-                                    <span class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">대기</span>
+                                    <span
+                                        class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">대기</span>
                                 </div>
                                 <div class="text-xs text-gray-500 mb-2">갈등, 대화, 시니어 공감 분석</div>
-                                <div class="result-detail text-xs text-gray-400 min-h-[80px] max-h-[120px] overflow-y-auto">
+                                <div
+                                    class="result-detail text-xs text-gray-400 min-h-[80px] max-h-[120px] overflow-y-auto">
                                     검수를 시작하면 결과가 표시됩니다.
                                 </div>
                             </div>
@@ -455,11 +587,13 @@
                                 <p class="text-xs text-gray-500 dark:text-gray-400">등장인물</p>
                             </div>
                             <div class="bg-gray-100 rounded-lg p-3 text-center dark:bg-gray-700">
-                                <p class="text-xl font-bold text-gray-800 dark:text-white" id="korea-keyword-count">-</p>
+                                <p class="text-xl font-bold text-gray-800 dark:text-white" id="korea-keyword-count">-
+                                </p>
                                 <p class="text-xs text-gray-500 dark:text-gray-400">한국키워드</p>
                             </div>
                             <div class="bg-gray-100 rounded-lg p-3 text-center dark:bg-gray-700">
-                                <p class="text-xl font-bold text-gray-800 dark:text-white" id="korea-dialogue-ratio">-</p>
+                                <p class="text-xl font-bold text-gray-800 dark:text-white" id="korea-dialogue-ratio">-
+                                </p>
                                 <p class="text-xs text-gray-500 dark:text-gray-400">대화비율</p>
                             </div>
                             <div class="bg-gray-100 rounded-lg p-3 text-center dark:bg-gray-700">
@@ -479,56 +613,68 @@
                             <h3 class="font-semibold text-gray-800 dark:text-white flex items-center">
                                 <i class="fas fa-magic text-indigo-500 mr-2"></i>
                                 AI 심층 분석
-                                <span class="ml-2 text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded-full dark:bg-indigo-900 dark:text-indigo-300">
+                                <span
+                                    class="ml-2 text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded-full dark:bg-indigo-900 dark:text-indigo-300">
                                     Gemini Flash 2.5
                                 </span>
                             </h3>
-                            <button id="korea-ai-analyze-btn" class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                            <button id="korea-ai-analyze-btn"
+                                class="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
                                 <i class="fas fa-brain mr-2"></i>AI 분석 시작
                             </button>
                         </div>
-                        
+
                         <!-- AI 분석 로딩 -->
                         <div id="korea-ai-loading" class="hidden mb-4">
-                            <div class="flex items-center justify-center p-6 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                            <div
+                                class="flex items-center justify-center p-6 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
                                 <div class="loading border-indigo-500 mr-3"></div>
-                                <span class="text-indigo-600 dark:text-indigo-300">AI가 대본을 심층 분석하고 있습니다... (약 10-30초 소요)</span>
+                                <span class="text-indigo-600 dark:text-indigo-300">AI가 대본을 심층 분석하고 있습니다... (약 10-30초
+                                    소요)</span>
                             </div>
                         </div>
 
                         <!-- AI 분석 결과 컨테이너 -->
                         <div id="korea-ai-result" class="hidden">
                             <!-- 요약 -->
-                            <div class="mb-4 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 rounded-lg border border-indigo-200 dark:border-indigo-700">
+                            <div
+                                class="mb-4 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 rounded-lg border border-indigo-200 dark:border-indigo-700">
                                 <h4 class="font-medium text-indigo-800 dark:text-indigo-300 mb-2">
                                     <i class="fas fa-lightbulb mr-2"></i>AI 요약
                                 </h4>
-                                <p id="korea-ai-summary" class="text-gray-700 dark:text-gray-300 text-sm leading-relaxed">-</p>
+                                <p id="korea-ai-summary"
+                                    class="text-gray-700 dark:text-gray-300 text-sm leading-relaxed">-</p>
                             </div>
 
                             <!-- AI 평가 점수 -->
                             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
-                                <div class="bg-white dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600">
+                                <div
+                                    class="bg-white dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600">
                                     <p class="text-xl font-bold text-indigo-600" id="ai-korea-score">-</p>
                                     <p class="text-xs text-gray-500 dark:text-gray-400">한국배경</p>
                                 </div>
-                                <div class="bg-white dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600">
+                                <div
+                                    class="bg-white dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600">
                                     <p class="text-xl font-bold text-indigo-600" id="ai-char-score">-</p>
                                     <p class="text-xs text-gray-500 dark:text-gray-400">인물일관성</p>
                                 </div>
-                                <div class="bg-white dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600">
+                                <div
+                                    class="bg-white dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600">
                                     <p class="text-xl font-bold text-indigo-600" id="ai-rel-score">-</p>
                                     <p class="text-xs text-gray-500 dark:text-gray-400">관계일관성</p>
                                 </div>
-                                <div class="bg-white dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600">
+                                <div
+                                    class="bg-white dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600">
                                     <p class="text-xl font-bold text-indigo-600" id="ai-flow-score">-</p>
                                     <p class="text-xs text-gray-500 dark:text-gray-400">이야기흐름</p>
                                 </div>
-                                <div class="bg-white dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600">
+                                <div
+                                    class="bg-white dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600">
                                     <p class="text-xl font-bold text-indigo-600" id="ai-pace-score">-</p>
                                     <p class="text-xs text-gray-500 dark:text-gray-400">페이싱</p>
                                 </div>
-                                <div class="bg-white dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600">
+                                <div
+                                    class="bg-white dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600">
                                     <p class="text-xl font-bold text-indigo-600" id="ai-fun-score">-</p>
                                     <p class="text-xs text-gray-500 dark:text-gray-400">재미요소</p>
                                 </div>
@@ -537,21 +683,25 @@
                             <!-- 상세 피드백 -->
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                 <!-- 주요 개선점 -->
-                                <div class="bg-red-50 dark:bg-red-900/20 rounded-lg p-4 border border-red-200 dark:border-red-800">
+                                <div
+                                    class="bg-red-50 dark:bg-red-900/20 rounded-lg p-4 border border-red-200 dark:border-red-800">
                                     <h4 class="font-medium text-red-800 dark:text-red-300 mb-2">
                                         <i class="fas fa-exclamation-triangle mr-2"></i>주요 개선점
                                     </h4>
-                                    <ul id="korea-ai-issues" class="text-sm text-red-700 dark:text-red-300 space-y-1 list-disc list-inside">
+                                    <ul id="korea-ai-issues"
+                                        class="text-sm text-red-700 dark:text-red-300 space-y-1 list-disc list-inside">
                                         <li>-</li>
                                     </ul>
                                 </div>
 
                                 <!-- 전문가 추천 -->
-                                <div class="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
+                                <div
+                                    class="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
                                     <h4 class="font-medium text-green-800 dark:text-green-300 mb-2">
                                         <i class="fas fa-thumbs-up mr-2"></i>전문가 추천사항
                                     </h4>
-                                    <ul id="korea-ai-recommendations" class="text-sm text-green-700 dark:text-green-300 space-y-1 list-disc list-inside">
+                                    <ul id="korea-ai-recommendations"
+                                        class="text-sm text-green-700 dark:text-green-300 space-y-1 list-disc list-inside">
                                         <li>-</li>
                                     </ul>
                                 </div>
@@ -563,7 +713,8 @@
                                     <i class="fas fa-robot text-indigo-500 text-2xl mr-3"></i>
                                     <div>
                                         <p class="text-sm text-gray-500 dark:text-gray-400">AI 최종 평가</p>
-                                        <p id="korea-ai-verdict" class="font-bold text-lg text-gray-800 dark:text-white">-</p>
+                                        <p id="korea-ai-verdict"
+                                            class="font-bold text-lg text-gray-800 dark:text-white">-</p>
                                     </div>
                                 </div>
                                 <div class="text-right">
@@ -580,7 +731,8 @@
                             <h3 class="font-semibold text-gray-800 dark:text-white flex items-center">
                                 <i class="fas fa-bug text-red-500 mr-2"></i>
                                 오류 상세 분석 및 수정
-                                <span class="ml-2 text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full dark:bg-red-900 dark:text-red-300">
+                                <span
+                                    class="ml-2 text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full dark:bg-red-900 dark:text-red-300">
                                     vNext
                                 </span>
                             </h3>
@@ -592,7 +744,8 @@
                         </div>
 
                         <!-- 오류 리스트 패널 -->
-                        <div id="issues-panel" class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+                        <div id="issues-panel"
+                            class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
                             <!-- JavaScript로 동적 생성 -->
                             <div class="text-center py-8 text-gray-400 dark:text-gray-500">
                                 <i class="fas fa-search text-4xl mb-3"></i>
@@ -622,7 +775,7 @@
                         </span>
                     </div>
                 </div>
-                
+
                 <!-- Content Body -->
                 <div class="p-6">
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -632,7 +785,7 @@
                                 <i class="fas fa-edit text-primary mr-2"></i>
                                 대본 입력
                             </h3>
-                            <textarea 
+                            <textarea
                                 class="w-full h-80 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none font-mono text-sm"
                                 placeholder="검수할 야담 대본을 입력하세요...
 
@@ -647,18 +800,19 @@
 허허, 이보게. 그 귀신 이야기 들었는가?
 
 상인:
-예, 나으리. 소문이 자자하옵니다..."
-                            ></textarea>
+예, 나으리. 소문이 자자하옵니다..."></textarea>
                             <div class="flex space-x-2">
-                                <button class="flex-1 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                                <button
+                                    class="flex-1 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
                                     <i class="fas fa-search mr-2"></i>검수 시작
                                 </button>
-                                <button class="px-4 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors">
+                                <button
+                                    class="px-4 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors">
                                     <i class="fas fa-eraser"></i>
                                 </button>
                             </div>
                         </div>
-                        
+
                         <!-- 검수 결과 영역 -->
                         <div class="space-y-4">
                             <h3 class="font-semibold text-gray-800 flex items-center">
@@ -709,7 +863,7 @@
                         </span>
                     </div>
                 </div>
-                
+
                 <!-- Content Body -->
                 <div class="p-6">
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -719,7 +873,7 @@
                                 <i class="fas fa-edit text-primary mr-2"></i>
                                 대본 입력
                             </h3>
-                            <textarea 
+                            <textarea
                                 class="w-full h-80 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent resize-none font-mono text-sm"
                                 placeholder="검수할 대본을 입력하세요...
 
@@ -732,18 +886,19 @@
 
 할아버지(70대):
 그 시절 교토는 참 아름다웠지요.
-전쟁의 상처가 아물어가던 때였습니다..."
-                            ></textarea>
+전쟁의 상처가 아물어가던 때였습니다..."></textarea>
                             <div class="flex space-x-2">
-                                <button class="flex-1 bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                                <button
+                                    class="flex-1 bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
                                     <i class="fas fa-search mr-2"></i>검수 시작
                                 </button>
-                                <button class="px-4 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors">
+                                <button
+                                    class="px-4 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors">
                                     <i class="fas fa-eraser"></i>
                                 </button>
                             </div>
                         </div>
-                        
+
                         <!-- 검수 결과 영역 -->
                         <div class="space-y-4">
                             <h3 class="font-semibold text-gray-800 flex items-center">
@@ -794,7 +949,7 @@
                         </span>
                     </div>
                 </div>
-                
+
                 <!-- Content Body -->
                 <div class="p-6">
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -804,7 +959,7 @@
                                 <i class="fas fa-edit text-primary mr-2"></i>
                                 대본 입력
                             </h3>
-                            <textarea 
+                            <textarea
                                 class="w-full h-80 p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none font-mono text-sm"
                                 placeholder="검수할 뉴스 대본을 입력하세요...
 
@@ -819,18 +974,19 @@
 
 나레이션:
 미국 연방준비제도가 기준금리를
-동결하기로 결정했습니다..."
-                            ></textarea>
+동결하기로 결정했습니다..."></textarea>
                             <div class="flex space-x-2">
-                                <button class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                                <button
+                                    class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
                                     <i class="fas fa-search mr-2"></i>검수 시작
                                 </button>
-                                <button class="px-4 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors">
+                                <button
+                                    class="px-4 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors">
                                     <i class="fas fa-eraser"></i>
                                 </button>
                             </div>
                         </div>
-                        
+
                         <!-- 검수 결과 영역 -->
                         <div class="space-y-4">
                             <h3 class="font-semibold text-gray-800 flex items-center">
@@ -885,4 +1041,5 @@
     <script src="js/issues-ui.js"></script>
     <script src="js/main.js"></script>
 </body>
+
 </html>
