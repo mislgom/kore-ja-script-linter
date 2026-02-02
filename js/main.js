@@ -1022,9 +1022,25 @@ function initAIStartButton() {
       var failReason = '알 수 없는 오류';
       var errStr = '';
 
+      // [HOTFIX] error 객체/문자열/기타를 무조건 사람이 읽을 수 있는 문자열로 정규화
       try {
-        errStr = (error.message || (error && error.toString ? error.toString() : String(error))) || '';
-      } catch (e) { errStr = 'Error parsing failed'; }
+        if (typeof error === 'string') {
+          errStr = error;
+        } else if (error && typeof error.message === 'string' && error.message.trim()) {
+          errStr = error.message;
+        } else if (error && typeof error.toString === 'function') {
+          errStr = error.toString();
+        } else {
+          errStr = JSON.stringify(error);
+        }
+      } catch (e) {
+        errStr = 'Error stringify failed';
+      }
+
+      // (추가) 브라우저별 TypeError 케이스도 네트워크로 분류
+      if (errStr && (errStr.includes('TypeError') || errStr.includes('Load failed'))) {
+        failReason = '네트워크/CORS(fetch) 오류';
+      }
 
       // 1. 타임아웃/Abort (최우선 확인)
       if (error.name === 'AbortError' || errStr.includes('AbortError') || errStr.includes('timeout') || errStr.includes('시간 초과')) {
