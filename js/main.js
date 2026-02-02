@@ -8,10 +8,10 @@
 ====================================================== */
 console.log('[BOOT] main.js loaded');
 
-window.addEventListener('error', function(e) {
+window.addEventListener('error', function (e) {
   console.error('[GLOBAL ERROR]', e.message, e.filename, e.lineno);
 });
-window.addEventListener('unhandledrejection', function(e) {
+window.addEventListener('unhandledrejection', function (e) {
   console.error('[UNHANDLED REJECTION]', e.reason);
 });
 
@@ -92,10 +92,10 @@ function showNotification(msg, type) {
     'box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:9999;';
   document.body.appendChild(el);
 
-  setTimeout(function() {
+  setTimeout(function () {
     el.style.opacity = '0';
     el.style.transition = 'opacity 0.3s';
-    setTimeout(function() {
+    setTimeout(function () {
       if (el.parentNode) el.parentNode.removeChild(el);
     }, 300);
   }, 2500);
@@ -111,7 +111,7 @@ function setActiveTab(tabId) {
   AppState.currentTab = tabId;
 
   var tabBtns = document.querySelectorAll('[data-tab]');
-  tabBtns.forEach(function(btn) {
+  tabBtns.forEach(function (btn) {
     var isActive = btn.dataset.tab === tabId;
 
     btn.classList.remove('active', 'border-primary', 'text-primary', 'bg-blue-50');
@@ -124,7 +124,7 @@ function setActiveTab(tabId) {
   });
 
   var tabContents = document.querySelectorAll('.tab-content');
-  tabContents.forEach(function(content) {
+  tabContents.forEach(function (content) {
     var isTarget = content.id === tabId;
     if (isTarget) {
       content.classList.remove('hidden');
@@ -146,8 +146,8 @@ function initTabs() {
 
   console.log('[Tabs] found', tabBtns.length, 'tab buttons');
 
-  tabBtns.forEach(function(btn) {
-    btn.addEventListener('click', function(e) {
+  tabBtns.forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
       e.preventDefault();
       var targetTab = btn.dataset.tab;
       console.log('[TAB CLICK]', targetTab);
@@ -186,7 +186,7 @@ function initDarkMode() {
     if (lightIcon) lightIcon.classList.remove('hidden');
   }
 
-  toggle.addEventListener('click', function(e) {
+  toggle.addEventListener('click', function (e) {
     e.preventDefault();
     console.log('[DARK MODE] toggle clicked');
 
@@ -253,23 +253,32 @@ function initApiKeyUI() {
 
   updateStatus();
 
-  toggleBtn.addEventListener('click', function(e) {
+  toggleBtn.addEventListener('click', function (e) {
     e.preventDefault();
     e.stopPropagation();
     var isHidden = panel.classList.contains('hidden');
     panel.classList.toggle('hidden');
+
+    // 패널이 열릴 때 저장된 API 키를 입력 필드에 로드
+    if (isHidden && input) {
+      var savedKey = localStorage.getItem(STORAGE_KEY);
+      if (savedKey) {
+        input.value = savedKey;
+      }
+    }
+
     console.log('[API KEY BTN] clicked, panel now:', isHidden ? 'visible' : 'hidden');
   });
 
   if (closeBtn) {
-    closeBtn.addEventListener('click', function(e) {
+    closeBtn.addEventListener('click', function (e) {
       e.preventDefault();
       panel.classList.add('hidden');
     });
   }
 
   if (saveBtn && input) {
-    saveBtn.addEventListener('click', function(e) {
+    saveBtn.addEventListener('click', function (e) {
       e.preventDefault();
       var key = input.value.trim();
       if (!key) {
@@ -279,12 +288,11 @@ function initApiKeyUI() {
       localStorage.setItem(STORAGE_KEY, key);
       showNotification('API 키가 저장되었습니다', 'success');
       updateStatus();
-      input.value = '';
     });
   }
 
   if (deleteBtn) {
-    deleteBtn.addEventListener('click', function(e) {
+    deleteBtn.addEventListener('click', function (e) {
       e.preventDefault();
       localStorage.removeItem(STORAGE_KEY);
       if (input) input.value = '';
@@ -293,7 +301,7 @@ function initApiKeyUI() {
     });
   }
 
-  document.addEventListener('click', function(e) {
+  document.addEventListener('click', function (e) {
     if (!container.contains(e.target) && !panel.classList.contains('hidden')) {
       panel.classList.add('hidden');
     }
@@ -332,7 +340,7 @@ function initKoreaSeniorButtons() {
   var sampleBtn = document.getElementById('korea-senior-sample-btn');
 
   if (clearBtn && ta) {
-    clearBtn.addEventListener('click', function(e) {
+    clearBtn.addEventListener('click', function (e) {
       e.preventDefault();
       ta.value = '';
       ta.dispatchEvent(new Event('input'));
@@ -341,7 +349,7 @@ function initKoreaSeniorButtons() {
   }
 
   if (sampleBtn && ta) {
-    sampleBtn.addEventListener('click', function(e) {
+    sampleBtn.addEventListener('click', function (e) {
       e.preventDefault();
       ta.value = '[씬 1. 서울 강남 아파트 거실 / 낮]\n\n' +
         '나레이션:\n' +
@@ -393,7 +401,7 @@ function initAIAnalysis() {
     return;
   }
 
-  btn.addEventListener('click', function(e) {
+  btn.addEventListener('click', function (e) {
     e.preventDefault();
 
     if (AppState.isAIAnalyzing) {
@@ -452,7 +460,7 @@ function initAIAnalysis() {
     showNotification('AI 분석을 시작합니다...', 'info');
 
     var progress = 0;
-    var progressInterval = setInterval(function() {
+    var progressInterval = setInterval(function () {
       if (progress < 90) {
         progress += Math.random() * 3 + 1;
         if (progress > 90) progress = 90;
@@ -465,8 +473,8 @@ function initAIAnalysis() {
     if (typeof window.geminiAPI !== 'undefined' && typeof window.geminiAPI.analyzeScript === 'function') {
       analyzePromise = window.geminiAPI.analyzeScript(script, 'comprehensive');
     } else {
-      analyzePromise = new Promise(function(resolve) {
-        setTimeout(function() {
+      analyzePromise = new Promise(function (resolve) {
+        setTimeout(function () {
           resolve({
             summary: '대본 분석이 완료되었습니다. (시뮬레이션)',
             overallScore: 85,
@@ -479,7 +487,7 @@ function initAIAnalysis() {
     }
 
     analyzePromise
-      .then(function(result) {
+      .then(function (result) {
         console.log('[AI ANALYSIS] 결과:', result);
         AppState.aiAnalysisResult = result;
 
@@ -487,7 +495,7 @@ function initAIAnalysis() {
         if (progressBar) progressBar.style.width = '100%';
         if (progressText) progressText.textContent = '100%';
 
-        setTimeout(function() {
+        setTimeout(function () {
           if (progressDone) {
             progressDone.classList.remove('hidden');
           }
@@ -543,7 +551,7 @@ function initAIAnalysis() {
               var issuesEl = document.getElementById('korea-ai-issues');
               if (issuesEl) {
                 issuesEl.innerHTML = '';
-                result.topIssues.forEach(function(item) {
+                result.topIssues.forEach(function (item) {
                   var li = document.createElement('li');
                   li.textContent = item;
                   issuesEl.appendChild(li);
@@ -555,7 +563,7 @@ function initAIAnalysis() {
               var recsEl = document.getElementById('korea-ai-recommendations');
               if (recsEl) {
                 recsEl.innerHTML = '';
-                result.recommendations.forEach(function(item) {
+                result.recommendations.forEach(function (item) {
                   var li = document.createElement('li');
                   li.textContent = item;
                   recsEl.appendChild(li);
@@ -567,7 +575,7 @@ function initAIAnalysis() {
           }
         }, 300);
       })
-      .catch(function(err) {
+      .catch(function (err) {
         console.error('[AI ANALYSIS] 오류:', err);
         clearInterval(progressInterval);
 
@@ -577,7 +585,7 @@ function initAIAnalysis() {
 
         showNotification('AI 분석 중 오류가 발생했습니다: ' + (err && err.message ? err.message : String(err)), 'error');
       })
-      .finally(function() {
+      .finally(function () {
         AppState.isAIAnalyzing = false;
         btn.disabled = false;
         btn.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -589,7 +597,7 @@ function initAIAnalysis() {
 /* ======================================================
    DOM READY
 ====================================================== */
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
   console.log('[BOOT] DOMContentLoaded fired');
 
   safeInit('Tabs', initTabs);
