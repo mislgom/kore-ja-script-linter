@@ -1023,6 +1023,7 @@ function initAIStartButton() {
       var errStr = '';
 
       // [HOTFIX] error 객체/문자열/기타를 무조건 사람이 읽을 수 있는 문자열로 정규화
+      // [HOTFIX] error 객체/문자열/기타를 무조건 사람이 읽을 수 있는 문자열로 정규화
       try {
         if (typeof error === 'string') {
           errStr = error;
@@ -1060,7 +1061,9 @@ function initAIStartButton() {
       else if (errStr.includes('500') || errStr.includes('503')) failReason = '서버 오류 (5xx)';
       else if (errStr.includes('비어있음') || errStr.includes('Empty')) failReason = '빈 응답';
 
-      var displayMsg = '❌ Step ' + stepInfo.step + ' 분석 실패 [' + failReason + ']';
+      // [FIX] 에러 메시지 토스트 상세 출력
+      var errShort = (errStr || '').replace(/\s+/g, ' ').slice(0, 160);
+      var displayMsg = '❌ Step ' + stepInfo.step + ' 분석 실패 [' + failReason + '] ' + (errShort ? ('- ' + errShort) : '');
 
       showNotification(displayMsg, 'error');
 
@@ -1439,6 +1442,10 @@ async function callGeminiWithRetry(prompt, isJson = true, retries = 2) {
 
         if (!response.ok) {
           var errorText = await response.text().catch(function () { return ''; });
+
+          // [FIX] non-ok 응답 상세 로깅
+          console.error('[API DEBUG] non-ok status:', response.status, response.statusText);
+          console.error('[API DEBUG] non-ok body:', errorText ? errorText.slice(0, 1000) : '(empty)');
 
           if (response.status === 429) {
             console.warn('[API DEBUG] 429 Rate Limit - 10초 대기 후 재시도');
