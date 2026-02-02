@@ -728,6 +728,17 @@ function initAIStartButton() {
     resetProgress();
     showNotification('AI 분석을 시작합니다...', 'info');
 
+    // [FIX] Watchdog: 20초간 0%면 강제 리셋 (무한 대기 방지)
+    setTimeout(function () {
+      if (AppState.isAIAnalyzing && (!progressBar || progressBar.style.width === '0%' || progressBar.style.width === '')) {
+        console.warn('[Watchdog] 분석 시작 후 20초간 반응 없음 - 강제 리셋');
+        AppState.isAIAnalyzing = false;
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        showNotification('서버 응답이 늦어지고 있습니다. 잠시 후 다시 시도해주세요.', 'warning');
+      }
+    }, 20000);
+
     // Step 0 + 5단계 분석 실행 (총 6단계)
     var analysisSteps = [
       {
@@ -785,12 +796,14 @@ function initAIStartButton() {
           console.warn('[AI ANALYSIS] ListModels 실패 - 폴백 모델 사용');
         }
         // ListModels 완료 후 분석 시작
+        updateProgress(0, 'processing', 5); // [FIX] Step 0 시작 시 5% (Watchdog 회피)
         analyzeNextStep();
       })
       .catch(function (err) {
         console.error('[AI ANALYSIS] ListModels 오류:', err);
         console.warn('[AI ANALYSIS] 폴백 모델로 계속 진행');
         // 오류가 있어도 폴백 모델로 계속 진행
+        updateProgress(0, 'processing', 5); // [FIX] Step 0 시작 시 5%
         analyzeNextStep();
       });
 
@@ -940,26 +953,43 @@ function initAIStartButton() {
       console.error('[FINAL FAILURE] Step ' + stepInfo.step + ' 모든 재시도 실패');
       updateProgress(stepInfo.step, 'error', (currentStep / analysisSteps.length) * 100);
 
-      // [B) 개선] 사용자 친화적 에러 메시지 분석
+      // [B) 개선] 에러 원인 정밀 분석 (사용자 요청 반영)
       var failReason = '알 수 없는 오류';
-      var errStr = error.message || error.toString();
+      var errStr = '';
 
-      if (errStr.includes('JSON')) failReason = '형식 오류 (JSON)';
+      try {
+        errStr = (error.message || (error && error.toString ? error.toString() : String(error))) || '';
+      } catch (e) { errStr = 'Error parsing failed'; }
+
+      // 1. 타임아웃/Abort (최우선 확인)
+      if (error.name === 'AbortError' || errStr.includes('AbortError') || errStr.includes('timeout') || errStr.includes('시간 초과')) {
+        failReason = '서버 응답 시간 초과';
+      }
+      // 2. 네트워크/Fetch/CORS
+      else if (errStr.includes('Failed to fetch') || errStr.includes('NetworkError') || errStr.includes('fetch')) {
+        failReason = '네트워크/CORS(fetch) 오류';
+      }
+      // 3. 기존 분류 유지
+      else if (errStr.includes('JSON')) failReason = '형식 오류 (JSON)';
       else if (errStr.includes('429')) failReason = '사용량 초과 (429)';
       else if (errStr.includes('401') || errStr.includes('key')) failReason = 'API 키 인증 실패';
       else if (errStr.includes('403')) failReason = '권한 없음 (403)';
       else if (errStr.includes('Safety') || errStr.includes('blocked')) failReason = '안전 필터 차단';
       else if (errStr.includes('finishReason')) failReason = '응답 중단됨';
-      else if (errStr.includes('fetch') || errStr.includes('Network')) failReason = '네트워크 오류';
       else if (errStr.includes('500') || errStr.includes('503')) failReason = '서버 오류 (5xx)';
-      else if (errStr.includes('비어있음')) failReason = '빈 응답';
+      else if (errStr.includes('비어있음') || errStr.includes('Empty')) failReason = '빈 응답';
 
       var displayMsg = '❌ Step ' + stepInfo.step + ' 분석 실패 [' + failReason + ']';
 
       showNotification(displayMsg, 'error');
-      console.error('[FINAL FAIL REASON]', failReason, 'ORIGINAL:', errStr);
 
-      // 상태 복구
+      console.error('[FINAL FAIL REASON]', failReason);
+      console.error('[ORIGINAL ERROR]', errStr);
+      if (error.stack) {
+        console.error('[ERROR STACK]', error.stack);
+      }
+
+      // 상태 복구 (필수)
       AppState.isAIAnalyzing = false;
       btn.disabled = false;
       btn.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -1050,11 +1080,12 @@ function initAIStartButton() {
         };
       }
 
-      // feedback을 issues로 변환
-      var issues = [];
-      var fixes = [];
+      // [FIX] issues/fixes 누락 문제 해결
+      var issues = Array.isArray(stepData.issues) ? stepData.issues : [];
+      var fixes = Array.isArray(stepData.fixes) ? stepData.fixes : [];
 
-      if (stepData.feedback) {
+      // 호환성: feedback만 있는 구버전 데이터 처리
+      if (issues.length === 0 && stepData.feedback) {
         issues.push({
           text: stepData.feedback,
           reason: "AI 분석 결과"
@@ -1182,10 +1213,16 @@ async function listAvailableModels(apiKey) {
   console.groupEnd();
 
   try {
+    // [FIX] 10초 타임아웃 추가
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function () { controller.abort(); }, 10000);
+
     var response = await fetch(url, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       console.error('[LIST MODELS] 오류:', response.status, response.statusText);
@@ -1259,7 +1296,7 @@ async function listAvailableModels(apiKey) {
   }
 }
 
-// API 호출 유틸리티 (레이트 리밋 및 재시도) - 디버그 강화 버전
+// API 호출 유틸리티 (레이트 리밋 및 재시도) - [FIX] 타임아웃 & 상태잠금 방지 강화
 async function callGeminiWithRetry(prompt, isJson = true, retries = 2) {
   if (apiCallState.isProcessing) {
     throw new Error('API 호출이 진행 중입니다. 잠시만 기다려주세요.');
@@ -1272,43 +1309,26 @@ async function callGeminiWithRetry(prompt, isJson = true, retries = 2) {
     await new Promise(resolve => setTimeout(resolve, 4000 - timeSinceLastCall));
   }
 
-  // [필수 수정 2] try/finally로 isProcessing 보호
   apiCallState.isProcessing = true;
   apiCallState.lastCallTime = Date.now();
 
   try {
     var apiKey = localStorage.getItem('GEMINI_API_KEY');
-    if (!apiKey) {
-      throw new Error('API 키가 없습니다.');
-    }
+    if (!apiKey) throw new Error('API 키가 없습니다.');
 
-    // API 키 마스킹 (앞 4글자만 표시)
+    // API 키 마스킹
     var maskedKey = apiKey.substring(0, 4) + '****' + apiKey.substring(apiKey.length - 4);
 
-    // [필수 수정 1] 모델 ID - ListModels 결과 사용 또는 폴백
-    var modelId = apiCallState.selectedModel || 'gemini-1.5-flash'; // 폴백: gemini-1.5-flash
+    var modelId = apiCallState.selectedModel || 'gemini-1.5-flash';
     var apiVersion = 'v1beta';
     var endpoint = 'generateContent';
-
-    // 전체 URL 구성
     var baseUrl = 'https://generativelanguage.googleapis.com';
     var path = '/' + apiVersion + '/models/' + modelId + ':' + endpoint;
     var url = baseUrl + path + '?key=' + apiKey;
 
-    // [필수 1] 요청 직전 로그 (민감정보 마스킹)
     console.group('[API DEBUG] 요청 정보');
-    console.log('Method:', 'POST');
-    console.log('Base URL:', baseUrl);
-    console.log('API Version:', apiVersion);
     console.log('Model ID:', modelId);
-    console.log('Model Source:', apiCallState.selectedModel ? 'ListModels' : 'Fallback');
-    console.log('Endpoint:', endpoint);
-    console.log('Full Path:', path);
-    console.log('Full URL (without key):', baseUrl + path);
-    console.log('API Key (masked):', maskedKey);
-    console.log('Prompt Length:', prompt.length, 'chars');
-    console.log('Prompt Preview:', prompt.substring(0, 100) + '...');
-    console.log('Is JSON Response:', isJson);
+    console.log('Prompt Length:', prompt.length);
     console.groupEnd();
 
     for (var i = 0; i <= retries; i++) {
@@ -1321,153 +1341,70 @@ async function callGeminiWithRetry(prompt, isJson = true, retries = 2) {
           }
         };
 
-        if (isJson) {
-          bodyConfig.generationConfig.responseMimeType = "application/json";
-        }
+        if (isJson) bodyConfig.generationConfig.responseMimeType = "application/json";
 
-        console.log('[API DEBUG] Request Body Config:', JSON.stringify(bodyConfig, null, 2).substring(0, 500) + '...');
+        // [FIX] 40초 타임아웃 설정
+        var controller = new AbortController();
+        var timeoutId = setTimeout(function () { controller.abort(); }, 40000);
 
         var response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(bodyConfig)
+          body: JSON.stringify(bodyConfig),
+          signal: controller.signal // 타임아웃 신호
         });
 
-        // [필수 1] 응답 로그
-        console.group('[API DEBUG] 응답 정보');
-        console.log('Status Code:', response.status);
-        console.log('Status Text:', response.statusText);
-        console.log('OK:', response.ok);
-        console.groupEnd();
-
-        // [필수 2] 엔드포인트/라우팅 점검
-        if (response.status === 404) {
-          var errorBody = '';
-          try {
-            errorBody = await response.text();
-            console.error('[API DEBUG] 404 Response Body:', errorBody);
-          } catch (e) {
-            console.error('[API DEBUG] 404 응답 본문 읽기 실패:', e);
-          }
-
-          // [필수 3] 오류 메시지 개선 - 모델 ID/retired 가능성 명시
-          var errorMsg = '❌ API 엔드포인트 오류 (404)\n\n';
-          errorMsg += '호출 URL: ' + baseUrl + path + '\n';
-          errorMsg += '모델: ' + modelId + '\n';
-          errorMsg += 'API 버전: ' + apiVersion + '\n\n';
-          errorMsg += '가능한 원인:\n';
-          errorMsg += '1. 모델 ID 불일치 또는 retired 모델 (가장 가능성 높음)\n';
-          errorMsg += '2. API 버전 불일치 (v1beta 확인 필요)\n';
-          errorMsg += '3. 엔드포인트 경로 오류 (:generateContent 확인 필요)\n\n';
-
-          // [필수 수정 3] ListModels 결과가 있으면 사용 가능한 모델 표시
-          if (apiCallState.availableModels && apiCallState.availableModels.length > 0) {
-            errorMsg += '✅ 현재 프로젝트에서 사용 가능한 모델:\n';
-            apiCallState.availableModels.slice(0, 5).forEach(function (model) {
-              var modelName = model.name.replace('models/', '');
-              errorMsg += '  - ' + modelName + ' (' + model.displayName + ')\n';
-            });
-            if (apiCallState.availableModels.length > 5) {
-              errorMsg += '  ... 외 ' + (apiCallState.availableModels.length - 5) + '개\n';
-            }
-            errorMsg += '\n';
-          } else {
-            errorMsg += '⚠️ ListModels 조회 실패 - 사용 가능한 모델 목록을 가져올 수 없습니다.\n\n';
-          }
-
-          if (errorBody) {
-            try {
-              var errorJson = JSON.parse(errorBody);
-              if (errorJson.error && errorJson.error.message) {
-                errorMsg += 'API 오류 메시지: ' + errorJson.error.message;
-              }
-            } catch (e) {
-              errorMsg += 'Response Body: ' + errorBody.substring(0, 200);
-            }
-          }
-
-          apiCallState.isProcessing = false;
-          throw new Error(errorMsg);
-        }
-
-        // [필수 3] 다른 HTTP 오류 구분
-        if (response.status === 429) {
-          console.warn('[API DEBUG] Rate limit (429) - 40초 대기');
-          await new Promise(resolve => setTimeout(resolve, 40000));
-          continue;
-        }
-
-        if (response.status === 401) {
-          apiCallState.isProcessing = false;
-          throw new Error('❌ API 키 인증 실패 (401)\n\nAPI 키가 유효하지 않거나 권한이 없습니다.\n우측 상단 🔑 버튼에서 API 키를 확인해주세요.');
-        }
-
-        if (response.status === 403) {
-          apiCallState.isProcessing = false;
-          throw new Error('❌ API 접근 거부 (403)\n\nAPI 키에 이 모델을 사용할 권한이 없습니다.\nGemini API 콘솔에서 권한을 확인해주세요.');
-        }
+        clearTimeout(timeoutId); // 성공 시 타이머 해제
 
         if (!response.ok) {
-          var genericErrorBody = '';
-          try {
-            genericErrorBody = await response.text();
-            console.error('[API DEBUG] Error Response Body:', genericErrorBody);
-          } catch (e) {
-            console.error('[API DEBUG] 오류 응답 본문 읽기 실패:', e);
+          var errorText = await response.text().catch(function () { return ''; });
+
+          if (response.status === 429) {
+            console.warn('[API DEBUG] 429 Rate Limit - 10초 대기 후 재시도');
+            await new Promise(resolve => setTimeout(resolve, 10000));
+            continue;
           }
-          throw new Error('API Error: ' + response.status + '\n\n' + genericErrorBody.substring(0, 200));
+
+          throw new Error('API 오류 (' + response.status + '): ' + errorText.substring(0, 200));
         }
 
         var data = await response.json();
-        console.log('[API DEBUG] Response Data:', JSON.stringify(data, null, 2).substring(0, 500) + '...');
 
-        // [응답 구조 방어] candidates 검증
+        // 응답 검증
         if (!data.candidates || data.candidates.length === 0) {
-          console.error('[RESPONSE BLOCKED] 응답이 비어있거나 차단됨');
-          console.error('[RESPONSE BLOCKED] promptFeedback:', data.promptFeedback);
-          console.error('[RESPONSE BLOCKED] Full Response:', JSON.stringify(data, null, 2));
-          throw new Error('응답이 비어있거나 차단되었습니다. (promptFeedback 확인 필요)');
+          throw new Error('응답이 비어있거나 차단되었습니다. (Safety Filter)');
         }
 
         var candidate = data.candidates[0];
-
         if (!candidate.content || !candidate.content.parts) {
-          console.error('[RESPONSE INVALID] content 또는 parts 없음');
-          console.error('[RESPONSE INVALID] finishReason:', candidate.finishReason);
-          console.error('[RESPONSE INVALID] safetyRatings:', candidate.safetyRatings);
-          throw new Error('응답 구조가 올바르지 않습니다. (finishReason: ' + candidate.finishReason + ')');
+          throw new Error('응답 포맷 오류 (content/parts 누락)');
         }
 
-        // text 추출 (폴백: parts join)
-        var parts = candidate.content.parts;
         var text = '';
-
-        if (parts[0] && parts[0].text) {
-          text = parts[0].text;
-        } else if (parts.length > 0) {
-          // 폴백: 모든 parts를 join
-          console.warn('[RESPONSE FALLBACK] parts[0].text 없음, parts join 시도');
-          text = parts.map(function (p) { return p.text || ''; }).join('');
+        if (candidate.content.parts[0] && candidate.content.parts[0].text) {
+          text = candidate.content.parts[0].text;
+        } else {
+          text = candidate.content.parts.map(function (p) { return p.text; }).join('');
         }
 
-        if (!text) {
-          console.error('[RESPONSE EMPTY] text가 비어있음');
-          console.error('[RESPONSE EMPTY] parts:', JSON.stringify(parts, null, 2));
-          throw new Error('응답 텍스트가 비어있습니다.');
-        }
+        if (!text) throw new Error('응답 텍스트가 비어있습니다.');
 
         return text;
 
       } catch (err) {
-        console.error('[API DEBUG] Attempt ' + (i + 1) + ' failed:', err);
-        if (i === retries) {
-          throw err;
+        if (err.name === 'AbortError') {
+          console.error('[API TIMEOUT] 요청 시간 초과 (40초)');
+          err = new Error('서버 응답 시간 초과 (40초)');
         }
+
+        console.error('[API DEBUG] 시도 ' + (i + 1) + ' 실패:', err);
+        if (i === retries) throw err;
+        // 재시도 대기
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
   } finally {
-    // [필수 수정 2] 어떤 경로든 반드시 isProcessing 해제
+    // [FIX] 핵심: 어떤 상황에서도(성공/실패/에러) 처리 상태 해제 보장
     apiCallState.isProcessing = false;
   }
 }
