@@ -74,7 +74,7 @@ function safeInit(name, fn) {
   }
 }
 
-// JSON 안전 파서 (3단계 폴백)
+// JSON 안전 파서 (3단계 폴백) - 배열 지원 + head/tail 프리뷰
 function safeParseJsonResponse(responseText) {
   if (!responseText) throw new Error('빈 응답입니다.');
 
@@ -90,20 +90,46 @@ function safeParseJsonResponse(responseText) {
     console.warn('[JSON PARSE] 1차 시도 실패, 2차 시도 중...');
   }
 
-  // 2차: 첫 { ~ 마지막 } 범위만 추출
+  // [B) 보강] 2차: 첫 JSON 시작({ 또는 [) ~ 마지막 JSON 끝(} 또는 ]) 범위 추출
   var firstBrace = cleaned.indexOf('{');
+  var firstBracket = cleaned.indexOf('[');
   var lastBrace = cleaned.lastIndexOf('}');
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+  var lastBracket = cleaned.lastIndexOf(']');
+
+  // JSON 시작 위치 결정 (더 앞에 있는 것)
+  var startPos = -1;
+  var endPos = -1;
+  var startChar = '';
+  var endChar = '';
+
+  if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    startPos = firstBrace;
+    endPos = lastBrace;
+    startChar = '{';
+    endChar = '}';
+  } else if (firstBracket !== -1) {
+    startPos = firstBracket;
+    endPos = lastBracket;
+    startChar = '[';
+    endChar = ']';
+  }
+
+  if (startPos !== -1 && endPos !== -1 && endPos > startPos) {
     try {
-      return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+      var extracted = cleaned.slice(startPos, endPos + 1);
+      console.log('[JSON PARSE] 2차 추출:', startChar + '...' + endChar, '길이:', extracted.length);
+      return JSON.parse(extracted);
     } catch (e2) {
       console.warn('[JSON PARSE] 2차 시도 실패, 3차 시도 중...');
     }
   }
 
-  // 3차: 실패 - 원문 프리뷰 포함 에러
+  // [C) 추가] 3차: 실패 - head/tail 프리뷰 포함 에러
   var err = new Error('응답 처리 실패 (JSON 파싱 오류)');
-  err._preview = cleaned.slice(0, 800);
+  err._fullLength = cleaned.length;
+  err._head = cleaned.slice(0, 400); // 앞 400자
+  err._tail = cleaned.slice(-400);   // 뒤 400자
+  err._preview = cleaned.slice(0, 800); // 호환성 유지
   throw err;
 }
 
@@ -534,6 +560,8 @@ window.updateCategoryFeedback = updateCategoryFeedback;
    AI ANALYSIS WITH PROGRESS BAR (5-STEP)
 ====================================================== */
 function initAIStartButton() {
+  console.log('[AIStartButton] 초기화 시작');
+
   var btn = document.getElementById('korea-ai-start-btn');
   var ta = document.getElementById('korea-senior-script');
   var progressSection = document.getElementById('korea-ai-progress-section');
@@ -542,46 +570,79 @@ function initAIStartButton() {
   var aiSection = document.getElementById('korea-ai-analysis');
   var resultEl = document.getElementById('korea-ai-result');
 
+  console.log('[AIStartButton] 버튼 엘리먼트:', btn);
+  console.log('[AIStartButton] 텍스트 영역:', ta);
+
   if (!btn) {
-    console.warn('[AIStartButton] button not found');
+    console.error('[AIStartButton] ❌ 버튼을 찾을 수 없습니다! ID: korea-ai-start-btn');
     return;
   }
 
+  console.log('[AIStartButton] ✅ 버튼 바인딩 성공');
+
   // 진행 상태 업데이트 함수
   function updateProgress(step, status, percent) {
+    // [A) 개선] 전체 진행바는 스텝 요소 존재 여부와 무관하게 항상 업데이트
+    if (progressBar) progressBar.style.width = percent + '%';
+    if (progressPercent) progressPercent.textContent = Math.round(percent) + '%';
+
     var stepEl = document.getElementById('progress-step-' + step);
-    if (!stepEl) return;
+    if (!stepEl) {
+      // Step 0 등 UI가 없는 단계도 로그는 남김
+      if (step === 0 && status === 'processing') {
+        console.log('[Step 0] UI 요소 없음 - 백그라운드 처리 중');
+      }
+      return;
+    }
 
     var statusSpan = stepEl.querySelector('.step-status');
     var iconDiv = stepEl.querySelector('.flex-shrink-0');
 
     if (status === 'processing') {
       stepEl.classList.add('border-indigo-300', 'bg-indigo-50');
-      stepEl.classList.remove('border-gray-200');
+      stepEl.classList.remove('border-gray-200', 'border-green-300', 'bg-green-50', 'border-red-300', 'bg-red-50');
       if (statusSpan) {
         statusSpan.className = 'step-status text-xs px-2 py-1 rounded-full bg-indigo-500 text-white';
         statusSpan.textContent = '분석중...';
       }
       if (iconDiv) {
         iconDiv.classList.add('bg-indigo-500');
-        iconDiv.classList.remove('bg-gray-200');
+        iconDiv.classList.remove('bg-gray-200', 'bg-green-500', 'bg-red-500');
         var icon = iconDiv.querySelector('i');
         if (icon) icon.classList.add('text-white');
         if (icon) icon.classList.remove('text-gray-400');
       }
     } else if (status === 'complete') {
       stepEl.classList.add('border-green-300', 'bg-green-50');
-      stepEl.classList.remove('border-indigo-300', 'bg-indigo-50', 'border-gray-200');
+      stepEl.classList.remove('border-indigo-300', 'bg-indigo-50', 'border-gray-200', 'border-red-300', 'bg-red-50');
       if (statusSpan) {
         statusSpan.className = 'step-status text-xs px-2 py-1 rounded-full bg-green-500 text-white';
         statusSpan.textContent = '완료';
       }
       if (iconDiv) {
         iconDiv.classList.add('bg-green-500');
-        iconDiv.classList.remove('bg-indigo-500', 'bg-gray-200');
+        iconDiv.classList.remove('bg-indigo-500', 'bg-gray-200', 'bg-red-500');
         var icon = iconDiv.querySelector('i');
         if (icon) icon.classList.add('text-white');
         if (icon) icon.classList.remove('text-gray-400');
+      }
+    } else if (status === 'error') {
+      // [A) 추가] error 상태 처리 - 실패 UI 표시
+      stepEl.classList.add('border-red-300', 'bg-red-50');
+      stepEl.classList.remove('border-indigo-300', 'bg-indigo-50', 'border-gray-200', 'border-green-300', 'bg-green-50');
+      if (statusSpan) {
+        statusSpan.className = 'step-status text-xs px-2 py-1 rounded-full bg-red-500 text-white';
+        statusSpan.textContent = '실패';
+      }
+      if (iconDiv) {
+        iconDiv.classList.add('bg-red-500');
+        iconDiv.classList.remove('bg-indigo-500', 'bg-gray-200', 'bg-green-500');
+        var icon = iconDiv.querySelector('i');
+        if (icon) {
+          // [C) 개선] 아이콘 class 강제 교체 대신 색상만 변경
+          icon.classList.add('text-white');
+          icon.classList.remove('text-gray-400', 'text-indigo-500', 'text-green-500');
+        }
       }
     }
 
@@ -620,31 +681,40 @@ function initAIStartButton() {
 
   btn.addEventListener('click', function (e) {
     e.preventDefault();
+    console.log('[AIStartButton] 🖱️ 버튼 클릭 감지!');
+    console.log('[AIStartButton] AppState.isAIAnalyzing:', AppState.isAIAnalyzing);
 
     if (AppState.isAIAnalyzing) {
+      console.warn('[AIStartButton] 이미 분석 중');
       showNotification('AI 분석이 진행 중입니다', 'warning');
       return;
     }
 
     var script = ta ? ta.value.trim() : '';
+    console.log('[AIStartButton] 대본 길이:', script.length);
 
     if (!script) {
+      console.warn('[AIStartButton] 대본 없음');
       showNotification('대본을 입력해주세요', 'warning');
       return;
     }
 
     if (script.length < 50) {
+      console.warn('[AIStartButton] 대본 너무 짧음:', script.length);
       showNotification('대본이 너무 짧습니다 (최소 50자)', 'warning');
       return;
     }
 
     var apiKey = localStorage.getItem('GEMINI_API_KEY');
+    console.log('[AIStartButton] API 키 존재:', !!apiKey);
+
     if (!apiKey || !apiKey.trim()) {
+      console.warn('[AIStartButton] API 키 없음');
       showNotification('API 키를 먼저 설정해주세요 (우측 상단 🔑)', 'warning');
       return;
     }
 
-    console.log('[AI ANALYSIS] 시작');
+    console.log('[AI ANALYSIS] ✅ 시작!');
 
     AppState.isAIAnalyzing = true;
     btn.disabled = true;
@@ -774,12 +844,20 @@ function initAIStartButton() {
           } catch (e) {
             console.error('[STEP ' + stepInfo.step + '] JSON Parse Error (시도 ' + (stepRetryCount[stepKey] + 1) + '회):', e);
 
-            // 원문 프리뷰 출력
-            if (e._preview) {
-              console.error('[JSON PARSE PREVIEW]', e._preview);
+            // [C) 추가] head/tail 프리뷰 출력 (앞뒤 400자씩)
+            if (e._fullLength) {
+              console.error('[RESPONSE FULL LENGTH]', e._fullLength, '자');
             }
-            console.error('[RESPONSE LENGTH]', responseText.length);
-            console.error('[RESPONSE LAST 200]', responseText.slice(-200));
+            if (e._head) {
+              console.error('[RESPONSE HEAD 400]', e._head);
+            }
+            if (e._tail) {
+              console.error('[RESPONSE TAIL 400]', e._tail);
+            }
+            // 호환성: 기존 preview도 출력
+            if (e._preview) {
+              console.error('[JSON PARSE PREVIEW 800]', e._preview);
+            }
 
             stepRetryCount[stepKey]++;
 
@@ -861,7 +939,25 @@ function initAIStartButton() {
     function handleFinalFailure(stepInfo, error) {
       console.error('[FINAL FAILURE] Step ' + stepInfo.step + ' 모든 재시도 실패');
       updateProgress(stepInfo.step, 'error', (currentStep / analysisSteps.length) * 100);
-      showNotification('Step ' + stepInfo.step + ' 분석 실패: ' + error.message + '\\n\\n재시도해주세요.', 'error');
+
+      // [B) 개선] 사용자 친화적 에러 메시지 분석
+      var failReason = '알 수 없는 오류';
+      var errStr = error.message || error.toString();
+
+      if (errStr.includes('JSON')) failReason = '형식 오류 (JSON)';
+      else if (errStr.includes('429')) failReason = '사용량 초과 (429)';
+      else if (errStr.includes('401') || errStr.includes('key')) failReason = 'API 키 인증 실패';
+      else if (errStr.includes('403')) failReason = '권한 없음 (403)';
+      else if (errStr.includes('Safety') || errStr.includes('blocked')) failReason = '안전 필터 차단';
+      else if (errStr.includes('finishReason')) failReason = '응답 중단됨';
+      else if (errStr.includes('fetch') || errStr.includes('Network')) failReason = '네트워크 오류';
+      else if (errStr.includes('500') || errStr.includes('503')) failReason = '서버 오류 (5xx)';
+      else if (errStr.includes('비어있음')) failReason = '빈 응답';
+
+      var displayMsg = '❌ Step ' + stepInfo.step + ' 분석 실패 [' + failReason + ']';
+
+      showNotification(displayMsg, 'error');
+      console.error('[FINAL FAIL REASON]', failReason, 'ORIGINAL:', errStr);
 
       // 상태 복구
       AppState.isAIAnalyzing = false;
