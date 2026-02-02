@@ -37,6 +37,24 @@ window.AppState = {
 
 var AppState = window.AppState;
 
+// 전역 카테고리 상태 (HTML onclick에서 접근 가능)
+var analysisByCategory = {};
+var selectedCategory = 'background';
+var categoryRequirements = {
+  background: { name: "배경확인", required: 100, type: "필수" },
+  character: { name: "등장인물 일관성", required: 100, type: "필수" },
+  distortion: { name: "스토리 왜곡 분석", required: 100, type: "필수" },
+  twistPace: { name: "반전/변화 속도", required: 100, type: "권장" },
+  immersion: { name: "재미/몰입 요소", required: 100, type: "권장" }
+};
+
+// API 호출 상태 관리
+var apiCallState = {
+  isProcessing: false,
+  lastCallTime: 0
+};
+
+
 /* ======================================================
    HELPERS
 ====================================================== */
@@ -383,6 +401,101 @@ function initKoreaSeniorButtons() {
 }
 
 /* ======================================================
+   CATEGORY TAB SELECTION (GLOBAL)
+====================================================== */
+function selectCategory(category) {
+  console.log('[CATEGORY CLICK] 카테고리 선택:', category);
+  console.log('[CATEGORY CLICK] analysisByCategory 상태:', analysisByCategory);
+
+  // 전역 변수 접근
+  if (typeof analysisByCategory === 'undefined') {
+    console.error('[CATEGORY CLICK] analysisByCategory가 정의되지 않음!');
+    return;
+  }
+
+  if (!analysisByCategory[category]) {
+    console.warn('[CATEGORY CLICK] 데이터 없음:', category);
+    console.warn('[CATEGORY CLICK] 사용 가능한 카테고리:', Object.keys(analysisByCategory));
+    return;
+  }
+
+  selectedCategory = category;
+  console.log('[CATEGORY CLICK] selectedCategory 업데이트:', selectedCategory);
+
+  // 모든 카드에서 active 제거
+  document.querySelectorAll('.score-card').forEach(function (card) {
+    card.classList.remove('active', 'border-indigo-500', 'bg-indigo-50');
+  });
+
+  // 선택된 카드에 active 추가
+  var selectedCard = document.querySelector('[data-category="' + category + '"]');
+  if (selectedCard) {
+    selectedCard.classList.add('active', 'border-indigo-500', 'bg-indigo-50');
+    console.log('[CATEGORY CLICK] 카드 active 스타일 적용 완료');
+  } else {
+    console.error('[CATEGORY CLICK] 카드를 찾을 수 없음:', category);
+  }
+
+  // 피드백 영역 업데이트
+  updateCategoryFeedback(category);
+}
+
+function updateCategoryFeedback(category) {
+  console.log('[CATEGORY FEEDBACK] 피드백 업데이트 시작:', category);
+  var data = analysisByCategory[category];
+  if (!data) {
+    console.error('[CATEGORY FEEDBACK] 데이터 없음:', category);
+    return;
+  }
+
+  // 제목 업데이트
+  var issuesTitle = document.getElementById('category-issues-title');
+  var fixesTitle = document.getElementById('category-fixes-title');
+  if (issuesTitle) issuesTitle.textContent = data.name + ' - 분석 결과';
+  if (fixesTitle) fixesTitle.textContent = data.name + ' - 수정 반영';
+
+  // 분석 결과 (빨강)
+  var issuesList = document.getElementById('category-issues-list');
+  if (issuesList) {
+    issuesList.innerHTML = '';
+    if (data.issues && data.issues.length > 0) {
+      data.issues.forEach(function (issue) {
+        var li = document.createElement('li');
+        li.innerHTML = '<strong>' + issue.text + '</strong> - ' + issue.reason;
+        issuesList.appendChild(li);
+      });
+      console.log('[CATEGORY FEEDBACK] issues 표시 완료:', data.issues.length + '개');
+    } else {
+      issuesList.innerHTML = '<li>발견된 문제가 없습니다.</li>';
+      console.log('[CATEGORY FEEDBACK] issues 없음');
+    }
+  }
+
+  // 수정 반영 (초록)
+  var fixesList = document.getElementById('category-fixes-list');
+  if (fixesList) {
+    fixesList.innerHTML = '';
+    if (data.fixes && data.fixes.length > 0) {
+      data.fixes.forEach(function (fix) {
+        var li = document.createElement('li');
+        li.innerHTML = '<span class="line-through">' + fix.before + '</span> → <strong>' + fix.after + '</strong> (' + fix.reason + ')';
+        fixesList.appendChild(li);
+      });
+      console.log('[CATEGORY FEEDBACK] fixes 표시 완료:', data.fixes.length + '개');
+    } else {
+      fixesList.innerHTML = '<li>수정 사항이 없습니다.</li>';
+      console.log('[CATEGORY FEEDBACK] fixes 없음');
+    }
+  }
+
+  console.log('[CATEGORY FEEDBACK] 피드백 업데이트 완료');
+}
+
+// 전역 스코프에 노출 (HTML onclick에서 접근 가능)
+window.selectCategory = selectCategory;
+window.updateCategoryFeedback = updateCategoryFeedback;
+
+/* ======================================================
    AI ANALYSIS WITH PROGRESS BAR (5-STEP)
 ====================================================== */
 function initAIStartButton() {
@@ -604,18 +717,7 @@ function initAIStartButton() {
         });
     }
 
-    // 전역 변수: 카테고리별 분석 데이터
-    var analysisByCategory = {};
-    var selectedCategory = 'background';
-
-    // 카테고리별 요구 점수 (모두 100점 목표)
-    var categoryRequirements = {
-      background: { name: "배경확인", required: 100, type: "필수" },
-      character: { name: "등장인물 일관성", required: 100, type: "필수" },
-      distortion: { name: "스토리 왜곡 분석", required: 100, type: "필수" },
-      twistPace: { name: "반전/변화 속도", required: 100, type: "권장" },
-      immersion: { name: "재미/몰입 요소", required: 100, type: "권장" }
-    };
+    // 카테고리 상태는 이제 전역 변수로 관리됨 (파일 상단 참조)
 
     function completeAnalysis() {
       console.log('[AI ANALYSIS] 전체 결과:', results);
@@ -810,75 +912,7 @@ function initAIStartButton() {
   });
 }
 
-/* ======================================================
-   CATEGORY TAB SELECTION
-====================================================== */
-function selectCategory(category) {
-  console.log('[CATEGORY] 선택:', category);
 
-  // 전역 변수 접근
-  if (typeof analysisByCategory === 'undefined' || !analysisByCategory[category]) {
-    console.warn('[CATEGORY] 데이터 없음:', category);
-    return;
-  }
-
-  selectedCategory = category;
-
-  // 모든 카드에서 active 제거
-  document.querySelectorAll('.score-card').forEach(function (card) {
-    card.classList.remove('active', 'border-indigo-500', 'bg-indigo-50');
-  });
-
-  // 선택된 카드에 active 추가
-  var selectedCard = document.querySelector('[data-category="' + category + '"]');
-  if (selectedCard) {
-    selectedCard.classList.add('active', 'border-indigo-500', 'bg-indigo-50');
-  }
-
-  // 피드백 영역 업데이트
-  updateCategoryFeedback(category);
-}
-
-function updateCategoryFeedback(category) {
-  var data = analysisByCategory[category];
-  if (!data) return;
-
-  // 제목 업데이트
-  var issuesTitle = document.getElementById('category-issues-title');
-  var fixesTitle = document.getElementById('category-fixes-title');
-  if (issuesTitle) issuesTitle.textContent = data.name + ' - 분석 결과';
-  if (fixesTitle) fixesTitle.textContent = data.name + ' - 수정 반영';
-
-  // 분석 결과 (빨강)
-  var issuesList = document.getElementById('category-issues-list');
-  if (issuesList) {
-    issuesList.innerHTML = '';
-    if (data.issues && data.issues.length > 0) {
-      data.issues.forEach(function (issue) {
-        var li = document.createElement('li');
-        li.innerHTML = '<strong>' + issue.text + '</strong> - ' + issue.reason;
-        issuesList.appendChild(li);
-      });
-    } else {
-      issuesList.innerHTML = '<li>발견된 문제가 없습니다.</li>';
-    }
-  }
-
-  // 수정 반영 (초록)
-  var fixesList = document.getElementById('category-fixes-list');
-  if (fixesList) {
-    fixesList.innerHTML = '';
-    if (data.fixes && data.fixes.length > 0) {
-      data.fixes.forEach(function (fix) {
-        var li = document.createElement('li');
-        li.innerHTML = '<span class="line-through">' + fix.before + '</span> → <strong>' + fix.after + '</strong> (' + fix.reason + ')';
-        fixesList.appendChild(li);
-      });
-    } else {
-      fixesList.innerHTML = '<li>수정 사항이 없습니다.</li>';
-    }
-  }
-}
 
 /* ======================================================
    FULL SCRIPT AUTO-FIX
@@ -1079,37 +1113,3 @@ function deduplicateAndPrioritizeFixes(fixes) {
     var bPriority = priority[b.category] || 999;
     return aPriority - bPriority;
   });
-
-  return unique;
-}
-
-function downloadScript(content) {
-  var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url;
-  var date = new Date().toISOString().slice(0, 10);
-  a.download = 'revised_script_100_' + date + '.txt';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-/* ======================================================
-   DOM READY
-====================================================== */
-document.addEventListener('DOMContentLoaded', function () {
-  console.log('[BOOT] DOMContentLoaded fired');
-
-  safeInit('Tabs', initTabs);
-  safeInit('DarkMode', initDarkMode);
-  safeInit('ApiKeyUI', initApiKeyUI);
-  safeInit('Textareas', initTextareas);
-  safeInit('KoreaButtons', initKoreaSeniorButtons);
-  safeInit('AIStartButton', initAIStartButton);
-  safeInit('AutoFixAllButton', initAutoFixAllButton);
-
-  console.log('[BOOT] All init functions completed');
-  console.log('[BOOT] Current tab:', AppState.currentTab);
-});
