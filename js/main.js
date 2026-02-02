@@ -347,6 +347,59 @@ function initTextareas() {
 
   ta.addEventListener('input', updateCounter);
   updateCounter();
+
+  // 드래그 앤 드롭 파일 업로드
+  ta.addEventListener('dragover', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    ta.style.borderColor = '#6366f1';
+    ta.style.backgroundColor = '#eef2ff';
+  });
+
+  ta.addEventListener('dragleave', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    ta.style.borderColor = '';
+    ta.style.backgroundColor = '';
+  });
+
+  ta.addEventListener('drop', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    ta.style.borderColor = '';
+    ta.style.backgroundColor = '';
+
+    var files = e.dataTransfer.files;
+    if (files.length === 0) {
+      showNotification('파일이 없습니다', 'warning');
+      return;
+    }
+
+    var file = files[0];
+
+    // TXT 파일만 허용
+    if (!file.name.toLowerCase().endsWith('.txt')) {
+      showNotification('TXT 파일만 업로드 가능합니다', 'warning');
+      return;
+    }
+
+    // 파일 크기 제한 (10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      showNotification('파일 크기는 10MB 이하여야 합니다', 'warning');
+      return;
+    }
+
+    var reader = new FileReader();
+    reader.onload = function (event) {
+      ta.value = event.target.result;
+      ta.dispatchEvent(new Event('input'));
+      showNotification('파일이 로드되었습니다: ' + file.name, 'success');
+    };
+    reader.onerror = function () {
+      showNotification('파일 읽기 실패', 'error');
+    };
+    reader.readAsText(file, 'UTF-8');
+  });
 }
 
 /* ======================================================
@@ -1060,56 +1113,3 @@ function initAutoFixAllButton() {
 
       var prompt = '다음 대본을 아래 수정 사항에 따라 전체적으로 수정하여 100점짜리 대본으로 만드세요.\n\n' +
         '## 수정 사항:\n' + fixSummary + '\n\n' +
-        '## 중요:\n' +
-        '1. 수정된 전체 대본만 반환하세요.\n' +
-        '2. 설명이나 주석 없이 대본 텍스트만 출력하세요.\n' +
-        '3. 원본의 형식을 유지하세요.\n\n' +
-        '## 원본 대본:\n' + scriptText;
-
-      // API 호출 (JSON 아님, 텍스트 반환)
-      var fixedScript = await callGeminiWithRetry(prompt, false);
-
-      // 다운로드
-      downloadScript(fixedScript);
-
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-magic mr-2"></i>전체 100점 반영 자동 수정';
-      showNotification('100점 반영 수정이 완료되어 다운로드되었습니다.', 'success');
-
-    } catch (error) {
-      console.error('[AUTO-FIX-ALL] 오류:', error);
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-magic mr-2"></i>전체 100점 반영 자동 수정';
-      alert('수정 중 오류가 발생했습니다:\n' + error.message);
-    }
-  });
-}
-
-function deduplicateAndPrioritizeFixes(fixes) {
-  // 중복 제거 (before 텍스트 기준)
-  var seen = {};
-  var unique = [];
-
-  fixes.forEach(function (fix) {
-    // 공백 제거 후 비교
-    var key = fix.before ? fix.before.trim() : '';
-    if (key && !seen[key]) {
-      seen[key] = true;
-      unique.push(fix);
-    }
-  });
-
-  // 우선순위 정렬: character > distortion > twistPace > immersion > background
-  var priority = {
-    'character': 1,
-    'distortion': 2,
-    'twistPace': 3,
-    'immersion': 4,
-    'background': 5
-  };
-
-  unique.sort(function (a, b) {
-    var aPriority = priority[a.category] || 999;
-    var bPriority = priority[b.category] || 999;
-    return aPriority - bPriority;
-  });
