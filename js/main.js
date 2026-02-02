@@ -6,13 +6,18 @@
 /* ======================================================
    BOOT
 ====================================================== */
-console.log('[BOOT] main.js loaded - API Debug Version');
+console.log('[BOOT] main.js loaded - API Debug Version vNEXT-ERRTRACE-001');
 
 window.addEventListener('error', function (e) {
   console.error('[GLOBAL ERROR]', e.message, e.filename, e.lineno);
+  try { window.showNotification('GLOBAL ERROR: ' + (e && e.message ? e.message : 'unknown'), 'error'); } catch (_) { }
 });
 window.addEventListener('unhandledrejection', function (e) {
   console.error('[UNHANDLED REJECTION]', e.reason);
+  try {
+    var r = e && e.reason ? (e.reason.message || e.reason.toString ? e.reason.toString() : String(e.reason)) : 'unknown';
+    window.showNotification('UNHANDLED: ' + String(r).slice(0, 180), 'error');
+  } catch (_) { }
 });
 
 /* ======================================================
@@ -1061,8 +1066,8 @@ function initAIStartButton() {
       else if (errStr.includes('500') || errStr.includes('503')) failReason = '서버 오류 (5xx)';
       else if (errStr.includes('비어있음') || errStr.includes('Empty')) failReason = '빈 응답';
 
-      // [FIX] 에러 메시지 토스트 상세 출력
-      var errShort = (errStr || '').replace(/\s+/g, ' ').slice(0, 160);
+      // [FIX] 에러 메시지 토스트 상세 출력 (길이 확장 240)
+      var errShort = (errStr || '').replace(/\s+/g, ' ').slice(0, 240);
       var displayMsg = '❌ Step ' + stepInfo.step + ' 분석 실패 [' + failReason + '] ' + (errShort ? ('- ' + errShort) : '');
 
       showNotification(displayMsg, 'error');
@@ -1443,9 +1448,9 @@ async function callGeminiWithRetry(prompt, isJson = true, retries = 2) {
         if (!response.ok) {
           var errorText = await response.text().catch(function () { return ''; });
 
-          // [FIX] non-ok 응답 상세 로깅
+          // [FIX] non-ok 응답 상세 로깅 & 에러 투척
           console.error('[API DEBUG] non-ok status:', response.status, response.statusText);
-          console.error('[API DEBUG] non-ok body:', errorText ? errorText.slice(0, 1000) : '(empty)');
+          console.error('[API DEBUG] non-ok body:', errorText ? errorText.slice(0, 2000) : '(empty)');
 
           if (response.status === 429) {
             console.warn('[API DEBUG] 429 Rate Limit - 10초 대기 후 재시도');
@@ -1453,7 +1458,10 @@ async function callGeminiWithRetry(prompt, isJson = true, retries = 2) {
             continue;
           }
 
-          throw new Error('API 오류 (' + response.status + '): ' + errorText.substring(0, 200));
+          var msg = 'HTTP ' + response.status + ' ' + response.statusText +
+            ' | model=' + modelId +
+            ' | body=' + (errorText ? errorText.replace(/\s+/g, ' ').slice(0, 400) : '(empty)');
+          throw new Error(msg);
         }
 
         var data = await response.json();
@@ -1490,7 +1498,7 @@ async function callGeminiWithRetry(prompt, isJson = true, retries = 2) {
       } catch (err) {
         if (err.name === 'AbortError') {
           console.error('[API TIMEOUT] 요청 시간 초과 (40초)');
-          err = new Error('서버 응답 시간 초과 (40초)');
+          throw new Error('TIMEOUT 40s | model=' + modelId + ' | url=' + url);
         }
 
         console.error('[API DEBUG] 시도 ' + (i + 1) + ' 실패:', err);
