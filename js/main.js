@@ -888,7 +888,14 @@ function initAIStartButton() {
         return;
       }
 
-      callGeminiWithRetry(prompt)
+      // [FIX] Step 2(등장인물)는 빈 응답 회피 위해 JSON 강제 해제 (forceText=true)
+      var callOptions = {};
+      if (stepInfo.step === 2) {
+        console.warn('[DEBUG] Step 2 감지 - forceText 옵션 활성화 (JSON 강제 해제)');
+        callOptions.forceText = true;
+      }
+
+      callGeminiWithRetry(prompt, true, 2, callOptions)
         .then(function (responseText) {
           // [FIX] 사용자 요청 4: null/undefined 응답 시 에러 던져서 재시도 유도
           if (responseText == null || !String(responseText).trim()) {
@@ -1397,7 +1404,8 @@ async function listAvailableModels(apiKey) {
 }
 
 // API 호출 유틸리티 (레이트 리밋 및 재시도) - [FIX] 타임아웃 & 상태잠금 방지 강화
-async function callGeminiWithRetry(prompt, isJson = true, retries = 2) {
+// API 호출 유틸리티 (레이트 리밋 및 재시도) - [FIX] 타임아웃 & 상태잠금 방지 강화
+async function callGeminiWithRetry(prompt, isJson = true, retries = 2, options = {}) {
   // [HOTFIX] 동시 API 호출 시 에러 throw 하지 말고 대기 처리 (영구 잠금 방지)
   if (apiCallState.isProcessing) {
     var waitStart = Date.now();
@@ -1451,7 +1459,9 @@ async function callGeminiWithRetry(prompt, isJson = true, retries = 2) {
           }
         };
 
-        if (isJson) bodyConfig.generationConfig.responseMimeType = "application/json";
+        if (isJson && (!options || !options.forceText)) {
+          bodyConfig.generationConfig.responseMimeType = "application/json";
+        }
 
         // [FIX] 40초 타임아웃 설정
         var controller = new AbortController();
