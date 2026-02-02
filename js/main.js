@@ -74,6 +74,39 @@ function safeInit(name, fn) {
   }
 }
 
+// JSON 안전 파서 (3단계 폴백)
+function safeParseJsonResponse(responseText) {
+  if (!responseText) throw new Error('빈 응답입니다.');
+
+  var cleaned = String(responseText)
+    .replace(/```json/gi, '')
+    .replace(/```/g, '')
+    .trim();
+
+  // 1차: 정상 JSON 파싱 시도
+  try {
+    return JSON.parse(cleaned);
+  } catch (e1) {
+    console.warn('[JSON PARSE] 1차 시도 실패, 2차 시도 중...');
+  }
+
+  // 2차: 첫 { ~ 마지막 } 범위만 추출
+  var firstBrace = cleaned.indexOf('{');
+  var lastBrace = cleaned.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+    } catch (e2) {
+      console.warn('[JSON PARSE] 2차 시도 실패, 3차 시도 중...');
+    }
+  }
+
+  // 3차: 실패 - 원문 프리뷰 포함 에러
+  var err = new Error('응답 처리 실패 (JSON 파싱 오류)');
+  err._preview = cleaned.slice(0, 800);
+  throw err;
+}
+
 var notificationState = {
   lastMessage: '',
   lastTimestamp: 0,
@@ -631,37 +664,37 @@ function initAIStartButton() {
         step: 0,
         name: '대본 파악/숙지',
         category: 'comprehension',
-        prompt: '당신은 대본 분석 전문가입니다. 먼저 아래 대본을 끝까지 읽고 완전히 이해하세요.\\n\\n대본:\\n{SCRIPT}\\n\\n위 대본을 읽고 다음 정보를 파악하세요:\\n1. 주요 등장인물과 관계\\n2. 시간적/공간적 배경\\n3. 핵심 플롯과 갈등\\n4. 전체 스토리 흐름\\n\\nJSON 형식으로 응답:\\n{\\n  \\"comprehended\\": true,\\n  \\"summary\\": \\"대본 핵심 요약 (2-3문장, 결말 노출 금지)\\",\\n  \\"characters\\": [\\"인물1\\", \\"인물2\\"],\\n  \\"setting\\": \\"배경 정보\\",\\n  \\"plotPoints\\": [\\"주요 사건1\\", \\"주요 사건2\\"]\\n}'
+        prompt: '중요: 반드시 JSON만 출력. 코드블록(```)·설명·주석·추가 텍스트 금지.\\n\\n당신은 대본 분석 전문가입니다. 먼저 아래 대본을 끝까지 읽고 완전히 이해하세요.\\n\\n대본:\\n{SCRIPT}\\n\\n위 대본을 읽고 다음 정보를 파악하세요:\\n1. 주요 등장인물과 관계\\n2. 시간적/공간적 배경\\n3. 핵심 플롯과 갈등\\n4. 전체 스토리 흐름\\n\\nJSON 형식으로 응답:\\n{\\n  \\"comprehended\\": true,\\n  \\"summary\\": \\"대본 핵심 요약 (2-3문장, 결말 노출 금지)\\",\\n  \\"characters\\": [\\"인물1\\", \\"인물2\\"],\\n  \\"setting\\": \\"배경 정보\\",\\n  \\"plotPoints\\": [\\"주요 사건1\\", \\"주요 사건2\\"]\\n}'
       },
       {
         step: 1,
         name: '배경확인',
         category: 'background',
-        prompt: '[대본 파악 완료] 이제 배경을 분석합니다.\\n\\n이 대본의 배경(한국/일본/조선 등)을 분석하고 점수(0-100)를 매겨주세요.\\n\\nJSON 형식:\\n{\\n  \\"score\\": 0-100,\\n  \\"issues\\": [\\n    {\\"text\\": \\"문제 설명\\", \\"reason\\": \\"근거/발췌\\", \\"type\\": \\"배경충돌\\"}\\n  ],\\n  \\"fixes\\": [\\n    {\\"before\\": \\"수정 전\\", \\"after\\": \\"수정 후\\", \\"reason\\": \\"수정 이유\\"}\\n  ]\\n}'
+        prompt: '중요: 반드시 JSON만 출력. 코드블록(```)·설명·주석·추가 텍스트 금지.\\n\\n[대본 파악 완료] 이제 배경을 분석합니다.\\n\\n이 대본의 배경(한국/일본/조선 등)을 분석하고 점수(0-100)를 매겨주세요.\\n\\nJSON 형식:\\n{\\n  \\"score\\": 0-100,\\n  \\"issues\\": [\\n    {\\"text\\": \\"문제 설명\\", \\"reason\\": \\"근거/발췌\\", \\"type\\": \\"배경충돌\\"}\\n  ],\\n  \\"fixes\\": [\\n    {\\"before\\": \\"수정 전\\", \\"after\\": \\"수정 후\\", \\"reason\\": \\"수정 이유\\"}\\n  ]\\n}'
       },
       {
         step: 2,
         name: '등장인물 일관성',
         category: 'character',
-        prompt: '등장인물의 나이, 이름, 관계가 일관되는지 분석하고 점수(0-100)를 매겨주세요.\\n\\nJSON 형식:\\n{\\n  \\"score\\": 0-100,\\n  \\"issues\\": [\\n    {\\"text\\": \\"문제 설명\\", \\"reason\\": \\"근거/발췌\\", \\"type\\": \\"인물명 불일치\\"}\\n  ],\\n  \\"fixes\\": [\\n    {\\"before\\": \\"수정 전\\", \\"after\\": \\"수정 후\\", \\"reason\\": \\"수정 이유\\"}\\n  ]\\n}'
+        prompt: '중요: 반드시 JSON만 출력. 코드블록(```)·설명·주석·추가 텍스트 금지.\\n\\n등장인물의 나이, 이름, 관계가 일관되는지 분석하고 점수(0-100)를 매겨주세요.\\n\\nJSON 형식:\\n{\\n  \\"score\\": 0-100,\\n  \\"issues\\": [\\n    {\\"text\\": \\"문제 설명\\", \\"reason\\": \\"근거/발췌\\", \\"type\\": \\"인물명 불일치\\"}\\n  ],\\n  \\"fixes\\": [\\n    {\\"before\\": \\"수정 전\\", \\"after\\": \\"수정 후\\", \\"reason\\": \\"수정 이유\\"}\\n  ]\\n}'
       },
       {
         step: 3,
         name: '스토리 왜곡 분석',
         category: 'distortion',
-        prompt: '씬 구조, 시간/장소 흐름이 자연스러운지 분석하고 점수(0-100)를 매겨주세요.\\n\\nJSON 형식:\\n{\\n  \\"score\\": 0-100,\\n  \\"issues\\": [\\n    {\\"text\\": \\"문제 설명\\", \\"reason\\": \\"근거/발췌\\", \\"type\\": \\"시간흐름 단절\\"}\\n  ],\\n  \\"fixes\\": [\\n    {\\"before\\": \\"수정 전\\", \\"after\\": \\"수정 후\\", \\"reason\\": \\"수정 이유\\"}\\n  ]\\n}'
+        prompt: '중요: 반드시 JSON만 출력. 코드블록(```)·설명·주석·추가 텍스트 금지.\\n\\n씬 구조, 시간/장소 흐름이 자연스러운지 분석하고 점수(0-100)를 매겨주세요.\\n\\nJSON 형식:\\n{\\n  \\"score\\": 0-100,\\n  \\"issues\\": [\\n    {\\"text\\": \\"문제 설명\\", \\"reason\\": \\"근거/발췌\\", \\"type\\": \\"시간흐름 단절\\"}\\n  ],\\n  \\"fixes\\": [\\n    {\\"before\\": \\"수정 전\\", \\"after\\": \\"수정 후\\", \\"reason\\": \\"수정 이유\\"}\\n  ]\\n}'
       },
       {
         step: 4,
         name: '반전/변화 속도',
         category: 'twistPace',
-        prompt: '감정 변화와 페이싱이 적절한지 분석하고 점수(0-100)를 매겨주세요.\\n\\nJSON 형식:\\n{\\n  \\"score\\": 0-100,\\n  \\"issues\\": [\\n    {\\"text\\": \\"문제 설명\\", \\"reason\\": \\"근거/발췌\\", \\"type\\": \\"페이싱 급변\\"}\\n  ],\\n  \\"fixes\\": [\\n    {\\"before\\": \\"수정 전\\", \\"after\\": \\"수정 후\\", \\"reason\\": \\"수정 이유\\"}\\n  ]\\n}'
+        prompt: '중요: 반드시 JSON만 출력. 코드블록(```)·설명·주석·추가 텍스트 금지.\\n\\n감정 변화와 페이싱이 적절한지 분석하고 점수(0-100)를 매겨주세요.\\n\\nJSON 형식:\\n{\\n  \\"score\\": 0-100,\\n  \\"issues\\": [\\n    {\\"text\\": \\"문제 설명\\", \\"reason\\": \\"근거/발췌\\", \\"type\\": \\"페이싱 급변\\"}\\n  ],\\n  \\"fixes\\": [\\n    {\\"before\\": \\"수정 전\\", \\"after\\": \\"수정 후\\", \\"reason\\": \\"수정 이유\\"}\\n  ]\\n}'
       },
       {
         step: 5,
         name: '재미/몰입 요소',
         category: 'immersion',
-        prompt: '갈등, 대화, 시니어 공감 요소를 분석하고 점수(0-100)를 매겨주세요.\\n\\nJSON 형식:\\n{\\n  \\"score\\": 0-100,\\n  \\"issues\\": [\\n    {\\"text\\": \\"문제 설명\\", \\"reason\\": \\"근거/발췌\\", \\"type\\": \\"몰입 저하\\"}\\n  ],\\n  \\"fixes\\": [\\n    {\\"before\\": \\"수정 전\\", \\"after\\": \\"수정 후\\", \\"reason\\": \\"수정 이유\\"}\\n  ]\\n}'
+        prompt: '중요: 반드시 JSON만 출력. 코드블록(```)·설명·주석·추가 텍스트 금지.\\n\\n갈등, 대화, 시니어 공감 요소를 분석하고 점수(0-100)를 매겨주세요.\\n\\nJSON 형식:\\n{\\n  \\"score\\": 0-100,\\n  \\"issues\\": [\\n    {\\"text\\": \\"문제 설명\\", \\"reason\\": \\"근거/발췌\\", \\"type\\": \\"몰입 저하\\"}\\n  ],\\n  \\"fixes\\": [\\n    {\\"before\\": \\"수정 전\\", \\"after\\": \\"수정 후\\", \\"reason\\": \\"수정 이유\\"}\\n  ]\\n}'
       }
     ]
 
@@ -713,9 +746,8 @@ function initAIStartButton() {
         .then(function (responseText) {
           console.log('[STEP ' + stepInfo.step + '] 응답:', responseText);
           try {
-            // JSON 파싱 (마크다운 코드 블록 제거)
-            var jsonStr = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-            var result = JSON.parse(jsonStr);
+            // 강건한 JSON 파싱 (3단계 폴백)
+            var result = safeParseJsonResponse(responseText);
 
             if (stepInfo.step === 0) {
               comprehensionResult = result;
@@ -727,13 +759,26 @@ function initAIStartButton() {
             setTimeout(analyzeNextStep, 4000); // 다음 단계 전 4초 대기
           } catch (e) {
             console.error('[STEP ' + stepInfo.step + '] JSON Parse Error:', e);
-            throw new Error('응답 처리 실패 (JSON 파싱 오류)');
+
+            // 원문 프리뷰 출력 (있는 경우)
+            if (e._preview) {
+              console.error('[JSON PARSE PREVIEW]', e._preview);
+            }
+
+            // 상태 복구
+            AppState.isAIAnalyzing = false;
+            btn.disabled = false;
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+            throw new Error('모델 응답 형식 오류 → 재시도 필요\n\n' + e.message);
           }
         })
         .catch(function (err) {
           console.error('[STEP ' + stepInfo.step + '] 오류:', err);
           updateProgress(stepInfo.step, 'error', ((currentStep) / analysisSteps.length) * 100);
           showNotification('분석 중 오류 발생: ' + err.message, 'error');
+
+          // 상태 복구 (중복 방지: 이미 위에서 복구했을 수 있음)
           AppState.isAIAnalyzing = false;
           btn.disabled = false;
           btn.classList.remove('opacity-50', 'cursor-not-allowed');
