@@ -1398,8 +1398,18 @@ async function listAvailableModels(apiKey) {
 
 // API 호출 유틸리티 (레이트 리밋 및 재시도) - [FIX] 타임아웃 & 상태잠금 방지 강화
 async function callGeminiWithRetry(prompt, isJson = true, retries = 2) {
+  // [HOTFIX] 동시 API 호출 시 에러 throw 하지 말고 대기 처리 (영구 잠금 방지)
   if (apiCallState.isProcessing) {
-    throw new Error('API 호출이 진행 중입니다. 잠시만 기다려주세요.');
+    var waitStart = Date.now();
+    while (apiCallState.isProcessing) {
+      // 45초 이상 잠기면 강제 해제
+      if (Date.now() - waitStart > 45000) {
+        console.warn('[API LOCK] isProcessing stuck >45s. force unlock.');
+        apiCallState.isProcessing = false;
+        break;
+      }
+      await new Promise(function (r) { setTimeout(r, 200); });
+    }
   }
 
   // 최소 호출 간격 (4초)
