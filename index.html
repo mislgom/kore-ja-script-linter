@@ -297,7 +297,8 @@
                             <div class="space-y-3">
                                 <!-- 1. 배경 확인 -->
                                 <div id="progress-step-1"
-                                    class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                    onclick="showTabResult(1)">
                                     <div
                                         class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mr-3">
                                         <i class="fas fa-map-marker-alt text-gray-400 text-sm"></i>
@@ -312,7 +313,8 @@
 
                                 <!-- 2. 등장인물 일관성 -->
                                 <div id="progress-step-2"
-                                    class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                    onclick="showTabResult(2)">
                                     <div
                                         class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mr-3">
                                         <i class="fas fa-users text-gray-400 text-sm"></i>
@@ -327,7 +329,8 @@
 
                                 <!-- 3. 스토리 왜곡 분석 -->
                                 <div id="progress-step-3"
-                                    class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                    onclick="showTabResult(3)">
                                     <div
                                         class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mr-3">
                                         <i class="fas fa-project-diagram text-gray-400 text-sm"></i>
@@ -342,7 +345,8 @@
 
                                 <!-- 4. 반전/변화 속도 -->
                                 <div id="progress-step-4"
-                                    class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                    onclick="showTabResult(4)">
                                     <div
                                         class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mr-3">
                                         <i class="fas fa-tachometer-alt text-gray-400 text-sm"></i>
@@ -357,7 +361,8 @@
 
                                 <!-- 5. 재미/몰입 요소 -->
                                 <div id="progress-step-5"
-                                    class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    class="flex items-center p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                    onclick="showTabResult(5)">
                                     <div
                                         class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mr-3">
                                         <i class="fas fa-star text-gray-400 text-sm"></i>
@@ -373,6 +378,233 @@
                         </div>
                     </div>
 
+<!-- 탭별 상세 결과 영역 (5개) -->
+<div id="tab-results-container" class="hidden mb-6">
+    <!-- 1. 배경 확인 결과 -->
+    <div id="result-step-1" class="hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3">
+                <h3 class="font-semibold text-white flex items-center">
+                    <i class="fas fa-map-marker-alt mr-2"></i>
+                    1. 배경 확인 분석 결과
+                </h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg">
+                    <h4 class="font-medium text-indigo-800 dark:text-indigo-300 mb-2 flex items-center">
+                        <i class="fas fa-lightbulb mr-2"></i>📊 AI 분석 요약
+                    </h4>
+                    <p id="summary-step-1" class="text-gray-700 dark:text-gray-300 text-sm">분석을 시작하면 결과가 표시됩니다.</p>
+                </div>
+                <div class="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
+                    <h4 class="font-medium text-red-800 dark:text-red-300 mb-2 flex items-center">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>⚠️ 오류/문제 지점
+                    </h4>
+                    <ul id="issues-step-1"
+                        class="text-sm text-red-700 dark:text-red-300 space-y-1 list-disc list-inside">
+                        <li>분석을 시작하면 문제 지점이 표시됩니다.</li>
+                    </ul>
+                </div>
+                <div class="bg-white dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <h4 class="font-medium text-gray-800 dark:text-gray-300 mb-2 flex items-center">
+                        <i class="fas fa-chart-line mr-2"></i>🎯 점수
+                    </h4>
+                    <p id="score-step-1" class="text-4xl font-bold text-indigo-600 dark:text-indigo-400">-/100</p>
+                </div>
+                <div class="flex space-x-2">
+                    <button id="autofix-step-1"
+                        class="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-lg font-medium transition-colors">
+                        <i class="fas fa-magic mr-2"></i>100점까지 자동 수정
+                    </button>
+                    <button id="download-step-1"
+                        class="px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors">
+                        <i class="fas fa-download mr-2"></i>다운로드
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 등장인물 일관성 결과 -->
+    <div id="result-step-2" class="hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="bg-gradient-to-r from-purple-500 to-purple-600 px-4 py-3">
+                <h3 class="font-semibold text-white flex items-center">
+                    <i class="fas fa-users mr-2"></i>
+                    2. 등장인물 일관성 분석 결과
+                </h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg">
+                    <h4 class="font-medium text-indigo-800 dark:text-indigo-300 mb-2 flex items-center">
+                        <i class="fas fa-lightbulb mr-2"></i>📊 AI 분석 요약
+                    </h4>
+                    <p id="summary-step-2" class="text-gray-700 dark:text-gray-300 text-sm">분석을 시작하면 결과가 표시됩니다.</p>
+                </div>
+                <div class="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
+                    <h4 class="font-medium text-red-800 dark:text-red-300 mb-2 flex items-center">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>⚠️ 오류/문제 지점
+                    </h4>
+                    <ul id="issues-step-2"
+                        class="text-sm text-red-700 dark:text-red-300 space-y-1 list-disc list-inside">
+                        <li>분석을 시작하면 문제 지점이 표시됩니다.</li>
+                    </ul>
+                </div>
+                <div class="bg-white dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <h4 class="font-medium text-gray-800 dark:text-gray-300 mb-2 flex items-center">
+                        <i class="fas fa-chart-line mr-2"></i>🎯 점수
+                    </h4>
+                    <p id="score-step-2" class="text-4xl font-bold text-indigo-600 dark:text-indigo-400">-/100</p>
+                </div>
+                <div class="flex space-x-2">
+                    <button id="autofix-step-2"
+                        class="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-lg font-medium transition-colors">
+                        <i class="fas fa-magic mr-2"></i>100점까지 자동 수정
+                    </button>
+                    <button id="download-step-2"
+                        class="px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors">
+                        <i class="fas fa-download mr-2"></i>다운로드
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 스토리 왜곡 분석 결과 -->
+    <div id="result-step-3" class="hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="bg-gradient-to-r from-green-500 to-green-600 px-4 py-3">
+                <h3 class="font-semibold text-white flex items-center">
+                    <i class="fas fa-project-diagram mr-2"></i>
+                    3. 스토리 왜곡 분석 결과
+                </h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg">
+                    <h4 class="font-medium text-indigo-800 dark:text-indigo-300 mb-2 flex items-center">
+                        <i class="fas fa-lightbulb mr-2"></i>📊 AI 분석 요약
+                    </h4>
+                    <p id="summary-step-3" class="text-gray-700 dark:text-gray-300 text-sm">분석을 시작하면 결과가 표시됩니다.</p>
+                </div>
+                <div class="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
+                    <h4 class="font-medium text-red-800 dark:text-red-300 mb-2 flex items-center">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>⚠️ 오류/문제 지점
+                    </h4>
+                    <ul id="issues-step-3"
+                        class="text-sm text-red-700 dark:text-red-300 space-y-1 list-disc list-inside">
+                        <li>분석을 시작하면 문제 지점이 표시됩니다.</li>
+                    </ul>
+                </div>
+                <div class="bg-white dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <h4 class="font-medium text-gray-800 dark:text-gray-300 mb-2 flex items-center">
+                        <i class="fas fa-chart-line mr-2"></i>🎯 점수
+                    </h4>
+                    <p id="score-step-3" class="text-4xl font-bold text-indigo-600 dark:text-indigo-400">-/100</p>
+                </div>
+                <div class="flex space-x-2">
+                    <button id="autofix-step-3"
+                        class="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-lg font-medium transition-colors">
+                        <i class="fas fa-magic mr-2"></i>100점까지 자동 수정
+                    </button>
+                    <button id="download-step-3"
+                        class="px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors">
+                        <i class="fas fa-download mr-2"></i>다운로드
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. 반전/변화 속도 결과 -->
+    <div id="result-step-4" class="hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-3">
+                <h3 class="font-semibold text-white flex items-center">
+                    <i class="fas fa-tachometer-alt mr-2"></i>
+                    4. 반전/변화 속도 분석 결과
+                </h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg">
+                    <h4 class="font-medium text-indigo-800 dark:text-indigo-300 mb-2 flex items-center">
+                        <i class="fas fa-lightbulb mr-2"></i>📊 AI 분석 요약
+                    </h4>
+                    <p id="summary-step-4" class="text-gray-700 dark:text-gray-300 text-sm">분석을 시작하면 결과가 표시됩니다.</p>
+                </div>
+                <div class="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
+                    <h4 class="font-medium text-red-800 dark:text-red-300 mb-2 flex items-center">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>⚠️ 오류/문제 지점
+                    </h4>
+                    <ul id="issues-step-4"
+                        class="text-sm text-red-700 dark:text-red-300 space-y-1 list-disc list-inside">
+                        <li>분석을 시작하면 문제 지점이 표시됩니다.</li>
+                    </ul>
+                </div>
+                <div class="bg-white dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <h4 class="font-medium text-gray-800 dark:text-gray-300 mb-2 flex items-center">
+                        <i class="fas fa-chart-line mr-2"></i>🎯 점수
+                    </h4>
+                    <p id="score-step-4" class="text-4xl font-bold text-indigo-600 dark:text-indigo-400">-/100</p>
+                </div>
+                <div class="flex space-x-2">
+                    <button id="autofix-step-4"
+                        class="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-lg font-medium transition-colors">
+                        <i class="fas fa-magic mr-2"></i>100점까지 자동 수정
+                    </button>
+                    <button id="download-step-4"
+                        class="px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors">
+                        <i class="fas fa-download mr-2"></i>다운로드
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. 재미/몰입 요소 결과 -->
+    <div id="result-step-5" class="hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="bg-gradient-to-r from-pink-500 to-pink-600 px-4 py-3">
+                <h3 class="font-semibold text-white flex items-center">
+                    <i class="fas fa-star mr-2"></i>
+                    5. 재미/몰입 요소 분석 결과
+                </h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg">
+                    <h4 class="font-medium text-indigo-800 dark:text-indigo-300 mb-2 flex items-center">
+                        <i class="fas fa-lightbulb mr-2"></i>📊 AI 분석 요약
+                    </h4>
+                    <p id="summary-step-5" class="text-gray-700 dark:text-gray-300 text-sm">분석을 시작하면 결과가 표시됩니다.</p>
+                </div>
+                <div class="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
+                    <h4 class="font-medium text-red-800 dark:text-red-300 mb-2 flex items-center">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>⚠️ 오류/문제 지점
+                    </h4>
+                    <ul id="issues-step-5"
+                        class="text-sm text-red-700 dark:text-red-300 space-y-1 list-disc list-inside">
+                        <li>분석을 시작하면 문제 지점이 표시됩니다.</li>
+                    </ul>
+                </div>
+                <div class="bg-white dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+                    <h4 class="font-medium text-gray-800 dark:text-gray-300 mb-2 flex items-center">
+                        <i class="fas fa-chart-line mr-2"></i>🎯 점수
+                    </h4>
+                    <p id="score-step-5" class="text-4xl font-bold text-indigo-600 dark:text-indigo-400">-/100</p>
+                </div>
+                <div class="flex space-x-2">
+                    <button id="autofix-step-5"
+                        class="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-lg font-medium transition-colors">
+                        <i class="fas fa-magic mr-2"></i>100점까지 자동 수정
+                    </button>
+                    <button id="download-step-5"
+                        class="px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors">
+                        <i class="fas fa-download mr-2"></i>다운로드
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
                     <!-- 등장인물 분석 결과 (검수 전 표시) -->
                     <div id="korea-character-analysis" class="hidden mb-6">
                         <div class="border-2 border-blue-200 rounded-xl overflow-hidden dark:border-blue-800">
@@ -896,6 +1128,10 @@
     <script src="js/issues-manager.js"></script>
     <script src="js/issues-ui.js"></script>
     <script src="js/main.js"></script>
+</body>
+
+</html>
+<script src="js/tab-analysis.js"></script>
 </body>
 
 </html>
