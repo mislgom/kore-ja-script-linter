@@ -534,56 +534,56 @@
                                     class="text-gray-700 dark:text-gray-300 text-sm leading-relaxed">-</p>
                             </div>
 
-                            <!-- AI 평가 점수 (클릭 가능한 탭) -->
-                            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+                            <!-- AI 평가 점수 (클릭 가능한 탭) - 5개 항목 -->
+                            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+                                <!-- 배경확인 -->
                                 <div class="score-card cursor-pointer transition-all hover:shadow-lg bg-white dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600"
-                                    data-category="korea" data-required="100" onclick="selectCategory('korea')">
+                                    data-category="background" onclick="selectCategory('background')">
                                     <div class="flex items-center justify-center mb-1">
-                                        <p class="text-xl font-bold text-indigo-600" id="ai-korea-score">-</p>
+                                        <p class="text-xl font-bold text-indigo-600" id="ai-background-score">-</p>
                                         <i class="score-status-icon ml-2 hidden"></i>
                                     </div>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">한국배경</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">배경확인</p>
                                 </div>
+
+                                <!-- 등장인물 일관성 -->
                                 <div class="score-card cursor-pointer transition-all hover:shadow-lg bg-white dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600"
-                                    data-category="character" data-required="100" onclick="selectCategory('character')">
+                                    data-category="character" onclick="selectCategory('character')">
                                     <div class="flex items-center justify-center mb-1">
-                                        <p class="text-xl font-bold text-indigo-600" id="ai-char-score">-</p>
+                                        <p class="text-xl font-bold text-indigo-600" id="ai-character-score">-</p>
                                         <i class="score-status-icon ml-2 hidden"></i>
                                     </div>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">인물일관성</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">등장인물 일관성</p>
                                 </div>
+
+                                <!-- 스토리 왜곡 분석 -->
                                 <div class="score-card cursor-pointer transition-all hover:shadow-lg bg-white dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600"
-                                    data-category="relationship" data-required="100"
-                                    onclick="selectCategory('relationship')">
+                                    data-category="distortion" onclick="selectCategory('distortion')">
                                     <div class="flex items-center justify-center mb-1">
-                                        <p class="text-xl font-bold text-indigo-600" id="ai-rel-score">-</p>
+                                        <p class="text-xl font-bold text-indigo-600" id="ai-distortion-score">-</p>
                                         <i class="score-status-icon ml-2 hidden"></i>
                                     </div>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">관계일관성</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">스토리 왜곡</p>
                                 </div>
+
+                                <!-- 반전/변화 속도 -->
                                 <div class="score-card cursor-pointer transition-all hover:shadow-lg bg-white dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600"
-                                    data-category="flow" data-required="90" onclick="selectCategory('flow')">
+                                    data-category="twistPace" onclick="selectCategory('twistPace')">
                                     <div class="flex items-center justify-center mb-1">
-                                        <p class="text-xl font-bold text-indigo-600" id="ai-flow-score">-</p>
+                                        <p class="text-xl font-bold text-indigo-600" id="ai-twistPace-score">-</p>
                                         <i class="score-status-icon ml-2 hidden"></i>
                                     </div>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">이야기흐름</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">반전/변화속도</p>
                                 </div>
+
+                                <!-- 재미/몰입 요소 -->
                                 <div class="score-card cursor-pointer transition-all hover:shadow-lg bg-white dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600"
-                                    data-category="pacing" data-required="100" onclick="selectCategory('pacing')">
+                                    data-category="immersion" onclick="selectCategory('immersion')">
                                     <div class="flex items-center justify-center mb-1">
-                                        <p class="text-xl font-bold text-indigo-600" id="ai-pace-score">-</p>
+                                        <p class="text-xl font-bold text-indigo-600" id="ai-immersion-score">-</p>
                                         <i class="score-status-icon ml-2 hidden"></i>
                                     </div>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">페이싱</p>
-                                </div>
-                                <div class="score-card cursor-pointer transition-all hover:shadow-lg bg-white dark:bg-gray-700 rounded-lg p-3 text-center border border-gray-200 dark:border-gray-600"
-                                    data-category="fun" data-required="90" onclick="selectCategory('fun')">
-                                    <div class="flex items-center justify-center mb-1">
-                                        <p class="text-xl font-bold text-indigo-600" id="ai-fun-score">-</p>
-                                        <i class="score-status-icon ml-2 hidden"></i>
-                                    </div>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">재미요소</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">재미/몰입</p>
                                 </div>
                             </div>
 
@@ -616,11 +616,11 @@
                                 </div>
                             </div>
 
-                            <!-- 전체 대본 자동 수정 버튼 -->
+                            <!-- 전체 100점 반영 자동 수정 버튼 -->
                             <div class="mt-4 flex justify-center">
                                 <button id="auto-fix-all-btn"
                                     class="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white px-6 py-3 rounded-lg font-medium transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
-                                    <i class="fas fa-magic mr-2"></i>전체 대본 자동 수정 및 다운로드
+                                    <i class="fas fa-magic mr-2"></i>전체 100점 반영 자동 수정
                                 </button>
                             </div>
 
