@@ -51,7 +51,9 @@ var categoryRequirements = {
 // API 호출 상태 관리
 var apiCallState = {
   isProcessing: false,
-  lastCallTime: 0
+  lastCallTime: 0,
+  availableModels: null, // ListModels 결과 캐시
+  selectedModel: null    // 선택된 모델 ID
 };
 
 
@@ -406,13 +408,13 @@ function initKoreaSeniorButtons() {
 function selectCategory(category) {
   console.log('[CATEGORY CLICK] 카테고리 선택:', category);
   console.log('[CATEGORY CLICK] analysisByCategory 상태:', analysisByCategory);
-  
+
   // 전역 변수 접근
   if (typeof analysisByCategory === 'undefined') {
     console.error('[CATEGORY CLICK] analysisByCategory가 정의되지 않음!');
     return;
   }
-  
+
   if (!analysisByCategory[category]) {
     console.warn('[CATEGORY CLICK] 데이터 없음:', category);
     console.warn('[CATEGORY CLICK] 사용 가능한 카테고리:', Object.keys(analysisByCategory));
@@ -487,7 +489,7 @@ function updateCategoryFeedback(category) {
       console.log('[CATEGORY FEEDBACK] fixes 없음');
     }
   }
-  
+
   console.log('[CATEGORY FEEDBACK] 피드백 업데이트 완료');
 }
 
@@ -661,11 +663,32 @@ function initAIStartButton() {
         category: 'immersion',
         prompt: '갈등, 대화, 시니어 공감 요소를 분석하고 점수(0-100)를 매겨주세요.\\n\\nJSON 형식:\\n{\\n  \\"score\\": 0-100,\\n  \\"issues\\": [\\n    {\\"text\\": \\"문제 설명\\", \\"reason\\": \\"근거/발췌\\", \\"type\\": \\"몰입 저하\\"}\\n  ],\\n  \\"fixes\\": [\\n    {\\"before\\": \\"수정 전\\", \\"after\\": \\"수정 후\\", \\"reason\\": \\"수정 이유\\"}\\n  ]\\n}'
       }
-    ];
+    ]
+
+      ;
 
     var results = {};
     var comprehensionResult = null;
     var currentStep = 0;
+
+    // [필수 수정 2] ListModels 프리플라이트 (1회만 실행)
+    console.log('[AI ANALYSIS] ListModels 프리플라이트 시작...');
+    listAvailableModels(apiKey)
+      .then(function (models) {
+        if (models && models.length > 0) {
+          console.log('[AI ANALYSIS] ListModels 완료 - 모델 선택됨:', apiCallState.selectedModel);
+        } else {
+          console.warn('[AI ANALYSIS] ListModels 실패 - 폴백 모델 사용');
+        }
+        // ListModels 완료 후 분석 시작
+        analyzeNextStep();
+      })
+      .catch(function (err) {
+        console.error('[AI ANALYSIS] ListModels 오류:', err);
+        console.warn('[AI ANALYSIS] 폴백 모델로 계속 진행');
+        // 오류가 있어도 폴백 모델로 계속 진행
+        analyzeNextStep();
+      });
 
     function analyzeNextStep() {
       if (currentStep >= analysisSteps.length) {
@@ -797,3 +820,550 @@ function initAIStartButton() {
         return {
           name: categoryName,
           score: 0,
+          issues: [],
+          fixes: []
+        };
+      }
+
+      // feedback을 issues로 변환
+      var issues = [];
+      var fixes = [];
+
+      if (stepData.feedback) {
+        issues.push({
+          text: stepData.feedback,
+          reason: "AI 분석 결과"
+        });
+      }
+
+      return {
+        name: categoryName,
+        score: stepData.score || 0,
+        issues: issues,
+        fixes: fixes
+      };
+    }
+
+    function calculateOverallVerdict() {
+      var failedCategories = [];
+      var allPassed = true;
+
+      Object.keys(categoryRequirements).forEach(function (key) {
+        var req = categoryRequirements[key];
+        var category = analysisByCategory[key];
+        var score = category ? category.score : 0;
+
+        if (score < req.required) {
+          allPassed = false;
+          failedCategories.push({
+            name: req.name,
+            score: score,
+            required: req.required,
+            type: req.type
+          });
+        }
+
+        // 점수 카드에 아이콘 표시
+        updateScoreCardStatus(key, score, req.required);
+      });
+
+      // 종합 판정 배너 표시
+      showVerdictBanner(allPassed, failedCategories);
+
+      return allPassed;
+    }
+
+    function updateScoreCardStatus(category, score, required) {
+      var card = document.querySelector('[data-category="' + category + '"]');
+      if (!card) return;
+
+      var icon = card.querySelector('.score-status-icon');
+      if (!icon) return;
+
+      icon.classList.remove('hidden', 'fa-check-circle', 'fa-times-circle', 'text-green-600', 'text-red-600');
+
+      if (score >= required) {
+        // 합격
+        icon.classList.add('fa-check-circle', 'text-green-600');
+        icon.classList.remove('hidden');
+        card.classList.add('border-green-500');
+        card.classList.remove('border-red-500');
+      } else {
+        // 불합격
+        icon.classList.add('fa-times-circle', 'text-red-600');
+        icon.classList.remove('hidden');
+        card.classList.add('border-red-500');
+        card.classList.remove('border-green-500');
+      }
+    }
+
+    function showVerdictBanner(passed, failedCategories) {
+      var banner = document.getElementById('overall-verdict-banner');
+      var passDiv = document.getElementById('verdict-pass');
+      var failDiv = document.getElementById('verdict-fail');
+
+      if (!banner || !passDiv || !failDiv) return;
+
+      banner.classList.remove('hidden');
+
+      if (passed) {
+        // 합격
+        passDiv.classList.remove('hidden');
+        failDiv.classList.add('hidden');
+        banner.classList.add('bg-green-50', 'border-green-500');
+        banner.classList.remove('bg-red-50', 'border-red-500');
+      } else {
+        // 불합격
+        passDiv.classList.add('hidden');
+        failDiv.classList.remove('hidden');
+        banner.classList.add('bg-red-50', 'border-red-500');
+        banner.classList.remove('bg-green-50', 'border-green-500');
+
+        // 실패 이유 표시
+        var failReason = document.getElementById('fail-reason');
+        if (failReason && failedCategories.length > 0) {
+          var reasons = failedCategories.map(function (cat) {
+            return cat.name + ': ' + cat.score + '점 (' + cat.type + ' ' + cat.required + '점)';
+          }).join(', ');
+          failReason.textContent = '미달 항목: ' + reasons;
+        }
+      }
+    }
+
+    // 분석 시작
+    analyzeNextStep();
+  });
+}
+
+
+
+/* ======================================================
+   FULL SCRIPT AUTO-FIX & API UTILS
+====================================================== */
+
+// ListModels API - 사용 가능한 모델 목록 가져오기 (1회만 실행)
+async function listAvailableModels(apiKey) {
+  // 이미 캐시된 결과가 있으면 재사용
+  if (apiCallState.availableModels) {
+    console.log('[LIST MODELS] 캐시된 모델 목록 사용:', apiCallState.availableModels);
+    return apiCallState.availableModels;
+  }
+
+  var baseUrl = 'https://generativelanguage.googleapis.com';
+  var apiVersion = 'v1beta';
+  var url = baseUrl + '/' + apiVersion + '/models?key=' + apiKey;
+
+  console.group('[LIST MODELS] 사용 가능한 모델 조회');
+  console.log('URL:', baseUrl + '/' + apiVersion + '/models');
+  console.groupEnd();
+
+  try {
+    var response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) {
+      console.error('[LIST MODELS] 오류:', response.status, response.statusText);
+      return null;
+    }
+
+    var data = await response.json();
+
+    if (!data.models || data.models.length === 0) {
+      console.warn('[LIST MODELS] 사용 가능한 모델이 없습니다.');
+      return null;
+    }
+
+    // generateContent를 지원하는 모델만 필터링
+    var generativeModels = data.models.filter(function (model) {
+      return model.supportedGenerationMethods &&
+        model.supportedGenerationMethods.includes('generateContent');
+    });
+
+    console.group('[LIST MODELS] 결과');
+    console.log('전체 모델 수:', data.models.length);
+    console.log('generateContent 지원 모델 수:', generativeModels.length);
+    console.log('사용 가능한 모델 목록:');
+    generativeModels.forEach(function (model) {
+      console.log('  -', model.name, '(' + model.displayName + ')');
+    });
+    console.groupEnd();
+
+    // 캐시 저장
+    apiCallState.availableModels = generativeModels;
+
+    // 우선순위: gemini-2.0 > gemini-1.5 > 기타
+    var preferredModel = null;
+
+    // 1순위: gemini-2.0-flash-exp
+    preferredModel = generativeModels.find(function (m) {
+      return m.name.includes('gemini-2.0-flash-exp');
+    });
+
+    // 2순위: gemini-2.5-flash
+    if (!preferredModel) {
+      preferredModel = generativeModels.find(function (m) {
+        return m.name.includes('gemini-2.5-flash') && !m.name.includes('lite');
+      });
+    }
+
+    // 3순위: gemini-1.5-flash
+    if (!preferredModel) {
+      preferredModel = generativeModels.find(function (m) {
+        return m.name.includes('gemini-1.5-flash');
+      });
+    }
+
+    // 4순위: 첫 번째 사용 가능한 모델
+    if (!preferredModel && generativeModels.length > 0) {
+      preferredModel = generativeModels[0];
+    }
+
+    if (preferredModel) {
+      // "models/" 접두사 제거
+      var modelId = preferredModel.name.replace('models/', '');
+      apiCallState.selectedModel = modelId;
+      console.log('[LIST MODELS] 선택된 모델:', modelId, '(' + preferredModel.displayName + ')');
+    }
+
+    return generativeModels;
+
+  } catch (error) {
+    console.error('[LIST MODELS] 예외 발생:', error);
+    return null;
+  }
+}
+
+// API 호출 유틸리티 (레이트 리밋 및 재시도) - 디버그 강화 버전
+async function callGeminiWithRetry(prompt, isJson = true, retries = 2) {
+  if (apiCallState.isProcessing) {
+    throw new Error('API 호출이 진행 중입니다. 잠시만 기다려주세요.');
+  }
+
+  // 최소 호출 간격 (4초)
+  var now = Date.now();
+  var timeSinceLastCall = now - apiCallState.lastCallTime;
+  if (timeSinceLastCall < 4000) {
+    await new Promise(resolve => setTimeout(resolve, 4000 - timeSinceLastCall));
+  }
+
+  apiCallState.isProcessing = true;
+  apiCallState.lastCallTime = Date.now();
+
+  var apiKey = localStorage.getItem('GEMINI_API_KEY');
+  if (!apiKey) {
+    apiCallState.isProcessing = false;
+    throw new Error('API 키가 없습니다.');
+  }
+
+  // API 키 마스킹 (앞 4글자만 표시)
+  var maskedKey = apiKey.substring(0, 4) + '****' + apiKey.substring(apiKey.length - 4);
+
+  // [필수 수정 1] 모델 ID - ListModels 결과 사용 또는 폴백
+  var modelId = apiCallState.selectedModel || 'gemini-1.5-flash'; // 폴백: gemini-1.5-flash
+  var apiVersion = 'v1beta';
+  var endpoint = 'generateContent';
+
+  // 전체 URL 구성
+  var baseUrl = 'https://generativelanguage.googleapis.com';
+  var path = '/' + apiVersion + '/models/' + modelId + ':' + endpoint;
+  var url = baseUrl + path + '?key=' + apiKey;
+
+  // [필수 1] 요청 직전 로그 (민감정보 마스킹)
+  console.group('[API DEBUG] 요청 정보');
+  console.log('Method:', 'POST');
+  console.log('Base URL:', baseUrl);
+  console.log('API Version:', apiVersion);
+  console.log('Model ID:', modelId);
+  console.log('Model Source:', apiCallState.selectedModel ? 'ListModels' : 'Fallback');
+  console.log('Endpoint:', endpoint);
+  console.log('Full Path:', path);
+  console.log('Full URL (without key):', baseUrl + path);
+  console.log('API Key (masked):', maskedKey);
+  console.log('Prompt Length:', prompt.length, 'chars');
+  console.log('Prompt Preview:', prompt.substring(0, 100) + '...');
+  console.log('Is JSON Response:', isJson);
+  console.groupEnd();
+
+  for (var i = 0; i <= retries; i++) {
+    try {
+      var bodyConfig = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 8192
+        }
+      };
+
+      if (isJson) {
+        bodyConfig.generationConfig.responseMimeType = "application/json";
+      }
+
+      console.log('[API DEBUG] Request Body Config:', JSON.stringify(bodyConfig, null, 2).substring(0, 500) + '...');
+
+      var response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyConfig)
+      });
+
+      // [필수 1] 응답 로그
+      console.group('[API DEBUG] 응답 정보');
+      console.log('Status Code:', response.status);
+      console.log('Status Text:', response.statusText);
+      console.log('OK:', response.ok);
+      console.groupEnd();
+
+      // [필수 2] 엔드포인트/라우팅 점검
+      if (response.status === 404) {
+        var errorBody = '';
+        try {
+          errorBody = await response.text();
+          console.error('[API DEBUG] 404 Response Body:', errorBody);
+        } catch (e) {
+          console.error('[API DEBUG] 404 응답 본문 읽기 실패:', e);
+        }
+
+        // [필수 3] 오류 메시지 개선 - 모델 ID/retired 가능성 명시
+        var errorMsg = '❌ API 엔드포인트 오류 (404)\n\n';
+        errorMsg += '호출 URL: ' + baseUrl + path + '\n';
+        errorMsg += '모델: ' + modelId + '\n';
+        errorMsg += 'API 버전: ' + apiVersion + '\n\n';
+        errorMsg += '가능한 원인:\n';
+        errorMsg += '1. 모델 ID 불일치 또는 retired 모델 (가장 가능성 높음)\n';
+        errorMsg += '2. API 버전 불일치 (v1beta 확인 필요)\n';
+        errorMsg += '3. 엔드포인트 경로 오류 (:generateContent 확인 필요)\n\n';
+
+        // [필수 수정 3] ListModels 결과가 있으면 사용 가능한 모델 표시
+        if (apiCallState.availableModels && apiCallState.availableModels.length > 0) {
+          errorMsg += '✅ 현재 프로젝트에서 사용 가능한 모델:\n';
+          apiCallState.availableModels.slice(0, 5).forEach(function (model) {
+            var modelName = model.name.replace('models/', '');
+            errorMsg += '  - ' + modelName + ' (' + model.displayName + ')\n';
+          });
+          if (apiCallState.availableModels.length > 5) {
+            errorMsg += '  ... 외 ' + (apiCallState.availableModels.length - 5) + '개\n';
+          }
+          errorMsg += '\n';
+        } else {
+          errorMsg += '⚠️ ListModels 조회 실패 - 사용 가능한 모델 목록을 가져올 수 없습니다.\n\n';
+        }
+
+        if (errorBody) {
+          try {
+            var errorJson = JSON.parse(errorBody);
+            if (errorJson.error && errorJson.error.message) {
+              errorMsg += 'API 오류 메시지: ' + errorJson.error.message;
+            }
+          } catch (e) {
+            errorMsg += 'Response Body: ' + errorBody.substring(0, 200);
+          }
+        }
+
+        apiCallState.isProcessing = false;
+        throw new Error(errorMsg);
+      }
+
+      // [필수 3] 다른 HTTP 오류 구분
+      if (response.status === 429) {
+        console.warn('[API DEBUG] Rate limit (429) - 40초 대기');
+        await new Promise(resolve => setTimeout(resolve, 40000));
+        continue;
+      }
+
+      if (response.status === 401) {
+        apiCallState.isProcessing = false;
+        throw new Error('❌ API 키 인증 실패 (401)\n\nAPI 키가 유효하지 않거나 권한이 없습니다.\n우측 상단 🔑 버튼에서 API 키를 확인해주세요.');
+      }
+
+      if (response.status === 403) {
+        apiCallState.isProcessing = false;
+        throw new Error('❌ API 접근 거부 (403)\n\nAPI 키에 이 모델을 사용할 권한이 없습니다.\nGemini API 콘솔에서 권한을 확인해주세요.');
+      }
+
+      if (!response.ok) {
+        var genericErrorBody = '';
+        try {
+          genericErrorBody = await response.text();
+          console.error('[API DEBUG] Error Response Body:', genericErrorBody);
+        } catch (e) {
+          console.error('[API DEBUG] 오류 응답 본문 읽기 실패:', e);
+        }
+        throw new Error('API Error: ' + response.status + '\n\n' + genericErrorBody.substring(0, 200));
+      }
+
+      var data = await response.json();
+      console.log('[API DEBUG] Response Data:', JSON.stringify(data, null, 2).substring(0, 500) + '...');
+
+      apiCallState.isProcessing = false;
+
+      if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+        throw new Error('Invalid API response format');
+      }
+
+      return data.candidates[0].content.parts[0].text;
+
+    } catch (err) {
+      console.error('[API DEBUG] Attempt ' + (i + 1) + ' failed:', err);
+      if (i === retries) {
+        apiCallState.isProcessing = false;
+        throw err;
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
+}
+
+function initAutoFixAllButton() {
+  var btn = document.getElementById('auto-fix-all-btn');
+  if (!btn) {
+    console.warn('[AUTO-FIX-ALL] 버튼 없음');
+    return;
+  }
+
+  btn.addEventListener('click', async function (e) {
+    e.preventDefault();
+
+    var originalScript = document.getElementById('korea-senior-script');
+    if (!originalScript || !originalScript.value.trim()) {
+      alert('대본을 먼저 입력해주세요.');
+      return;
+    }
+
+    var scriptText = originalScript.value.trim();
+
+    if (btn.disabled) {
+      alert('이미 수정 작업이 진행 중입니다.');
+      return;
+    }
+
+    // analysisByCategory 확인
+    if (typeof analysisByCategory === 'undefined' || Object.keys(analysisByCategory).length === 0) {
+      alert('먼저 AI 분석을 실행해주세요.');
+      return;
+    }
+
+    // 모든 카테고리의 fixes 병합
+    var allFixes = [];
+    Object.keys(analysisByCategory).forEach(function (key) {
+      var category = analysisByCategory[key];
+      if (category.fixes && category.fixes.length > 0) {
+        // 카테고리 정보 추가
+        var fixesWithCat = category.fixes.map(function (f) {
+          f.category = key;
+          return f;
+        });
+        allFixes = allFixes.concat(fixesWithCat);
+      }
+    });
+
+    if (allFixes.length === 0) {
+      alert('수정할 항목이 없습니다.');
+      return;
+    }
+
+    // 중복 제거 및 우선순위 정렬
+    var mergedFixes = deduplicateAndPrioritizeFixes(allFixes);
+
+    var confirmMsg = '총 ' + mergedFixes.length + '개의 수정 사항(중복 제거됨)을 반영하여 전체 대본을 100점으로 자동 수정하시겠습니까?\\n\\n수정 후 TXT 파일로 다운로드됩니다.';
+    if (!confirm(confirmMsg)) return;
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>100점 반영 수정 중...';
+
+    try {
+      // 수정 사항 요약 생성
+      var fixSummary = mergedFixes.map(function (fix, idx) {
+        return (idx + 1) + '. [' + fix.category + '] "' + fix.before + '" → "' + fix.after + '" (' + fix.reason + ')';
+      }).join('\\n');
+
+      var prompt = '다음 대본을 아래 수정 사항에 따라 전체적으로 수정하여 100점짜리 대본으로 만드세요.\\n\\n' +
+        '## 수정 사항:\\n' + fixSummary + '\\n\\n' +
+        '## 중요:\\n' +
+        '1. 수정된 전체 대본만 반환하세요.\\n' +
+        '2. 설명이나 주석 없이 대본 텍스트만 출력하세요.\\n' +
+        '3. 원본의 형식을 유지하세요.\\n\\n' +
+        '## 원본 대본:\\n' + scriptText;
+
+      // API 호출 (JSON 아님, 텍스트 반환)
+      var fixedScript = await callGeminiWithRetry(prompt, false);
+
+      // 다운로드
+      downloadScript(fixedScript);
+
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-magic mr-2"></i>전체 100점 반영 자동 수정';
+      showNotification('100점 반영 수정이 완료되어 다운로드되었습니다.', 'success');
+
+    } catch (error) {
+      console.error('[AUTO-FIX-ALL] 오류:', error);
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-magic mr-2"></i>전체 100점 반영 자동 수정';
+      alert('수정 중 오류가 발생했습니다:\\n' + error.message);
+    }
+  });
+}
+
+function deduplicateAndPrioritizeFixes(fixes) {
+  // 중복 제거 (before 텍스트 기준)
+  var seen = {};
+  var unique = [];
+
+  fixes.forEach(function (fix) {
+    // 공백 제거 후 비교
+    var key = fix.before ? fix.before.trim() : '';
+    if (key && !seen[key]) {
+      seen[key] = true;
+      unique.push(fix);
+    }
+  });
+
+  // 우선순위 정렬: character > distortion > twistPace > immersion > background
+  var priority = {
+    'character': 1,
+    'distortion': 2,
+    'twistPace': 3,
+    'immersion': 4,
+    'background': 5
+  };
+
+  unique.sort(function (a, b) {
+    var aPriority = priority[a.category] || 999;
+    var bPriority = priority[b.category] || 999;
+    return aPriority - bPriority;
+  });
+
+  return unique;
+}
+
+function downloadScript(content) {
+  var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  var date = new Date().toISOString().slice(0, 10);
+  a.download = 'revised_script_100_' + date + '.txt';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ======================================================
+   DOM READY
+====================================================== */
+document.addEventListener('DOMContentLoaded', function () {
+  console.log('[BOOT] DOMContentLoaded fired');
+
+  safeInit('Tabs', initTabs);
+  safeInit('DarkMode', initDarkMode);
+  safeInit('ApiKeyUI', initApiKeyUI);
+  safeInit('Textareas', initTextareas);
+  safeInit('KoreaButtons', initKoreaSeniorButtons);
+  safeInit('AIStartButton', initAIStartButton);
+  safeInit('AutoFixAllButton', initAutoFixAllButton);
+
+  console.log('[BOOT] All init functions completed');
+  console.log('[BOOT] Current tab:', AppState.currentTab);
+});
