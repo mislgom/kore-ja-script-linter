@@ -37,9 +37,10 @@ window.addEventListener('unhandledrejection', function (e) {
 ========================= */
 window.ApiStability = window.ApiStability || {
     // 토큰 부담 완화: 기본 8192 등 큰 값이면 4096(또는 2048)로 낮추기
-    DEFAULT_MAX_OUTPUT_TOKENS: 4096,
+    DEFAULT_MAX_OUTPUT_TOKENS: 2048,
     // Step별 추가 쿨다운 (연속 호출이 쌓여 Step2/4에서 터지는 현상 완화)
     STEP_COOLDOWN_MS: {
+        // [HOTFIX] Step 1 쿨다운 제거
         2: 15000,
         4: 30000,
     },
@@ -49,6 +50,41 @@ window.ApiStability = window.ApiStability || {
     // 호출 간 최소 간격(기존 4초가 있다면 더 큰 값으로 올리지 말고 유지)
     MIN_CALL_INTERVAL_MS: 4000,
 };
+
+/* ======================================================
+   [429 Infinite Retry Helpers]
+====================================================== */
+window.Step429State = window.Step429State || {
+    counts: {},
+    capMs: 300000,   // 5분
+    baseMs: 30000    // 30초
+};
+function _is429(err) {
+    try {
+        if (err && err.status === 429) return true;
+        var m = (err && (err.message || (err.toString && err.toString()))) ? (err.message || err.toString()) : '';
+        return !!m && (m.indexOf('429') !== -1 || m.indexOf('Rate Limit') !== -1);
+    } catch (_) { return false; }
+}
+function _get429Wait(stepNo, err) {
+    // Retry-After 우선 사용
+    try {
+        if (err && typeof err.retryAfterSec === 'number' && err.retryAfterSec > 0) {
+            return Math.min(err.retryAfterSec * 1000, window.Step429State.capMs);
+        }
+    } catch (_) { }
+
+    var s = window.Step429State;
+    var c = s.counts[stepNo] || 0;
+    var w = Math.min(s.baseMs * Math.pow(2, c), s.capMs);  // 30s→60s→120s→240s→300s
+    var j = Math.floor(w * 0.1);                           // ±10% jitter
+    w = w + Math.floor((Math.random() * 2 - 1) * j);
+    s.counts[stepNo] = c + 1;
+    return w;
+}
+function _reset429(stepNo) {
+    try { delete window.Step429State.counts[stepNo]; } catch (_) { }
+}
 
 function sleep(ms) {
     return new Promise((res) => setTimeout(res, ms));
@@ -217,10 +253,15 @@ window._callGeminiOnce = async function _callGeminiOnce(callPrompt, callOptions 
             }
 
             if (response.status === 429) {
-                console.warn('[API DEBUG] 429 Rate Limit - 10초 대기');
-                // 내부에서 대기하지 않고 에러를 던져서 상위 retry 로직이 처리하게 함
-                // await new Promise(resolve => setTimeout(resolve, 10000));
-                throw new Error('429 Rate Limit');
+                var ra = 0;
+                try {
+                    var h = response.headers && response.headers.get ? response.headers.get('retry-after') : null;
+                    if (h) ra = parseInt(h, 10) || 0;
+                } catch (_) { }
+                var e429 = new Error('429 Rate Limit');
+                e429.status = 429;
+                if (ra > 0) e429.retryAfterSec = ra;
+                throw e429;
             }
 
             var msg = 'HTTP ' + response.status + ' ' + response.statusText +
@@ -1186,6 +1227,7 @@ function initAIStartButton() {
 
                         // 파싱 성공 - 재시도 카운터 리셋
                         stepRetryCount[stepKey] = 0;
+                        _reset429(stepInfo.step); // [FIX] 429 Backoff Reset
                         // [FIX] 성공 시 타임아웃 해제
                         if (stepInfo.step === 0 && step0TimeoutId) clearTimeout(step0TimeoutId);
 
@@ -1290,7 +1332,25 @@ function initAIStartButton() {
                 .catch(function (err) {
                     console.error('[STEP ' + stepInfo.step + '] API 오류:', err);
 
-                    // API 오류도 재시도
+                    // 429는 종료 금지: 대기 후 동일 Step 자동 재시도(무제한)
+                    if (_is429(err)) {
+                        var waitMs = _get429Wait(stepInfo.step, err);
+
+                        // 실패로 고정하지 말고 processing 유지
+                        var percent = (currentStep / analysisSteps.length) * 100;
+                        if (stepInfo.step === 0) percent = Math.max(5, percent);
+                        updateProgress(stepInfo.step, 'processing', percent);
+
+                        try {
+                            showNotification('요청 제한(429) 대기 ' + Math.round(waitMs / 1000) + '초 후 자동 재시도...', 'warning');
+                        } catch (_) { }
+
+                        // 429는 stepRetryCount 증가시키지 않음(최종 실패 방지)
+                        setTimeout(analyzeNextStep, waitMs);
+                        return;
+                    }
+
+                    // 429가 아닌 오류만 기존 재시도 정책 유지
                     stepRetryCount[stepKey]++;
 
                     if (stepRetryCount[stepKey] <= 2) {
@@ -1306,6 +1366,15 @@ function initAIStartButton() {
 
         // 최종 실패 처리 함수
         function handleFinalFailure(stepInfo, error) {
+            // [HOTFIX] 429 감지 시 최종 실패 처리 방지
+            try {
+                const msg = (error && (error.message || error.toString())) || '';
+                if (msg.includes('429') || msg.includes('Rate Limit')) {
+                    console.warn('[HOTFIX] 429 detected → final failure blocked (auto retry only)');
+                    return;
+                }
+            } catch (_) { }
+
             // [FIX] Step 0 실패 시 강제 완료로 전환 (오판/무한대기 방지)
             if (stepInfo.step === 0) {
                 console.warn('[Step 0] 최종 실패 감지 -> 강제 완료로 전환');
@@ -1701,6 +1770,12 @@ async function callGeminiWithRetry(prompt, isJson = true, retries = 2, options =
 
     // options와 인자 매핑
     options.isJson = isJson; // _callGeminiOnce에서 사용
+
+    // [HOTFIX] Step 1 always Force Text
+    if (options.stepNo === 1) {
+        options.forceText = true;
+        options.tag = (options.tag || '') + '-STEP1';
+    }
 
     const stepNo =
         typeof options.stepNo === 'number' ? options.stepNo :
