@@ -2093,9 +2093,289 @@ document.addEventListener('DOMContentLoaded', function () {
     safeInit('ApiKeyUI', initApiKeyUI);
     safeInit('Textareas', initTextareas);
     safeInit('KoreaButtons', initKoreaSeniorButtons);
-    safeInit('AIStartButton', initAIStartButton);
+    // safeInit('AIStartButton', initAIStartButton);  // 탭별 독립 분석 모드로 변경
+    safeInit('TabAnalysisButtons', initTabAnalysisButtons);  // 탭별 독립 분석 버튼 초기화
     safeInit('AutoFixAllButton', initAutoFixAllButton);
 
     console.log('[BOOT] All init functions completed');
     console.log('[BOOT] Current tab:', AppState.currentTab);
 });
+
+/* ======================================================
+   탭별 독립 분석 (Tab-by-Tab Independent Analysis)
+====================================================== */
+
+// 카테고리별 요구사항 정의
+var categoryRequirements = {
+    background: { name: '배경확인', required: 70 },
+    character: { name: '등장인물 일관성', required: 75 },
+    distortion: { name: '스토리 왜곡 분석', required: 70 },
+    twistPace: { name: '반전/변화 속도', required: 65 },
+    immersion: { name: '재미/몰입 요소', required: 70 }
+};
+
+// 탭별 분석 버튼 초기화
+function initTabAnalysisButtons() {
+    console.log('[TAB BUTTONS] 탭별 AI 분석 버튼 초기화');
+
+    // 모든 탭 AI 분석 버튼
+    var aiButtons = document.querySelectorAll('.tab-ai-btn');
+    aiButtons.forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            var category = btn.dataset.category;
+            console.log('[TAB AI] 클릭:', category);
+            runTabAnalysis(category);
+        });
+    });
+
+    // 모든 탭 검수 버튼
+    var reviewButtons = document.querySelectorAll('.tab-review-btn');
+    reviewButtons.forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            var category = btn.dataset.category;
+            console.log('[TAB REVIEW] 클릭:', category);
+            runTabReview(category);
+        });
+    });
+
+    console.log('[TAB BUTTONS] 초기화 완료 - AI:', aiButtons.length, '검수:', reviewButtons.length);
+}
+
+// 단일 탭 분석 실행
+function runTabAnalysis(category) {
+    console.log('[TAB ANALYSIS] 시작:', category);
+
+    // 카테고리 → 프롬프트 매핑
+    var prompts = {
+        background: '중요: 반드시 JSON만 출력. 코드블록(```)·설명·주석·추가 텍스트 금지.\\n\\n' +
+            '이 대본의 배경(한국/일본/조선 등)을 분석하고 점수(0-100)를 매겨주세요.\\n\\n' +
+            '대본:\\n{SCRIPT}\\n\\n' +
+            'JSON 형식:\\n' +
+            '{\\n' +
+            '  "score": 0-100,\\n' +
+            '  "issues": [{"text": "문제", "reason": "근거", "type": "배경충돌"}],\\n' +
+            '  "fixes": [{"before": "수정전", "after": "수정후", "reason": "이유"}]\\n' +
+            '}',
+
+        character: '중요: 반드시 JSON만 출력. 코드블록(```)·설명·주석·추가 텍스트 금지.\\n\\n' +
+            '등장인물의 나이, 이름, 관계가 일관되는지 분석하고 점수(0-100)를 매겨주세요.\\n\\n' +
+            '대본:\\n{SCRIPT}\\n\\n' +
+            'JSON 형식:\\n' +
+            '{\\n' +
+            '  "score": 0-100,\\n' +
+            '  "issues": [{"text": "문제", "reason": "근거", "type": "인물명 불일치"}],\\n' +
+            '  "fixes": [{"before": "수정전", "after": "수정후", "reason": "이유"}]\\n' +
+            '}',
+
+        distortion: '중요: 반드시 JSON만 출력. 코드블록(```)·설명·주석·추가 텍스트 금지.\\n\\n' +
+            '씬 구조, 시간/장소 흐름이 자연스러운지 분석하고 점수(0-100)를 매겨주세요.\\n\\n' +
+            '대본:\\n{SCRIPT}\\n\\n' +
+            'JSON 형식:\\n' +
+            '{\\n' +
+            '  "score": 0-100,\\n' +
+            '  "issues": [{"text": "문제", "reason": "근거", "type": "시간흐름 단절"}],\\n' +
+            '  "fixes": [{"before": "수정전", "after": "수정후", "reason": "이유"}]\\n' +
+            '}',
+
+        twistPace: '중요: 반드시 JSON만 출력. 코드블록(```)·설명·주석·추가 텍스트 금지.\\n\\n' +
+            '감정 변화와 페이싱이 적절한지 분석하고 점수(0-100)를 매겨주세요.\\n\\n' +
+            '대본:\\n{SCRIPT}\\n\\n' +
+            'JSON 형식:\\n' +
+            '{\\n' +
+            '  "score": 0-100,\\n' +
+            '  "issues": [{"text": "문제", "reason": "근거", "type": "페이싱 급변"}],\\n' +
+            '  "fixes": [{"before": "수정전", "after": "수정후", "reason": "이유"}]\\n' +
+            '}',
+
+        immersion: '중요: 반드시 JSON만 출력. 코드블록(```)·설명·주석·추가 텍스트 금지.\\n\\n' +
+            '갈등, 대화, 시니어 공감 요소를 분석하고 점수(0-100)를 매겨주세요.\\n\\n' +
+            '대본:\\n{SCRIPT}\\n\\n' +
+            'JSON 형식:\\n' +
+            '{\\n' +
+            '  "score": 0-100,\\n' +
+            '  "issues": [{"text": "문제", "reason": "근거", "type": "몰입 저하"}],\\n' +
+            '  "fixes": [{"before": "수정전", "after": "수정후", "reason": "이유"}]\\n' +
+            '}'
+    };
+
+    var prompt = prompts[category];
+    if (!prompt) {
+        console.error('[TAB ANALYSIS] 알 수 없는 카테고리:', category);
+        showNotification('알 수 없는 카테고리: ' + category, 'error');
+        return;
+    }
+
+    // 대본 가져오기
+    var scriptEl = document.getElementById('korea-senior-script');
+    if (!scriptEl || !scriptEl.value.trim()) {
+        showNotification('대본을 먼저 입력해주세요', 'warning');
+        return;
+    }
+    var script = scriptEl.value.trim();
+
+    // API 키 확인
+    var apiKey = localStorage.getItem('GEMINI_API_KEY');
+    if (!apiKey || !apiKey.trim()) {
+        showNotification('API 키를 먼저 설정해주세요 (우측 상단 🔑)', 'warning');
+        return;
+    }
+
+    // 프롬프트에 대본 삽입
+    prompt = prompt.replace('{SCRIPT}', script.substring(0, 30000));
+
+    // 버튼 비활성화
+    var btn = document.querySelector('.tab-ai-btn[data-category="' + category + '"]');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>분석중...';
+    }
+
+    // 카테고리 → stepNo 매핑 (진행 표시용)
+    var stepMap = {
+        background: 1,
+        character: 2,
+        distortion: 3,
+        twistPace: 4,
+        immersion: 5
+    };
+    var stepNo = stepMap[category] || 99;
+
+    // 진행바 업데이트
+    var progressBar = document.getElementById('progress-' + category);
+    if (progressBar) {
+        progressBar.style.width = '50%';
+    }
+
+    // API 호출 (retries=0, 자동 재시도 금지)
+    callGeminiWithRetry(prompt, true, 0, {
+        stepNo: stepNo,
+        tag: 'TAB_' + category.toUpperCase(),
+        maxOutputTokens: 2048
+    })
+        .then(function (responseText) {
+            console.log('[TAB ANALYSIS] 성공:', category);
+
+            // JSON 파싱
+            var result = safeParseJsonResponse(responseText);
+
+            // 결과 저장
+            if (typeof analysisByCategory === 'undefined') {
+                window.analysisByCategory = {};
+            }
+
+            analysisByCategory[category] = {
+                name: categoryRequirements[category].name,
+                score: result.score || 0,
+                issues: result.issues || [],
+                fixes: result.fixes || []
+            };
+
+            // 점수 표시
+            var scoreEl = document.getElementById('ai-' + category + '-score');
+            if (scoreEl) scoreEl.textContent = result.score || 0;
+
+            // 진행바 완료
+            if (progressBar) {
+                progressBar.style.width = '100%';
+            }
+
+            // 버튼 재활성화
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-robot mr-1"></i>분석';
+            }
+
+            // 성공 알림
+            showNotification(categoryRequirements[category].name + ' 분석 완료!', 'success');
+
+            // 해당 카테고리 선택하여 결과 표시
+            if (typeof selectCategory === 'function') {
+                selectCategory(category);
+            }
+
+            // AI 분석 결과 섹션 표시
+            var aiResultSection = document.getElementById('korea-ai-result');
+            if (aiResultSection) {
+                aiResultSection.classList.remove('hidden');
+            }
+        })
+        .catch(function (err) {
+            console.error('[TAB ANALYSIS] 실패:', category, err);
+
+            // 즉시 실패 처리 (자동 재시도 없음)
+            handleTabAnalysisFailure(category, stepNo, err, btn, progressBar);
+        });
+}
+
+// 탭 분석 실패 처리
+function handleTabAnalysisFailure(category, stepNo, err, btn, progressBar) {
+    console.error('[TAB FAILURE]', category, err);
+
+    // 진행바 리셋
+    if (progressBar) {
+        progressBar.style.width = '0%';
+    }
+
+    // 버튼 재활성화
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-robot mr-1"></i>분석';
+    }
+
+    // 상태 복구
+    AppState.isAIAnalyzing = false;
+    if (apiCallState) apiCallState.isProcessing = false;
+
+    // 에러 메시지
+    var errMsg = err && err.message ? err.message : String(err);
+    var displayMsg = categoryRequirements[category].name + ' 분석 실패';
+
+    if (errMsg.includes('429')) {
+        displayMsg += ' - 요청 제한 초과. 잠시 후 다시 시도해주세요.';
+    } else if (errMsg.includes('401') || errMsg.includes('key')) {
+        displayMsg += ' - API 키를 확인해주세요.';
+    } else if (errMsg.includes('JSON')) {
+        displayMsg += ' - 응답 형식 오류';
+    } else {
+        displayMsg += ' - ' + errMsg.slice(0, 80);
+    }
+
+    showNotification(displayMsg, 'error');
+}
+
+// 단일 탭 검수 실행
+function runTabReview(category) {
+    console.log('[TAB REVIEW] 시작:', category);
+
+    // 분석 결과가 있는지 확인
+    if (typeof analysisByCategory === 'undefined' || !analysisByCategory[category]) {
+        showNotification('먼저 AI 분석을 실행해주세요', 'warning');
+        return;
+    }
+
+    var data = analysisByCategory[category];
+
+    // 검수 로직 (기존 로직 재사용 또는 간단한 확인)
+    var passed = data.score >= categoryRequirements[category].required;
+
+    if (passed) {
+        showNotification(
+            categoryRequirements[category].name + ' 검수 통과 (' + data.score + '점)',
+            'success'
+        );
+    } else {
+        showNotification(
+            categoryRequirements[category].name + ' 검수 미달 (' + data.score + '/' +
+            categoryRequirements[category].required + '점)',
+            'warning'
+        );
+    }
+
+    // 해당 카테고리 선택하여 결과 표시
+    if (typeof selectCategory === 'function') {
+        selectCategory(category);
+    }
+}
+
