@@ -1,13 +1,10 @@
 /** ======================================================
  * KORE-JA SCRIPT LINTER - MAIN.JS
- * 4-Panel Layout System v2.3
+ * 4-Panel Layout System v2.4
  * ====================================================== */
 
 window.__MAIN_JS_LOADED__ = true;
 
-/* ======================================================
-   GLOBAL STATE
-====================================================== */
 var tabStates = {
     stage1: {
         status: 'idle',
@@ -27,22 +24,16 @@ var tabStates = {
     }
 };
 
-console.log('[BOOT] main.js loaded - v2.3 (TSV Table Fix)');
+console.log('[BOOT] main.js loaded - v2.4');
 
-/* ======================================================
-   ERROR HANDLING
-====================================================== */
 window.addEventListener('error', function (e) {
-    console.warn('[RUNTIME WARN] JS 오류:', e.message);
+    console.warn('[RUNTIME WARN]', e.message);
 });
 
 window.addEventListener('unhandledrejection', function (e) {
-    console.warn('[RUNTIME WARN] Promise Rejection:', e.reason);
+    console.warn('[RUNTIME WARN]', e.reason);
 });
 
-/* ======================================================
-   NOTIFICATION
-====================================================== */
 function showNotification(message, type) {
     type = type || 'info';
     var colors = {
@@ -51,26 +42,18 @@ function showNotification(message, type) {
         warning: 'bg-yellow-500',
         info: 'bg-blue-500'
     };
-    var color = colors[type] || colors.info;
-
     var notification = document.createElement('div');
-    notification.className = 'fixed top-4 right-4 ' + color + ' text-white px-4 py-2 rounded-lg shadow-lg z-50 max-w-sm text-sm transition-opacity duration-300';
+    notification.className = 'fixed top-4 right-4 ' + (colors[type] || colors.info) + ' text-white px-4 py-2 rounded-lg shadow-lg z-50 max-w-sm text-sm';
     notification.textContent = message;
     document.body.appendChild(notification);
-
     setTimeout(function () {
         notification.style.opacity = '0';
         setTimeout(function () {
-            if (notification.parentNode) {
-                document.body.removeChild(notification);
-            }
+            if (notification.parentNode) notification.parentNode.removeChild(notification);
         }, 300);
     }, 3000);
 }
 
-/* ======================================================
-   FILE UPLOAD & DRAG DROP
-====================================================== */
 function initFileUpload() {
     var dropZone = document.getElementById('drop-zone');
     var dropOverlay = document.getElementById('drop-overlay');
@@ -99,33 +82,38 @@ function initFileUpload() {
 
     dropZone.addEventListener('drop', function (e) {
         if (dropOverlay) dropOverlay.classList.add('hidden');
-        handleFiles(e.dataTransfer.files);
+        var files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+            var file = files[0];
+            if (file.name.endsWith('.txt')) {
+                var reader = new FileReader();
+                reader.onload = function (ev) {
+                    textarea.value = ev.target.result;
+                    updateCharCounter();
+                    showNotification('파일 로드 완료', 'success');
+                };
+                reader.readAsText(file, 'UTF-8');
+            } else {
+                showNotification('TXT 파일만 가능합니다.', 'error');
+            }
+        }
     });
 
     if (uploadBtn && fileInput) {
-        uploadBtn.addEventListener('click', function () {
-            fileInput.click();
-        });
+        uploadBtn.addEventListener('click', function () { fileInput.click(); });
         fileInput.addEventListener('change', function () {
-            handleFiles(this.files);
+            if (this.files && this.files.length > 0) {
+                var file = this.files[0];
+                var reader = new FileReader();
+                reader.onload = function (ev) {
+                    textarea.value = ev.target.result;
+                    updateCharCounter();
+                    showNotification('파일 로드 완료', 'success');
+                };
+                reader.readAsText(file, 'UTF-8');
+            }
             this.value = '';
         });
-    }
-
-    function handleFiles(files) {
-        if (!files || files.length === 0) return;
-        var file = files[0];
-        if (!file.name.endsWith('.txt')) {
-            showNotification('TXT 파일만 업로드 가능합니다.', 'error');
-            return;
-        }
-        var reader = new FileReader();
-        reader.onload = function (e) {
-            textarea.value = e.target.result;
-            updateCharCounter();
-            showNotification('파일 로드 완료: ' + file.name, 'success');
-        };
-        reader.readAsText(file, 'UTF-8');
     }
 }
 
@@ -138,18 +126,58 @@ function updateCharCounter() {
 }
 
 /* ======================================================
-   PROMPT GENERATION (TSV 형식 강제)
+   프롬프트 생성 (TSV 형식 강제)
 ====================================================== */
 function generatePrompt(stage, script) {
-    if (stage === 'stage1') {
-        return "당신은 한국 시니어 낭독용 대본 1차 검수 전문가입니다.\n\n[필수 검수 항목]\n1) 국가 배경 - 한국 배경에 타국 요소 혼입 여부\n2) 시대 배경 - 시대에 맞지 않는 표현\n3) 인물 설정 일관성 - 이름/나이/외형/성격/말투\n4) 인물 관계 일관성 - 호칭/관계\n\n[중요] analysis 출력 형식\nanalysis 값은 반드시 아래 TSV(탭 구분) 형식으로만 작성하세요.\n첫 줄은 헤더, 둘째 줄부터 데이터입니다.\n각 열은 탭(Tab 문자)으로 구분합니다.\n\nTSV 형식 예시 (오류 발견 시):\n번호\t유형\t위치(대략)\t변경 내용 요약\t검수 포인트\n1\t시간 왜곡\t도입부\t겨울 폭설 → 초가을 새벽 → 한낮 혼용\t시간 연속성\n2\t장소 왜곡\t헛간 이후\t헛간 → 관아 대청 즉시 이동\t공간 전환 누락\n3\t인물 설정 변경\t윤혜린 설명부\t과부 → 30년차 아전\t캐릭터 일관성\n4\t쌩뚱 상황\t궤짝 탈취 직후\t비극 장면에 축제 반응\t톤맥락 붕괴\n5\t대화 붕괴\t나그네 대화\t숙박 요청 → 쌀값 화제\t대사 논리\n6\t쌩뚱 인물\t중반부\t윤철수翁 등장\t인물 관리\n\nTSV 형식 예시 (검수 통과 시):\n번호\t유형\t위치(대략)\t변경 내용 요약\t검수 포인트\n1\t통과\t-\t검수 통과\t-\n\n[출력 형식 - 반드시 JSON만 출력]\n{\"analysis\":\"번호\\t유형\\t위치(대략)\\t변경 내용 요약\\t검수 포인트\\n1\\t...\",\"revised\":\"수정된 대본 전체\"}\n\n주의: JSON 외의 텍스트는 절대 출력하지 마세요.\n\n[대본]\n" + script;
-    } else {
-        return "당신은 한국 시니어 낭독용 대본 2차 심화 검수 전문가입니다.\n입력 대본은 1차 수정이 완료된 상태입니다.\n\n[필수 검수 항목]\n1) 장소 왜곡 - 같은 장면에서 장소가 갑자기 바뀌는지\n2) 시간 왜곡 - 오전/오후/계절/날짜 흐름이 맞는지\n3) 인물 설정 변경 - 성격/직업/관계/나이가 갑자기 변하는지\n4) 쌩뚱맞는 상황 - 복선 없이 사건이 튀어나오는지\n5) 대화 흐름 붕괴 - 질문-답이 맞지 않는지\n6) 쌩뚱 인물 등장 - 소개 없이 새 인물이 등장하는지\n\n[중요] analysis 출력 형식\nanalysis 값은 반드시 아래 TSV(탭 구분) 형식으로만 작성하세요.\n첫 줄은 헤더, 둘째 줄부터 데이터입니다.\n각 열은 탭(Tab 문자)으로 구분합니다.\n\nTSV 형식 예시 (오류 발견 시):\n번호\t유형\t위치(대략)\t변경 내용 요약\t검수 포인트\n1\t시간 왜곡\t도입부\t겨울 폭설 → 초가을 새벽 → 한낮 혼용\t시간 연속성\n2\t장소 왜곡\t헛간 이후\t헛간 → 관아 대청 즉시 이동\t공간 전환 누락\n3\t인물 설정 변경\t윤혜린 설명부\t과부 → 30년차 아전\t캐릭터 일관성\n4\t쌩뚱 상황\t궤짝 탈취 직후\t비극 장면에 축제 반응\t톤맥락 붕괴\n5\t대화 붕괴\t나그네 대화\t숙박 요청 → 쌀값 화제\t대사 논리\n6\t쌩뚱 인물\t중반부\t윤철수翁 등장\t인물 관리\n\nTSV 형식 예시 (검수 통과 시):\n번호\t유형\t위치(대략)\t변경 내용 요약\t검수 포인트\n1\t통과\t-\t검수 통과\t-\n\n[출력 규칙]\n- 오류 없음: {\"analysis\":\"번호\\t유형\\t...\\n1\\t통과\\t...\",\"revised\":\"최종 대본 전체\"}\n- 오류 발견: {\"analysis\":\"번호\\t유형\\t...\\n1\\t시간 왜곡\\t...\",\"revised\":\"\"}\n\n주의: JSON 외의 텍스트는 절대 출력하지 마세요.\n\n[대본]\n" + script;
-    }
+    var stage1Prompt = '당신은 한국 시니어 낭독용 대본 검수 전문가입니다.\n\n';
+    stage1Prompt += '아래 대본을 검수하고, 발견된 오류를 수정하세요.\n\n';
+    stage1Prompt += '[검수 항목]\n';
+    stage1Prompt += '1. 국가/시대 배경 오류\n';
+    stage1Prompt += '2. 인물 설정 불일치 (이름, 나이, 성격)\n';
+    stage1Prompt += '3. 인물 관계 불일치 (호칭, 관계)\n';
+    stage1Prompt += '4. 시간/장소 흐름 오류\n\n';
+    stage1Prompt += '[출력 형식] 반드시 아래 JSON 형식으로만 출력하세요:\n';
+    stage1Prompt += '{\n';
+    stage1Prompt += '  "analysis": "번호\\t유형\\t위치\\t변경내용\\t검수포인트\\n1\\t유형명\\t위치명\\t변경설명\\t포인트명",\n';
+    stage1Prompt += '  "revised": "수정된 전체 대본"\n';
+    stage1Prompt += '}\n\n';
+    stage1Prompt += '[analysis 작성 규칙]\n';
+    stage1Prompt += '- 반드시 TSV(탭 구분) 형식으로 작성\n';
+    stage1Prompt += '- 첫 줄: 번호\\t유형\\t위치\\t변경내용\\t검수포인트 (헤더)\n';
+    stage1Prompt += '- 둘째 줄부터: 1\\t시간왜곡\\t도입부\\t아침→저녁 수정\\t시간연속성\n';
+    stage1Prompt += '- 오류가 없으면: 1\\t통과\\t-\\t검수통과\\t-\n';
+    stage1Prompt += '- 각 열은 탭(Tab)으로 구분, 각 행은 줄바꿈(\\n)으로 구분\n\n';
+    stage1Prompt += '[revised 작성 규칙]\n';
+    stage1Prompt += '- 오류가 있으면 수정된 전체 대본 작성\n';
+    stage1Prompt += '- 오류가 없으면 원본 그대로 작성\n\n';
+    stage1Prompt += '[대본]\n' + script;
+
+    var stage2Prompt = '당신은 한국 시니어 낭독용 대본 2차 심화 검수 전문가입니다.\n';
+    stage2Prompt += '아래 대본은 1차 검수가 완료된 상태입니다.\n\n';
+    stage2Prompt += '[검수 항목]\n';
+    stage2Prompt += '1. 장소 왜곡 - 장면 연속성\n';
+    stage2Prompt += '2. 시간 왜곡 - 시간 흐름 논리성\n';
+    stage2Prompt += '3. 인물 설정 급변 - 성격/직업 변화\n';
+    stage2Prompt += '4. 쌩뚱맞은 상황 - 복선 없는 사건\n';
+    stage2Prompt += '5. 대화 흐름 붕괴 - 질문-답변 불일치\n';
+    stage2Prompt += '6. 쌩뚱 인물 등장 - 소개 없는 인물\n\n';
+    stage2Prompt += '[출력 형식] 반드시 아래 JSON 형식으로만 출력하세요:\n';
+    stage2Prompt += '{\n';
+    stage2Prompt += '  "analysis": "번호\\t유형\\t위치\\t변경내용\\t검수포인트\\n1\\t유형명\\t위치명\\t변경설명\\t포인트명",\n';
+    stage2Prompt += '  "revised": "수정된 전체 대본"\n';
+    stage2Prompt += '}\n\n';
+    stage2Prompt += '[analysis 작성 규칙]\n';
+    stage2Prompt += '- 반드시 TSV(탭 구분) 형식으로 작성\n';
+    stage2Prompt += '- 첫 줄: 번호\\t유형\\t위치\\t변경내용\\t검수포인트 (헤더)\n';
+    stage2Prompt += '- 둘째 줄부터: 1\\t대화붕괴\\t중반부\\t질문과 답변 수정\\t대사논리\n';
+    stage2Prompt += '- 오류가 없으면: 1\\t통과\\t-\\t검수통과\\t-\n\n';
+    stage2Prompt += '[대본]\n' + script;
+
+    return (stage === 'stage1') ? stage1Prompt : stage2Prompt;
 }
 
 /* ======================================================
-   ANALYSIS EXECUTION
+   분석 실행
 ====================================================== */
 function runAnalysis(stage) {
     var tab = tabStates[stage];
@@ -184,11 +212,9 @@ function runAnalysis(stage) {
         return;
     }
 
+    // 1차 재분석 시 2차 초기화
     if (stage === 'stage1' && tabStates.stage2.status !== 'idle') {
-        tabStates.stage2 = {
-            status: 'idle', progress: 0, resultText: null,
-            revisedScript: null, originalScript: null, errorMessage: null
-        };
+        tabStates.stage2 = { status: 'idle', progress: 0, resultText: null, revisedScript: null, originalScript: null, errorMessage: null };
         updateStageUI('stage2');
         document.getElementById('result-stage2').classList.add('hidden');
         disableButton('btn-stage2', true);
@@ -197,45 +223,38 @@ function runAnalysis(stage) {
     tab.originalScript = scriptToAnalyze;
     tab.status = 'running';
     tab.progress = 0;
-    tab.resultText = null;
-    tab.revisedScript = null;
-    tab.errorMessage = null;
-
     updateStageUI(stage);
     disableButton('btn-' + stage, true);
-    document.getElementById('result-' + stage).classList.remove('hidden');
-    document.getElementById('result-table-' + stage).innerHTML = '<p class="text-blue-400"><i class="fas fa-spinner fa-spin mr-2"></i>분석 진행 중...</p>';
-    document.getElementById('revised-' + stage).innerHTML = '<p class="text-gray-500">분석 진행 중...</p>';
 
-    updateProgress(stage, 10);
+    document.getElementById('result-' + stage).classList.remove('hidden');
+    document.getElementById('result-table-' + stage).innerHTML = '<p class="text-blue-400"><i class="fas fa-spinner fa-spin mr-2"></i>AI 분석 중...</p>';
+    document.getElementById('revised-' + stage).innerHTML = '<p class="text-gray-400">분석 진행 중...</p>';
+
+    updateProgress(stage, 20);
 
     setTimeout(function () {
-        updateProgress(stage, 30);
+        updateProgress(stage, 40);
 
         var prompt = generatePrompt(stage, scriptToAnalyze);
 
-        window.GeminiAPI.generateContent(prompt, {
-            temperature: 0.3,
-            maxOutputTokens: 8192
-        })
+        window.GeminiAPI.generateContent(prompt, { temperature: 0.2, maxOutputTokens: 8192 })
         .then(function (response) {
             updateProgress(stage, 80);
 
-            var parsed = parseResult(response);
-            tab.resultText = parsed.analysis || '분석 결과 없음';
-            tab.revisedScript = parsed.revised || scriptToAnalyze;
+            var parsed = parseGeminiResponse(response, scriptToAnalyze);
+            tab.resultText = parsed.analysis;
+            tab.revisedScript = parsed.revised;
             tab.status = 'success';
             tab.progress = 100;
 
             updateStageUI(stage);
             updateProgress(stage, 100);
             renderResults(stage);
-
             disableButton('btn-' + stage, false);
 
             if (stage === 'stage1') {
                 disableButton('btn-stage2', false);
-                showNotification('1차 분석 완료. 2차 분석 가능합니다.', 'success');
+                showNotification('1차 분석 완료!', 'success');
             } else {
                 updateDownloadButton();
                 showNotification('2차 분석 완료!', 'success');
@@ -244,141 +263,159 @@ function runAnalysis(stage) {
         .catch(function (error) {
             tab.status = 'error';
             tab.errorMessage = error.message;
-            tab.progress = 0;
             updateStageUI(stage);
             document.getElementById('result-table-' + stage).innerHTML = '<p class="text-red-400">오류: ' + escapeHtml(error.message) + '</p>';
-            document.getElementById('revised-' + stage).innerHTML = '<p class="text-gray-500">분석 실패</p>';
             disableButton('btn-' + stage, false);
-            showNotification('분석 실패: ' + error.message, 'error');
+            showNotification('분석 실패', 'error');
         });
-    }, 500);
+    }, 300);
 }
 
-function parseResult(responseText) {
-    if (!responseText) return { analysis: '응답 없음', revised: null };
+/* ======================================================
+   Gemini 응답 파싱
+====================================================== */
+function parseGeminiResponse(responseText, originalScript) {
+    if (!responseText) {
+        return { analysis: '응답 없음', revised: originalScript };
+    }
 
-    var cleaned = String(responseText)
-        .replace(/```json/gi, '')
-        .replace(/```/g, '')
-        .trim();
+    var cleaned = String(responseText).replace(/```json/gi, '').replace(/```/g, '').trim();
 
+    // JSON 파싱 시도
     try {
-        return JSON.parse(cleaned);
+        var json = JSON.parse(cleaned);
+        var analysis = json.analysis || '';
+        var revised = json.revised || originalScript;
+
+        // analysis가 문자열인지 확인
+        if (typeof analysis === 'string') {
+            // 이스케이프된 탭/줄바꿈 복원
+            analysis = analysis.replace(/\\t/g, '\t').replace(/\\n/g, '\n');
+        }
+
+        return { analysis: analysis, revised: revised };
     } catch (e) {
-        console.warn('[PARSE] JSON 파싱 실패');
-        return { analysis: responseText, revised: null };
+        console.warn('[PARSE] JSON 파싱 실패, 대체 파싱 시도');
+
+        // JSON 파싱 실패 시 텍스트에서 추출 시도
+        var analysisMatch = cleaned.match(/"analysis"\s*:\s*"([^"]*)"/);
+        var revisedMatch = cleaned.match(/"revised"\s*:\s*"([\s\S]*?)"\s*}/);
+
+        var analysis = analysisMatch ? analysisMatch[1].replace(/\\t/g, '\t').replace(/\\n/g, '\n') : cleaned;
+        var revised = revisedMatch ? revisedMatch[1].replace(/\\n/g, '\n') : originalScript;
+
+        return { analysis: analysis, revised: revised };
     }
 }
 
 /* ======================================================
-   RENDER FUNCTIONS
+   결과 렌더링
 ====================================================== */
 function renderResults(stage) {
     var tab = tabStates[stage];
 
+    // 좌측: 분석 결과 표
     var tableHtml = renderAnalysisTable(tab.resultText);
     document.getElementById('result-table-' + stage).innerHTML = tableHtml;
 
+    // 우측: 수정 반영 (diff 하이라이트)
     var diffHtml = renderDiffHighlight(tab.originalScript, tab.revisedScript);
     document.getElementById('revised-' + stage).innerHTML = diffHtml;
 }
 
 function renderAnalysisTable(analysisText) {
-    if (!analysisText) {
+    if (!analysisText || analysisText.trim() === '') {
         return '<p class="text-gray-500">분석 결과 없음</p>';
     }
 
-    // 줄바꿈 처리 (\\n을 실제 줄바꿈으로)
-    var text = analysisText.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
-    var lines = text.trim().split('\n');
-    
-    if (lines.length < 1) {
-        return '<div class="whitespace-pre-wrap">' + escapeHtml(analysisText) + '</div>';
+    var text = String(analysisText);
+    var lines = text.split('\n').filter(function(line) { return line.trim() !== ''; });
+
+    if (lines.length === 0) {
+        return '<p class="text-gray-500">분석 결과 없음</p>';
     }
 
     // 탭이 있는지 확인
     var hasTab = lines[0].indexOf('\t') !== -1;
+
     if (!hasTab) {
-        return '<div class="whitespace-pre-wrap text-gray-300">' + escapeHtml(analysisText) + '</div>';
+        // TSV 형식이 아니면 일반 텍스트로 보기 좋게 표시
+        return '<div class="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed">' + escapeHtml(analysisText) + '</div>';
     }
 
-    var html = '<div class="overflow-x-auto"><table class="w-full text-xs border-collapse">';
-
-    // 헤더
+    // TSV → 테이블 변환
+    var html = '<table class="w-full text-xs border-collapse">';
     html += '<thead><tr class="bg-gray-800">';
+
     var headers = lines[0].split('\t');
-    var widths = ['45px', '85px', '85px', '', '95px'];
+    var headerNames = ['번호', '유형', '위치(대략)', '변경 내용 요약', '검수 포인트'];
+    var widths = ['40px', '80px', '80px', '', '90px'];
     var headerColors = ['text-gray-400', 'text-purple-400', 'text-blue-400', 'text-gray-300', 'text-cyan-400'];
+
     for (var h = 0; h < 5; h++) {
-        var w = widths[h] ? 'width:' + widths[h] + ';' : '';
-        html += '<th class="border border-gray-700 px-2 py-2 text-left font-semibold ' + headerColors[h] + '" style="' + w + '">' + escapeHtml(headers[h] || '') + '</th>';
+        var headerText = (headers[h] && headers[h].trim()) ? headers[h] : headerNames[h];
+        var style = widths[h] ? 'width:' + widths[h] + ';' : '';
+        html += '<th class="border border-gray-700 px-2 py-2 text-left ' + headerColors[h] + '" style="' + style + '">' + escapeHtml(headerText) + '</th>';
     }
     html += '</tr></thead><tbody>';
 
-    // 데이터 행
     for (var i = 1; i < lines.length; i++) {
-        if (!lines[i].trim()) continue;
         var cols = lines[i].split('\t');
         var typeText = (cols[1] || '').trim();
 
         // 유형별 색상
         var typeColor = 'text-gray-300';
-        if (typeText === '통과') {
-            typeColor = 'text-green-400';
-        } else if (typeText.indexOf('왜곡') !== -1) {
-            typeColor = 'text-yellow-400';
-        } else if (typeText.indexOf('붕괴') !== -1) {
-            typeColor = 'text-orange-400';
-        } else if (typeText.indexOf('변경') !== -1) {
-            typeColor = 'text-pink-400';
-        } else if (typeText.indexOf('쌩뚱') !== -1) {
-            typeColor = 'text-red-400';
-        }
+        if (typeText === '통과') typeColor = 'text-green-400';
+        else if (typeText.indexOf('왜곡') !== -1) typeColor = 'text-yellow-400';
+        else if (typeText.indexOf('붕괴') !== -1) typeColor = 'text-orange-400';
+        else if (typeText.indexOf('변경') !== -1 || typeText.indexOf('불일치') !== -1) typeColor = 'text-pink-400';
+        else if (typeText.indexOf('쌩뚱') !== -1) typeColor = 'text-red-400';
 
         var rowBg = (i % 2 === 0) ? 'bg-gray-900' : 'bg-gray-800/50';
         html += '<tr class="' + rowBg + '">';
-        
+
         for (var c = 0; c < 5; c++) {
-            var cellText = cols[c] || '';
+            var cellText = (cols[c] || '').trim() || '-';
             var cellClass = 'text-gray-300';
-            
-            if (c === 0) cellClass = 'text-gray-500'; // 번호
-            if (c === 1) cellClass = typeColor + ' font-medium'; // 유형
-            if (c === 2) cellClass = 'text-blue-300'; // 위치
-            if (c === 4) cellClass = 'text-cyan-400'; // 검수 포인트
-            
+            if (c === 0) cellClass = 'text-gray-500';
+            if (c === 1) cellClass = typeColor + ' font-medium';
+            if (c === 2) cellClass = 'text-blue-300';
+            if (c === 4) cellClass = 'text-cyan-400';
             html += '<td class="border border-gray-700 px-2 py-1.5 ' + cellClass + '">' + escapeHtml(cellText) + '</td>';
         }
         html += '</tr>';
     }
 
-    html += '</tbody></table></div>';
+    html += '</tbody></table>';
     return html;
 }
 
 function renderDiffHighlight(originalScript, revisedScript) {
-    if (!revisedScript) {
+    if (!revisedScript || revisedScript.trim() === '') {
         return '<p class="text-gray-500">수정본 없음</p>';
     }
 
     var originalLines = (originalScript || '').split('\n');
     var revisedLines = revisedScript.split('\n');
-    var html = '<div class="font-mono text-sm leading-relaxed">';
+
+    var html = '<div class="font-mono text-sm leading-relaxed space-y-0">';
 
     for (var i = 0; i < revisedLines.length; i++) {
         var revisedLine = revisedLines[i];
-        var originalLine = (i < originalLines.length) ? originalLines[i] : null;
-        var isDifferent = (originalLine === null) || (originalLine !== revisedLine);
+        var originalLine = (i < originalLines.length) ? originalLines[i] : '';
 
-        if (isDifferent && revisedLine.trim() !== '') {
-            // 변경된 라인: 연한 초록 배경
-            html += '<div class="bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200 px-1 -mx-1 rounded">' + escapeHtml(revisedLine) + '</div>';
-        } else if (revisedLine.trim() === '') {
+        // 변경 여부 확인
+        var isDifferent = (originalLine !== revisedLine);
+
+        if (revisedLine.trim() === '') {
             // 빈 줄
-            html += '<div class="min-h-[1.25rem]">&nbsp;</div>';
+            html += '<div class="h-5">&nbsp;</div>';
+        } else if (isDifferent) {
+            // 변경된 라인 - 연한 초록 배경
+            html += '<div class="bg-green-200 dark:bg-green-800/60 text-green-900 dark:text-green-100 px-2 py-0.5 rounded">' + escapeHtml(revisedLine) + '</div>';
         } else {
-            // 변경 없는 라인
-            html += '<div class="text-gray-700 dark:text-gray-300">' + escapeHtml(revisedLine) + '</div>';
+            // 동일한 라인
+            html += '<div class="text-gray-700 dark:text-gray-300 px-2">' + escapeHtml(revisedLine) + '</div>';
         }
     }
 
@@ -389,35 +426,31 @@ function renderDiffHighlight(originalScript, revisedScript) {
 function escapeHtml(text) {
     if (!text) return '';
     return String(text)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
 
 /* ======================================================
-   UI UPDATE FUNCTIONS
+   UI 업데이트
 ====================================================== */
 function updateStageUI(stage) {
     var tab = tabStates[stage];
     var badge = document.getElementById('status-' + stage);
-
     if (!badge) return;
 
-    if (tab.status === 'idle') {
-        badge.textContent = '대기';
-        badge.className = 'ml-2 status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full';
-    } else if (tab.status === 'running') {
-        badge.textContent = '분석중';
-        badge.className = 'ml-2 status-badge bg-blue-500 text-white text-xs px-2 py-1 rounded-full';
-    } else if (tab.status === 'success') {
-        badge.textContent = '완료';
-        badge.className = 'ml-2 status-badge bg-green-500 text-white text-xs px-2 py-1 rounded-full';
-    } else if (tab.status === 'error') {
-        badge.textContent = '실패';
-        badge.className = 'ml-2 status-badge bg-red-500 text-white text-xs px-2 py-1 rounded-full';
-    }
+    var statusMap = {
+        idle: { text: '대기', class: 'bg-gray-200 text-gray-600' },
+        running: { text: '분석중', class: 'bg-blue-500 text-white' },
+        success: { text: '완료', class: 'bg-green-500 text-white' },
+        error: { text: '실패', class: 'bg-red-500 text-white' }
+    };
+
+    var s = statusMap[tab.status] || statusMap.idle;
+    badge.textContent = s.text;
+    badge.className = 'ml-2 text-xs px-2 py-1 rounded-full ' + s.class;
 
     var progressContainer = document.getElementById('progress-container-' + stage);
     if (progressContainer) {
@@ -437,6 +470,7 @@ function disableButton(btnId, disabled) {
     var btn = document.getElementById(btnId);
     if (!btn) return;
     btn.disabled = disabled;
+
     if (disabled) {
         btn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-gray-400');
         btn.classList.remove('bg-indigo-500', 'hover:bg-indigo-600', 'bg-purple-500', 'hover:bg-purple-600');
@@ -455,15 +489,10 @@ function updateDownloadButton() {
     if (!btn) return;
     var canDownload = (tabStates.stage2.status === 'success' && tabStates.stage2.revisedScript);
     btn.disabled = !canDownload;
-    if (canDownload) {
-        btn.classList.remove('opacity-50', 'cursor-not-allowed');
-    } else {
-        btn.classList.add('opacity-50', 'cursor-not-allowed');
-    }
 }
 
 /* ======================================================
-   INITIALIZATION
+   초기화
 ====================================================== */
 function initDarkMode() {
     var toggle = document.getElementById('dark-mode-toggle');
@@ -490,45 +519,37 @@ function initApiKeyUI() {
     if (!toggle || !panel) return;
 
     if (localStorage.getItem('GEMINI_API_KEY')) {
-        status.textContent = '설정됨';
-        icon.textContent = '✅';
+        if (status) status.textContent = '설정됨';
+        if (icon) icon.textContent = '✅';
     }
 
     toggle.addEventListener('click', function () {
         panel.classList.toggle('hidden');
-        if (!panel.classList.contains('hidden')) {
+        if (!panel.classList.contains('hidden') && input) {
             input.value = localStorage.getItem('GEMINI_API_KEY') || '';
         }
     });
 
-    if (close) {
-        close.addEventListener('click', function () {
-            panel.classList.add('hidden');
-        });
-    }
+    if (close) close.addEventListener('click', function () { panel.classList.add('hidden'); });
 
-    if (save) {
-        save.addEventListener('click', function () {
-            if (input.value.trim()) {
-                localStorage.setItem('GEMINI_API_KEY', input.value.trim());
-                status.textContent = '설정됨';
-                icon.textContent = '✅';
-                panel.classList.add('hidden');
-                showNotification('API 키 저장됨', 'success');
-            }
-        });
-    }
-
-    if (del) {
-        del.addEventListener('click', function () {
-            localStorage.removeItem('GEMINI_API_KEY');
-            status.textContent = 'API 키 설정';
-            icon.textContent = '🔑';
-            input.value = '';
+    if (save) save.addEventListener('click', function () {
+        if (input && input.value.trim()) {
+            localStorage.setItem('GEMINI_API_KEY', input.value.trim());
+            if (status) status.textContent = '설정됨';
+            if (icon) icon.textContent = '✅';
             panel.classList.add('hidden');
-            showNotification('API 키 삭제됨', 'info');
-        });
-    }
+            showNotification('API 키 저장됨', 'success');
+        }
+    });
+
+    if (del) del.addEventListener('click', function () {
+        localStorage.removeItem('GEMINI_API_KEY');
+        if (status) status.textContent = 'API 키 설정';
+        if (icon) icon.textContent = '🔑';
+        if (input) input.value = '';
+        panel.classList.add('hidden');
+        showNotification('API 키 삭제됨', 'info');
+    });
 }
 
 function initButtons() {
@@ -537,32 +558,28 @@ function initButtons() {
     var sampleBtn = document.getElementById('korea-senior-sample-btn');
     if (sampleBtn) {
         sampleBtn.addEventListener('click', function () {
-            textarea.value = '[제 1회 드라마 대본 / 씬1]\n\n나레이션:\n1995년 여름, 서울 강남의 한 아파트 단지.\n오랜만에 가족들이 한자리에 모였다.\n\n[씬 1. 서울 강남 아파트 거실 / 낮]\n\n(거실. 소파에 앉아 있는 할머니(75세, 김순자)와 손녀(20세, 이지은))\n\n지은: 할머니, 오늘 날씨 정말 좋죠?\n순자: 그러게. 이렇게 맑은 날은 오랜만이야.\n\n나레이션:\n두 사람은 따뜻한 햇살 아래에서 옛 이야기를 나누기 시작했다.';
-            updateCharCounter();
+            if (textarea) {
+                textarea.value = '[제 1회 드라마 대본 / 씬1]\n\n나레이션:\n1995년 여름, 서울 강남의 한 아파트 단지.\n오랜만에 가족들이 한자리에 모였다.\n\n[씬 1. 서울 강남 아파트 거실 / 낮]\n\n(거실. 소파에 앉아 있는 할머니(75세, 김순자)와 손녀(20세, 이지은))\n\n지은: 할머니, 오늘 날씨 정말 좋죠?\n순자: 그러게. 이렇게 맑은 날은 오랜만이야.\n\n나레이션:\n두 사람은 따뜻한 햇살 아래에서 옛 이야기를 나누기 시작했다.';
+                updateCharCounter();
+            }
         });
     }
 
     var clearBtn = document.getElementById('korea-senior-clear-btn');
     if (clearBtn) {
         clearBtn.addEventListener('click', function () {
-            textarea.value = '';
-            updateCharCounter();
+            if (textarea) {
+                textarea.value = '';
+                updateCharCounter();
+            }
         });
     }
 
     var btn1 = document.getElementById('btn-stage1');
-    if (btn1) {
-        btn1.addEventListener('click', function () {
-            runAnalysis('stage1');
-        });
-    }
+    if (btn1) btn1.addEventListener('click', function () { runAnalysis('stage1'); });
 
     var btn2 = document.getElementById('btn-stage2');
-    if (btn2) {
-        btn2.addEventListener('click', function () {
-            runAnalysis('stage2');
-        });
-    }
+    if (btn2) btn2.addEventListener('click', function () { runAnalysis('stage2'); });
 
     var downloadBtn = document.getElementById('download-revised-btn');
     if (downloadBtn) {
@@ -583,13 +600,11 @@ function initButtons() {
         });
     }
 
-    if (textarea) {
-        textarea.addEventListener('input', updateCharCounter);
-    }
+    if (textarea) textarea.addEventListener('input', updateCharCounter);
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    console.log('[BOOT] DOMContentLoaded - v2.3');
+    console.log('[BOOT] DOMContentLoaded - v2.4');
     initDarkMode();
     initApiKeyUI();
     initFileUpload();
