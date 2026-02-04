@@ -673,3 +673,74 @@ function initDownloadButton() {
         }
 
         downloadRevisedScript(tab.title, tab.revisedScript);
+    });
+}
+
+function updateDownloadButtonState(tabId) {
+    var downloadBtn = document.getElementById('download-revised-btn');
+    if (!downloadBtn) return;
+
+    var tab = tabStates[tabId];
+
+    // revisedScript가 있고 성공 상태일 때만 활성화
+    if (tab && tab.status === 'success' && tab.revisedScript) {
+        downloadBtn.disabled = false;
+    } else {
+        downloadBtn.disabled = true;
+    }
+}
+
+function downloadRevisedScript(tabTitle, scriptContent) {
+    // 파일명 생성: 탭제목_YYYY-MM-DD.txt
+    var today = new Date();
+    var dateStr = today.getFullYear() + '-' +
+        String(today.getMonth() + 1).padStart(2, '0') + '-' +
+        String(today.getDate()).padStart(2, '0');
+
+    // 특수문자 제거 (공백은 언더스코어로)
+    var safeTitle = tabTitle.replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, '').replace(/\s+/g, '_');
+    var filename = safeTitle + '_' + dateStr + '.txt';
+
+    // Blob 생성 및 다운로드
+    var blob = new Blob([scriptContent], { type: 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showNotification('수정된 대본이 다운로드되었습니다: ' + filename, 'success');
+}
+
+
+/* ======================================================
+   DOM READY
+====================================================== */
+document.addEventListener('DOMContentLoaded', function () {
+    console.log('[BOOT] DOMContentLoaded fired');
+
+    // 의존성 체크 (경고만, 중단하지 않음)
+    var depErrors = [];
+    if (typeof GeminiAPI === 'undefined') depErrors.push('GeminiAPI');
+
+    if (depErrors.length > 0) {
+        console.warn('[DEPENDENCY] ⚠️ 일부 스크립트 누락:', depErrors.join(', '));
+        console.warn('[DEPENDENCY] 기본 UI는 동작하지만, AI 분석 기능이 제한될 수 있습니다.');
+    } else {
+        console.log('[BOOT] ✅ 필수 의존성 체크 통과');
+    }
+
+    // 초기화
+    initDarkMode();
+    initApiKeyUI();
+    initScriptButtons();
+    initDownloadButton();
+
+    console.log('[BOOT] ✅ 초기화 완료');
+});
+document.addEventListener('DOMContentLoaded', function () {
+    ...
+});
