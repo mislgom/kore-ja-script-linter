@@ -338,7 +338,6 @@ function initDragAndDrop() {
     });
 }
 
-
 // ========== 분석 버튼 ==========
 function initAnalysisButtons() {
     const btn1 = document.getElementById('btn-stage1');
