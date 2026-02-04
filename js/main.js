@@ -245,37 +245,99 @@ function initDragAndDrop() {
     const dropOverlay = document.getElementById('drop-overlay');
     const textarea = document.getElementById('korea-senior-script');
     
-    if (!dropZone || !textarea) return;
+    if (!dropZone || !textarea) {
+        console.warn('⚠️ 드래그 앤 드롭: drop-zone 또는 textarea를 찾을 수 없음');
+        return;
+    }
     
+    console.log('✅ 드래그 앤 드롭 초기화됨');
+    
+    // 드래그 오버
     dropZone.addEventListener('dragover', function(e) {
         e.preventDefault();
+        e.stopPropagation();
         if (dropOverlay) dropOverlay.classList.remove('hidden');
+        dropZone.classList.add('border-blue-500');
     });
     
+    // 드래그 나감
     dropZone.addEventListener('dragleave', function(e) {
         e.preventDefault();
+        e.stopPropagation();
         if (dropOverlay) dropOverlay.classList.add('hidden');
+        dropZone.classList.remove('border-blue-500');
     });
     
+    // 드롭
     dropZone.addEventListener('drop', function(e) {
         e.preventDefault();
+        e.stopPropagation();
         if (dropOverlay) dropOverlay.classList.add('hidden');
+        dropZone.classList.remove('border-blue-500');
         
         const file = e.dataTransfer.files[0];
-        if (file && file.type === 'text/plain') {
-            currentFileName = file.name.replace('.txt', '');
+        if (!file) {
+            console.warn('⚠️ 드롭된 파일 없음');
+            return;
+        }
+        
+        console.log('📁 드롭된 파일:', file.name, '타입:', file.type);
+        
+        // 파일 확장자 또는 타입으로 체크
+        const isTextFile = file.type === 'text/plain' || 
+                          file.name.toLowerCase().endsWith('.txt');
+        
+        if (isTextFile) {
+            currentFileName = file.name.replace(/\.txt$/i, '');
             const reader = new FileReader();
             reader.onload = function(event) {
                 textarea.value = event.target.result;
                 updateCharCounter();
-                console.log('📂 드래그 파일 로드됨:', file.name);
+                console.log('📂 드래그 파일 로드 완료:', file.name);
             };
-            reader.readAsText(file);
+            reader.onerror = function() {
+                console.error('❌ 파일 읽기 실패');
+                alert('파일을 읽는 중 오류가 발생했습니다.');
+            };
+            reader.readAsText(file, 'UTF-8');
+        } else {
+            alert('텍스트 파일(.txt)만 지원합니다.\n드롭된 파일: ' + file.name);
+        }
+    });
+    
+    // textarea에도 드롭 이벤트 추가 (직접 드롭 시)
+    textarea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    });
+    
+    textarea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const file = e.dataTransfer.files[0];
+        if (!file) return;
+        
+        console.log('📁 textarea에 드롭된 파일:', file.name);
+        
+        const isTextFile = file.type === 'text/plain' || 
+                          file.name.toLowerCase().endsWith('.txt');
+        
+        if (isTextFile) {
+            currentFileName = file.name.replace(/\.txt$/i, '');
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                textarea.value = event.target.result;
+                updateCharCounter();
+                console.log('📂 textarea 드래그 파일 로드 완료:', file.name);
+            };
+            reader.readAsText(file, 'UTF-8');
         } else {
             alert('텍스트 파일(.txt)만 지원합니다.');
         }
     });
 }
+
 
 // ========== 분석 버튼 ==========
 function initAnalysisButtons() {
