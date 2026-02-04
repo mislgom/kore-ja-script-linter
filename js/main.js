@@ -187,38 +187,70 @@ function initFileUpload() {
 ====================================================== */
 function generatePromptForTab(promptKey, script) {
     if (promptKey === 'stage1') {
-        return `당신은 한국 시니어 낭독용 대본 검수 전문가입니다.
-다음 대본에 대해 "1차 기본 점검"을 수행하세요.
+        return `너는 “한국 시니어 낭독용 대본 1차 검수 전문가”다.
+입력 대본을 분석하고 즉시 수정본을 만든다.
 
-[점검 항목]
-1. 한국 배경 확인: 지명/장소/문화 요소가 한국적인지, 타국(일본/중국) 요소가 없는지
-2. 인물 설정 일관성: 이름/나이/직업/특성이 일관된지
-3. 인물 관계 일관성: 가족/사회 관계가 앞뒤가 맞는지
+[검수 항목]
+1) 국가 배경 검증
+- 도시/지명/화폐/문화 요소가 국가와 일치하는지
+- 한국 배경 기준에서 타국 요소 혼입 여부
 
-대본:
-${script}
+2) 시대 배경 검증
+- 조선/일제/현대/70·80·90년대 단서 분석
+- 시대에 맞지 않는 사물·문화·표현 수정
 
-다음 JSON 형식으로 응답하세요:
-{
-  "analysis": "분석 결과 텍스트 (위 3가지 항목별로 문제점과 분석 내용을 상세히 기술)",
-  "revised": "수정된 대본 전체 (문제가 해결된 검수본)"
-}`;
+3) 등장인물 설정 일관성
+- 이름/나이/외형/성격/말투가 처음부터 끝까지 동일한지
+- 충돌 시 최초 등장 설정을 기준으로 하나로 통일
+
+4) 등장인물 관계 일관성
+- 가족/친족/이웃/사회적 관계 및 호칭 일관성
+- 가장 자연스러운 관계 1개로 고정
+
+5) 즉시 반영
+- 위 문제를 모두 반영해 1차 수정 대본 생성
+
+[analysis 작성 규칙]
+- 항목별로 구분해 작성
+- 문제 라인은 반드시 아래 토큰 중 하나 포함:
+  오류:, 불일치:, 주의:, 경고:, ❌
+- 문제 없으면 “문제 없음” 명시
+
+[출력(JSON만)]
+{"analysis":"...","revised":"..."}
+
+[대본]
+${script}`;
     } else if (promptKey === 'stage2') {
-        return `당신은 한국 시니어 낭독용 대본 검수 전문가입니다.
-다음 대본(1차 검수를 마친 상태)에 대해 "2차 심화 점검"을 수행하세요.
+        return `너는 “한국 시니어 낭독용 대본 2차 심화 검수 전문가”다.
+입력 대본은 1차 수정이 완료된 상태다.
 
-[점검 항목]
-1. 이야기 흐름/왜곡 확인: 씬 구조, 시간/장소 흐름이 논리적인지
-2. 재미/몰입 요소: 갈등 불명확, 대화 어색함, 시니어 공감 요소 부족 여부
+[검수 항목]
+1) 이야기 시간·장소 흐름 왜곡
+- 아침/점심/저녁, 오전/오후, 계절, 날짜 흐름
+- 장소 이동의 논리성 점검
 
-대본:
-${script}
+2) 재미/몰입 요소 분석
+- 시니어 낭독 채널 기준으로 공감·몰입·이탈 리스크 점검
+- 웹 검색 언급 금지
+- 채널 정보 부족 시 일반적인 시니어 낭독 기준으로 판단
 
-다음 JSON 형식으로 응답하세요:
-{
-  "analysis": "분석 결과 텍스트 (위 2가지 항목별로 심층 분석)",
-  "revised": "최종 수정된 대본 전체 (모든 문제가 해결된 최종 완성본)"
-}`;
+3) 최종 수정 대본 생성
+- 1차 수정본을 바탕으로 최종 수정 대본 작성
+- VREW 1줄=1클립 규칙 동일 적용
+
+[analysis 작성 규칙]
+- 섹션:
+  (1) 시간/장소 왜곡
+  (2) 몰입/이탈 리스크
+  (3) 핵심 수정 요약
+- 문제 라인은 오류/불일치/주의/경고/❌ 중 하나 포함
+
+[출력(JSON만)]
+{"analysis":"...","revised":"..."}
+
+[대본]
+${script}`;
     }
     return '';
 }
@@ -235,7 +267,7 @@ window.runAnalysisForTab = function (tabId) {
         return;
     }
 
-    // 2. 대본 확인 (Stage 1인 경우 Textarea에서, Stage 2는 인자로 받음)
+    // 2. 대본 확인 (Stage 1인 경우 Textarea에서, Stage 2는 Stage 1 결과에서)
     var scriptToAnalyze = null;
     if (tabId === 'stage1') {
         var scriptTextarea = document.getElementById('korea-senior-script');
@@ -244,12 +276,14 @@ window.runAnalysisForTab = function (tabId) {
             return;
         }
         scriptToAnalyze = scriptTextarea.value;
-    } else {
-        // Stage 2는 내부적으로 호출되므로 여기서는 직접 실행 차단 (UI 버튼 클릭 방지용)
-        // 하지만 만약 버튼이 활성화되어 눌렸다면, 이전 탭의 결과를 가져와야 함.
-        // 현재 로직상 stage2 버튼은 disable 처리됨.
-        // 아래 executePipelineNode에서 처리.
-        return;
+    } else if (tabId === 'stage2') {
+        // Stage 2: Stage 1의 결과물(revisedScript)이 존재하는지 확인
+        var stage1Tab = tabStates['stage1'];
+        if (stage1Tab.status !== 'success' || !stage1Tab.revisedScript) {
+            showNotification('1차 분석을 먼저 완료해야 합니다.', 'warning');
+            return;
+        }
+        scriptToAnalyze = stage1Tab.revisedScript;
     }
 
     // 3. 의존성/키 체크
@@ -261,8 +295,28 @@ window.runAnalysisForTab = function (tabId) {
     }
 
     // --- PIPELINE START ---
-    console.log('[PIPELINE] Starting Stage 1...');
-    executePipelineNode('stage1', scriptToAnalyze);
+    console.log('[PIPELINE] Starting Analysis: ' + tabId);
+
+    // [New Feature] 1차 재분석 시 2차 결과 초기화 로직
+    if (tabId === 'stage1') {
+        var stage2Tab = tabStates['stage2'];
+        if (stage2Tab.status !== 'idle') {
+            console.log('[PIPELINE] 1차 재분석으로 인한 2차 결과 초기화');
+            stage2Tab.status = 'idle';
+            stage2Tab.resultText = null;
+            stage2Tab.revisedScript = null;
+            stage2Tab.errorMessage = null;
+            stage2Tab.progress = 0;
+            updateTabUI('stage2');
+            disableTabButton('stage2', true); // 2차 버튼 다시 비활성화
+
+            // 결과창도 초기화
+            var resultSection = document.getElementById('result-section');
+            if (resultSection) resultSection.classList.add('hidden');
+        }
+    }
+
+    executePipelineNode(tabId, scriptToAnalyze);
 };
 
 // 파이프라인 노드 실행 함수
@@ -277,7 +331,10 @@ function executePipelineNode(tabId, inputScript) {
     tab.errorMessage = null;
 
     updateTabUI(tabId);
-    if (tabId === 'stage1') disableTabButton('stage1', true); // 1차 버튼 비활성
+    disableTabButton(tabId, true); // 실행 중 버튼 비활성
+
+    // [UX Improvement] 분석 시작 시 결과창에 '진행 중' 표시
+    selectAnalysisTab(tabId);
 
     // 진행도 시뮬레이션
     updateTabProgress(tabId, 10);
@@ -315,31 +372,29 @@ function executePipelineNode(tabId, inputScript) {
                 selectAnalysisTab(tabId);
                 showNotification(tab.title + ' 완료', 'success');
 
-                // --- PIPELINE CHAINING ---
+                // --- PIPELINE LOGIC UPDATE (Manual Trigger) ---
                 if (tabId === 'stage1') {
-                    // 1차 완료 -> 2차 자동 시작
-                    console.log('[PIPELINE] Stage 1 Complete. Triggering Stage 2...');
+                    // [Change] 1차 완료 시 2차 자동 실행 제거 -> 2차 버튼 활성화
+                    console.log('[PIPELINE] Stage 1 Complete. Enabling Stage 2 Button.');
 
-                    // 1.5초 딜레이 후 2차 시작 (사용자가 1차 완료를 인지할 시간)
-                    setTimeout(function () {
-                        // 2차 탭으로 이동
-                        selectAnalysisTab('stage2');
-                        // 2차 실행 (입력: 1차 수정본)
-                        executePipelineNode('stage2', tab.revisedScript);
-                    }, 1500);
+                    disableTabButton('stage1', false); // 1차 버튼 다시 활성화 (재분석 가능)
+
+                    // 2차 버튼 활성화 (이제 클릭 가능)
+                    disableTabButton('stage2', false);
+                    showNotification('1차 분석 완료. 2차 분석을 시작할 수 있습니다.', 'info');
+
                 } else if (tabId === 'stage2') {
-                    // 2차 완료 -> 최종 종료
-                    console.log('[PIPELINE] All Stages Complete.');
+                    // 2차 완료
+                    console.log('[PIPELINE] Stage 2 Complete.');
                     showNotification('모든 분석이 완료되었습니다.', 'success');
-                    // 1차 버튼 다시 활성화
-                    disableTabButton('stage1', false);
+                    disableTabButton('stage2', false); // 2차 버튼 다시 활성화 (재분석 가능)
                 }
 
             })
             .catch(function (error) {
                 handleAnalysisError(tabId, error);
-                // 실패 시 1차 버튼 활성화
-                disableTabButton('stage1', false);
+                // 실패 시 버튼 다시 활성화
+                disableTabButton(tabId, false);
             });
 
     }, 500);
@@ -561,58 +616,3 @@ function initApiKeyUI() {
     if (del) del.addEventListener('click', function () {
         localStorage.removeItem('GEMINI_API_KEY');
         status.textContent = 'API 키 설정';
-        icon.textContent = '🔑';
-        panel.classList.add('hidden');
-    });
-}
-
-function initScriptButtons() {
-    var sample = document.getElementById('korea-senior-sample-btn');
-    var clear = document.getElementById('korea-senior-clear-btn');
-    var text = document.getElementById('korea-senior-script');
-
-    if (sample && text) {
-        sample.addEventListener('click', function () {
-            text.value = '[제 1회 드라마 대본 / 씬1]\n\n나레이션:\n1995년 여름, 서울 강남의 한 아파트 단지.\n오랜만에 가족들이 한자리에 모였다.\n\n[씬 1. 서울 강남 아파트 거실 / 낮]\n\n(거실. 소파에 앉아 있는 할머니(75세, 김순자)와 손녀(20세, 이지은))\n\n지은: 할머니, 오늘 날씨 정말 좋죠?\n순자: 그러게. 이렇게 맑은 날은 오랜만이야.\n\n나레이션:\n두 사람은 따뜻한 햇살 아래에서 옛 이야기를 나누기 시작했다.';
-            text.dispatchEvent(new Event('input'));
-        });
-    }
-    if (clear && text) {
-        clear.addEventListener('click', function () { text.value = ''; text.dispatchEvent(new Event('input')); });
-    }
-}
-
-function initDownloadButton() {
-    var btn = document.getElementById('download-revised-btn');
-    if (!btn) return;
-    btn.addEventListener('click', function () {
-        var id = window.AppState.currentSelectedTab;
-        if (!id) return;
-        var tab = tabStates[id];
-        if (tab && tab.revisedScript) {
-            var blob = new Blob([tab.revisedScript], { type: 'text/plain;charset=utf-8' });
-            var url = URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = tab.title.replace(/\s/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.txt';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-        }
-    });
-}
-
-function updateDownloadButtonState(tabId) {
-    var btn = document.getElementById('download-revised-btn');
-    var tab = tabStates[tabId];
-    if (btn && tab) btn.disabled = !(tab.status === 'success' && tab.revisedScript);
-}
-
-document.addEventListener('DOMContentLoaded', function () {
-    console.log('[BOOT] DOMContentLoaded');
-    initDarkMode();
-    initApiKeyUI();
-    initScriptButtons();
-    initFileUpload();
-    initDownloadButton();
-});
