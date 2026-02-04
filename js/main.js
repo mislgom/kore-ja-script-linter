@@ -1,13 +1,13 @@
 /** ======================================================
  * KORE-JA SCRIPT LINTER - MAIN.JS
- * 2-Stage Pipeline Analysis System v3.4
- * Features: TSV Table + Diff Highlight + Drag Fix
+ * 2-Stage Pipeline Analysis System v3.5
+ * Features: New Table Columns + Full Script Diff
  * ====================================================== */
 
-console.log('🚀 main.js v3.4 로드됨');
+console.log('🚀 main.js v3.5 로드됨');
 
 // ========== 전역 상태 ==========
-const tabStates = {
+var tabStates = {
     stage1: {
         originalScript: '',
         revisedScript: '',
@@ -24,7 +24,7 @@ const tabStates = {
     }
 };
 
-let currentFileName = 'script';
+var currentFileName = 'script';
 
 // ========== 초기화 ==========
 document.addEventListener('DOMContentLoaded', function() {
@@ -49,24 +49,24 @@ function initializeApp() {
 
 // ========== 다크모드 ==========
 function initDarkMode() {
-    const toggle = document.getElementById('dark-mode-toggle');
+    var toggle = document.getElementById('dark-mode-toggle');
     if (!toggle) return;
     
-    const isDark = localStorage.getItem('darkMode') === 'true';
+    var isDark = localStorage.getItem('darkMode') === 'true';
     if (isDark) {
         document.documentElement.classList.add('dark');
     }
     updateDarkModeIcon(isDark);
     
     toggle.addEventListener('click', function() {
-        const nowDark = document.documentElement.classList.toggle('dark');
+        var nowDark = document.documentElement.classList.toggle('dark');
         localStorage.setItem('darkMode', nowDark);
         updateDarkModeIcon(nowDark);
     });
 }
 
 function updateDarkModeIcon(isDark) {
-    const icon = document.querySelector('#dark-mode-toggle i');
+    var icon = document.querySelector('#dark-mode-toggle i');
     if (icon) {
         icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
     }
@@ -74,17 +74,17 @@ function updateDarkModeIcon(isDark) {
 
 // ========== API 키 관리 ==========
 function initApiKeyPanel() {
-    const toggleBtn = document.getElementById('api-key-toggle-btn');
-    const panel = document.getElementById('api-key-panel');
-    const closeBtn = document.getElementById('api-key-close-btn');
-    const saveBtn = document.getElementById('api-key-save-btn');
-    const deleteBtn = document.getElementById('api-key-delete-btn');
-    const input = document.getElementById('api-key-input');
-    const statusText = document.getElementById('api-key-status-text');
-    const statusIcon = document.getElementById('api-key-status-icon');
+    var toggleBtn = document.getElementById('api-key-toggle-btn');
+    var panel = document.getElementById('api-key-panel');
+    var closeBtn = document.getElementById('api-key-close-btn');
+    var saveBtn = document.getElementById('api-key-save-btn');
+    var deleteBtn = document.getElementById('api-key-delete-btn');
+    var input = document.getElementById('api-key-input');
+    var statusText = document.getElementById('api-key-status-text');
+    var statusIcon = document.getElementById('api-key-status-icon');
     
     function updateApiKeyStatus() {
-        const hasKey = localStorage.getItem('GEMINI_API_KEY');
+        var hasKey = localStorage.getItem('GEMINI_API_KEY');
         if (statusText) {
             statusText.textContent = hasKey ? 'API 키 설정됨' : 'API 키 설정';
         }
@@ -113,7 +113,7 @@ function initApiKeyPanel() {
     
     if (saveBtn && input) {
         saveBtn.addEventListener('click', function() {
-            const key = input.value.trim();
+            var key = input.value.trim();
             if (key) {
                 localStorage.setItem('GEMINI_API_KEY', key);
                 alert('API 키가 저장되었습니다.');
@@ -143,9 +143,9 @@ function initApiKeyPanel() {
 
 // ========== 텍스트 영역 ==========
 function initTextarea() {
-    const sampleBtn = document.getElementById('korea-senior-sample-btn');
-    const clearBtn = document.getElementById('korea-senior-clear-btn');
-    const textarea = document.getElementById('korea-senior-script');
+    var sampleBtn = document.getElementById('korea-senior-sample-btn');
+    var clearBtn = document.getElementById('korea-senior-clear-btn');
+    var textarea = document.getElementById('korea-senior-script');
     
     if (sampleBtn) {
         sampleBtn.addEventListener('click', loadSampleScript);
@@ -160,34 +160,26 @@ function initTextarea() {
 }
 
 function loadSampleScript() {
-    const textarea = document.getElementById('korea-senior-script');
+    var textarea = document.getElementById('korea-senior-script');
     if (!textarea) return;
     
-    const sample = `[낭독 대본 - 따뜻한 겨울 이야기]
-
-제1장: 첫 만남
-
-찾아와 주셔서 고맙습니다.
-오늘은 제가 겪었던 특별한 겨울 이야기를 들려드릴게요.
-
-그해 겨울은 유난히 추웠습니다.
-눈이 펑펑 내리는 어느 날, 저는 작은 카페에서 따뜻한 코코아를 마시고 있었어요.
-
-[※ 테스트용 의도적 오류 삽입]
-그때 문이 열리며 한 할머니께서 들어오셨습니다.
-할머니는 추위에 떨고 계셨고, 저는 자리를 양보해 드렸습니다.
-
-"고마워요, 젊은이."
-할머니의 미소가 참 따뜻했습니다.
-
-우리는 그렇게 처음 만낫습니다.
-서로의 이야기를 나누며, 시간 가는 줄 몰랐어요.
-
-할머니께서는 옛날 이야기를 들려주셨습니다.
-전쟁 때 헤어진 가족을 찾아 평생을 헤맸다고 하셨어요.
-
-저는 그 이야기에 깊이 감동받았습니다.
-인생이란 참으로 기구하기도 하고, 아름답기도 하다는 걸 깨달았어요.`;
+    var sample = '[낭독 대본 - 따뜻한 겨울 이야기]\n\n' +
+        '제1장: 첫 만남\n\n' +
+        '찾아와 주셔서 고맙습니다.\n' +
+        '오늘은 제가 겪었던 특별한 겨울 이야기를 들려드릴게요.\n\n' +
+        '그해 겨울은 유난히 추웠습니다.\n' +
+        '눈이 펑펑 내리는 어느 날, 저는 작은 카페에서 따뜻한 코코아를 마시고 있었어요.\n\n' +
+        '[※ 테스트용 의도적 오류 삽입]\n' +
+        '그때 문이 열리며 한 할머니께서 들어오셨습니다.\n' +
+        '할머니는 추위에 떨고 계셨고, 저는 자리를 양보해 드렸습니다.\n\n' +
+        '"고마워요, 젊은이."\n' +
+        '할머니의 미소가 참 따뜻했습니다.\n\n' +
+        '우리는 그렇게 처음 만낫습니다.\n' +
+        '서로의 이야기를 나누며, 시간 가는 줄 몰랐어요.\n\n' +
+        '할머니께서는 옛날 이야기를 들려주셨습니다.\n' +
+        '전쟁 때 헤어진 가족을 찾아 평생을 헤맸다고 하셨어요.\n\n' +
+        '저는 그 이야기에 깊이 감동받았습니다.\n' +
+        '인생이란 참으로 기구하기도 하고, 아름답기도 하다는 걸 깨달았어요.';
 
     textarea.value = sample;
     updateCharCounter();
@@ -196,9 +188,9 @@ function loadSampleScript() {
 
 // ========== 파일 업로드 ==========
 function initFileUpload() {
-    const uploadBtn = document.getElementById('btn-upload-file');
-    const fileInput = document.getElementById('file-upload-input');
-    const textarea = document.getElementById('korea-senior-script');
+    var uploadBtn = document.getElementById('btn-upload-file');
+    var fileInput = document.getElementById('file-upload-input');
+    var textarea = document.getElementById('korea-senior-script');
     
     if (uploadBtn && fileInput) {
         uploadBtn.addEventListener('click', function() {
@@ -206,10 +198,10 @@ function initFileUpload() {
         });
         
         fileInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
+            var file = e.target.files[0];
             if (file && textarea) {
                 currentFileName = file.name.replace(/\.txt$/i, '');
-                const reader = new FileReader();
+                var reader = new FileReader();
                 reader.onload = function(event) {
                     textarea.value = event.target.result;
                     updateCharCounter();
@@ -223,7 +215,7 @@ function initFileUpload() {
 
 // ========== 글자 수 카운터 ==========
 function initCharCounter() {
-    const textarea = document.getElementById('korea-senior-script');
+    var textarea = document.getElementById('korea-senior-script');
     if (textarea) {
         textarea.addEventListener('input', updateCharCounter);
         updateCharCounter();
@@ -231,8 +223,8 @@ function initCharCounter() {
 }
 
 function updateCharCounter() {
-    const textarea = document.getElementById('korea-senior-script');
-    const counter = document.getElementById('korea-char-counter');
+    var textarea = document.getElementById('korea-senior-script');
+    var counter = document.getElementById('korea-char-counter');
     if (textarea && counter) {
         counter.textContent = textarea.value.length + '자 / 무제한';
     }
@@ -240,24 +232,21 @@ function updateCharCounter() {
 
 // ========== 드래그 앤 드롭 ==========
 function initDragAndDrop() {
-    const dropZone = document.getElementById('drop-zone');
-    const dropOverlay = document.getElementById('drop-overlay');
-    const textarea = document.getElementById('korea-senior-script');
+    var dropZone = document.getElementById('drop-zone');
+    var dropOverlay = document.getElementById('drop-overlay');
+    var textarea = document.getElementById('korea-senior-script');
     
     if (!dropZone || !textarea) {
-        console.warn('⚠️ 드래그 앤 드롭: drop-zone 또는 textarea를 찾을 수 없음');
+        console.warn('⚠️ 드래그 앤 드롭: 요소를 찾을 수 없음');
         return;
     }
     
     console.log('✅ 드래그 앤 드롭 초기화됨');
     
     function handleFile(file) {
-        if (!file) {
-            console.warn('⚠️ 파일 없음');
-            return;
-        }
+        if (!file) return;
         
-        console.log('📁 파일 감지:', file.name, '타입:', file.type);
+        console.log('📁 파일 감지:', file.name);
         
         var isTextFile = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt');
         
@@ -269,13 +258,9 @@ function initDragAndDrop() {
                 updateCharCounter();
                 console.log('📂 드래그 파일 로드 완료:', file.name);
             };
-            reader.onerror = function() {
-                console.error('❌ 파일 읽기 실패');
-                alert('파일을 읽는 중 오류가 발생했습니다.');
-            };
             reader.readAsText(file, 'UTF-8');
         } else {
-            alert('텍스트 파일(.txt)만 지원합니다.\n파일: ' + file.name);
+            alert('텍스트 파일(.txt)만 지원합니다.');
         }
     }
     
@@ -295,9 +280,7 @@ function initDragAndDrop() {
         e.preventDefault();
         e.stopPropagation();
         if (dropOverlay) dropOverlay.classList.add('hidden');
-        
-        var file = e.dataTransfer.files[0];
-        handleFile(file);
+        handleFile(e.dataTransfer.files[0]);
     });
     
     textarea.addEventListener('dragover', function(e) {
@@ -308,16 +291,14 @@ function initDragAndDrop() {
     textarea.addEventListener('drop', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        
-        var file = e.dataTransfer.files[0];
-        handleFile(file);
+        handleFile(e.dataTransfer.files[0]);
     });
 }
 
 // ========== 분석 버튼 ==========
 function initAnalysisButtons() {
-    const btn1 = document.getElementById('btn-stage1');
-    const btn2 = document.getElementById('btn-stage2');
+    var btn1 = document.getElementById('btn-stage1');
+    var btn2 = document.getElementById('btn-stage2');
     
     if (btn1) {
         btn1.addEventListener('click', function() {
@@ -475,25 +456,35 @@ function generatePrompt(stage, script) {
             '1. 맞춤법/문법 오류\n' +
             '2. 어색한 표현/문장\n' +
             '3. 시니어 낭독에 부적절한 표현\n' +
-            '4. 문장 흐름/연결 문제\n' +
-            '5. 기타 개선 필요 사항\n\n' +
+            '4. 문장 흐름/연결 문제\n\n' +
             '## 출력 형식 (반드시 JSON으로만 응답):\n' +
-            '{"analysis": "번호\\t유형\\t위치\\t변경 내용\\t검수 포인트\\n1\\t맞춤법\\t15번째 줄\\t원문 → 수정문\\t설명", "revised": "수정된 전체 대본"}\n\n' +
+            '{\n' +
+            '  "analysis": "번호\\t유형\\t오류 대본\\t변경 대본\\t검수 포인트\\n1\\t맞춤법\\t만낫습니다\\t만났습니다\\t받침 오류 수정",\n' +
+            '  "revised": "전체 수정된 대본 내용"\n' +
+            '}\n\n' +
             '## 중요 규칙:\n' +
-            '1. analysis: TSV 형식, 최대 10개 항목\n' +
-            '2. revised: 수정사항 반영한 전체 대본\n' +
-            '3. 반드시 완전한 JSON으로 응답 마무리\n' +
-            '4. JSON 외 다른 텍스트 금지';
+            '1. analysis: TSV 형식 (탭으로 구분)\n' +
+            '   - 번호: 순번\n' +
+            '   - 유형: 맞춤법/표현/흐름 등\n' +
+            '   - 오류 대본: 원본에서 문제가 있는 부분 (해당 문장이나 구절)\n' +
+            '   - 변경 대본: 수정된 내용\n' +
+            '   - 검수 포인트: 수정 이유 설명\n' +
+            '2. revised: 모든 오류를 수정한 전체 대본\n' +
+            '3. 최대 10개 항목까지만 작성\n' +
+            '4. 반드시 완전한 JSON으로 응답 마무리\n' +
+            '5. JSON 외 다른 텍스트 금지';
     } else {
         return '당신은 한국 시니어 낭독용 대본 2차 심화 검수 전문가입니다.\n\n' +
             '## 1차 검수 완료된 대본:\n' + script + '\n\n' +
             '## 2차 검수 항목:\n' +
             '1. 1차에서 놓친 오류\n' +
             '2. 문장 자연스러움\n' +
-            '3. 시니어 표현 최적화\n' +
-            '4. 전체 흐름과 완성도\n\n' +
+            '3. 시니어 표현 최적화\n\n' +
             '## 출력 형식 (반드시 JSON으로만 응답):\n' +
-            '{"analysis": "번호\\t유형\\t위치\\t변경 내용\\t검수 포인트\\n1\\t표현\\t5번째 줄\\t원문 → 수정문\\t설명", "revised": "최종 수정 대본"}\n\n' +
+            '{\n' +
+            '  "analysis": "번호\\t유형\\t오류 대본\\t변경 대본\\t검수 포인트\\n1\\t표현\\t원본 문장\\t수정 문장\\t설명",\n' +
+            '  "revised": "최종 수정 대본"\n' +
+            '}\n\n' +
             '## 중요 규칙:\n' +
             '1. 반드시 완전한 JSON으로 응답\n' +
             '2. JSON 외 다른 텍스트 금지';
@@ -616,30 +607,28 @@ function renderResults(stage, result) {
         tabStates.stage2.revisedScript = parsed.revised;
     }
     
+    // 좌측: 분석 결과 표
     var tableContainer = document.getElementById('result-table-' + stage);
     if (tableContainer) {
         tableContainer.innerHTML = renderAnalysisTable(parsed.analysis, parsed.parseError);
     }
     
+    // 우측: 전체 대본 + 수정된 부분만 하이라이트
     var revisedContainer = document.getElementById('revised-' + stage);
     if (revisedContainer) {
         var original = stage === 'stage1' ? tabStates.stage1.originalScript : tabStates.stage1.revisedScript;
         var revised = parsed.revised;
         
-        if (revised && revised.trim() !== (original ? original.trim() : '')) {
-            revisedContainer.innerHTML = renderDiffHighlight(original, revised);
-            console.log('✅ 차이점 하이라이트 적용됨');
-        } else if (revised) {
-            revisedContainer.innerHTML = '<div class="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg">' +
-                '<p class="text-yellow-700 dark:text-yellow-300 font-medium mb-2 text-sm">⚠️ 수정사항 없음</p>' +
-                '<pre class="whitespace-pre-wrap text-gray-700 dark:text-gray-300 text-sm">' + escapeHtml(revised) + '</pre></div>';
+        if (revised) {
+            revisedContainer.innerHTML = renderFullScriptWithHighlight(original, revised);
+            console.log('✅ 전체 대본 + 하이라이트 적용됨');
         } else {
             revisedContainer.innerHTML = '<div class="p-4 text-gray-500 text-center"><i class="fas fa-info-circle mr-2"></i>수정본이 생성되지 않았습니다.</div>';
         }
     }
 }
 
-// ========== 분석 결과 테이블 렌더링 ==========
+// ========== 분석 결과 테이블 렌더링 (새 컬럼) ==========
 function renderAnalysisTable(analysisText, isParseError) {
     if (!analysisText || typeof analysisText !== 'string') {
         return '<div class="p-4 text-gray-400 text-center"><i class="fas fa-info-circle mr-2"></i>분석 결과가 없습니다.</div>';
@@ -655,7 +644,7 @@ function renderAnalysisTable(analysisText, isParseError) {
     var lines = text.trim().split('\n').filter(function(line) { return line.trim(); });
     
     if (lines.length === 0) {
-        return '<div class="p-4 text-gray-400 text-center"><i class="fas fa-check-circle mr-2 text-green-400"></i>분석 결과가 없습니다.</div>';
+        return '<div class="p-4 text-gray-400 text-center"><i class="fas fa-check-circle mr-2 text-green-400"></i>수정이 필요한 항목이 없습니다.</div>';
     }
     
     var hasTabs = lines.some(function(line) { return line.indexOf('\t') !== -1; });
@@ -664,12 +653,13 @@ function renderAnalysisTable(analysisText, isParseError) {
         return '<div class="p-3"><pre class="whitespace-pre-wrap text-sm text-gray-300">' + escapeHtml(text) + '</pre></div>';
     }
     
+    // 새 컬럼: 번호 | 유형 | 오류 대본 | 변경 대본 | 검수 포인트
     var html = '<div class="overflow-x-auto p-2"><table class="w-full text-xs border-collapse">' +
         '<thead><tr class="bg-gray-700">' +
-        '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">번호</th>' +
-        '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">유형</th>' +
-        '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">위치</th>' +
-        '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">변경 내용</th>' +
+        '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200 w-12">번호</th>' +
+        '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200 w-16">유형</th>' +
+        '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">오류 대본</th>' +
+        '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">변경 대본</th>' +
         '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">검수 포인트</th>' +
         '</tr></thead><tbody>';
     
@@ -684,10 +674,18 @@ function renderAnalysisTable(analysisText, isParseError) {
         
         rowCount++;
         html += '<tr class="hover:bg-gray-700/50">';
-        for (var j = 0; j < 5; j++) {
-            var cellContent = (cols[j] || '').trim();
-            html += '<td class="border border-gray-600 px-2 py-1.5 text-gray-300">' + escapeHtml(cellContent) + '</td>';
-        }
+        
+        // 번호
+        html += '<td class="border border-gray-600 px-2 py-1.5 text-gray-300 text-center">' + escapeHtml(cols[0] || '') + '</td>';
+        // 유형
+        html += '<td class="border border-gray-600 px-2 py-1.5 text-gray-300">' + escapeHtml(cols[1] || '') + '</td>';
+        // 오류 대본 (빨간색 배경)
+        html += '<td class="border border-gray-600 px-2 py-1.5 bg-red-900/30 text-red-300">' + escapeHtml(cols[2] || '') + '</td>';
+        // 변경 대본 (초록색 배경)
+        html += '<td class="border border-gray-600 px-2 py-1.5 bg-green-900/30 text-green-300">' + escapeHtml(cols[3] || '') + '</td>';
+        // 검수 포인트
+        html += '<td class="border border-gray-600 px-2 py-1.5 text-gray-300">' + escapeHtml(cols[4] || '') + '</td>';
+        
         html += '</tr>';
     }
     
@@ -700,36 +698,47 @@ function renderAnalysisTable(analysisText, isParseError) {
     return html;
 }
 
-// ========== Diff 하이라이트 렌더링 ==========
-function renderDiffHighlight(original, revised) {
-    if (!original || !revised) {
-        return '<div class="p-4 text-gray-500">비교할 텍스트가 없습니다.</div>';
+// ========== 전체 대본 + 수정된 부분만 하이라이트 ==========
+function renderFullScriptWithHighlight(original, revised) {
+    if (!revised) {
+        return '<div class="p-4 text-gray-500">수정본이 없습니다.</div>';
+    }
+    
+    if (!original) {
+        // 원본이 없으면 전체 수정본 표시
+        return '<div class="p-3 text-sm"><pre class="whitespace-pre-wrap text-gray-700 dark:text-gray-300">' + escapeHtml(revised) + '</pre></div>';
     }
     
     var originalLines = original.split('\n');
     var revisedLines = revised.split('\n');
     
-    var html = '<div class="p-3 space-y-0.5 text-sm">';
-    var maxLines = Math.max(originalLines.length, revisedLines.length);
     var changeCount = 0;
+    var html = '<div class="p-3 space-y-0.5 text-sm">';
+    
+    var maxLines = Math.max(originalLines.length, revisedLines.length);
     
     for (var i = 0; i < maxLines; i++) {
-        var origLine = (originalLines[i] || '').trim();
-        var revLine = (revisedLines[i] || '').trim();
+        var origLine = originalLines[i] || '';
+        var revLine = revisedLines[i] || '';
         
-        if (origLine !== revLine) {
+        // 원본과 수정본이 다르면 하이라이트
+        if (origLine.trim() !== revLine.trim()) {
             changeCount++;
-            html += '<div class="bg-green-50 dark:bg-green-900/30 border-l-4 border-green-400 pl-3 py-1 rounded-r">' +
-                '<span class="text-green-800 dark:text-green-300">' + (escapeHtml(revisedLines[i] || '') || '<span class="italic text-green-600">(삭제됨)</span>') + '</span></div>';
+            html += '<div class="bg-green-100 dark:bg-green-900/40 border-l-4 border-green-500 pl-3 py-1 rounded-r">' +
+                '<span class="text-green-800 dark:text-green-200">' + escapeHtml(revLine) + '</span></div>';
         } else {
-            html += '<div class="pl-4 py-0.5"><span class="text-gray-700 dark:text-gray-300">' + escapeHtml(revisedLines[i] || '') + '</span></div>';
+            // 동일한 라인은 일반 표시
+            html += '<div class="pl-4 py-0.5">' +
+                '<span class="text-gray-700 dark:text-gray-300">' + escapeHtml(revLine) + '</span></div>';
         }
     }
     
     html += '</div>';
     
-    var summary = '<div class="bg-blue-50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-700 px-3 py-2">' +
-        '<span class="text-blue-700 dark:text-blue-300 text-sm font-medium"><i class="fas fa-edit mr-2"></i>총 ' + changeCount + '개 라인 수정됨</span></div>';
+    // 상단 요약
+    var summary = '<div class="bg-blue-50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-700 px-3 py-2 sticky top-0">' +
+        '<span class="text-blue-700 dark:text-blue-300 text-sm font-medium">' +
+        '<i class="fas fa-edit mr-2"></i>총 ' + changeCount + '개 라인 수정됨 (연한 초록색 = 수정된 부분)</span></div>';
     
     return summary + html;
 }
@@ -780,4 +789,4 @@ window.__MAIN_JS_LOADED__ = true;
 window.MAIN_JS_LOADED = true;
 window.tabStates = tabStates;
 
-console.log('✅ main.js v3.4 초기화 준비 완료');
+console.log('✅ main.js v3.5 초기화 준비 완료');
