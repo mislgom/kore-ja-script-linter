@@ -93,7 +93,7 @@
                         </div>
                     </div>
 
-                    <!-- 다크모드 대형화 -->
+                    <!-- 다크모드 -->
                     <button id="dark-mode-toggle"
                         class="w-9 h-9 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors text-yellow-400"
                         title="다크모드 전환">
@@ -115,9 +115,7 @@
                         대본 입력
                     </h2>
                     <div class="flex space-x-2">
-                        <!-- 파일 업로드 (숨김) -->
                         <input type="file" id="file-upload-input" accept=".txt,text/plain" class="hidden" />
-
                         <button id="btn-upload-file"
                             class="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white text-xs rounded-lg transition-colors shadow-sm">
                             <i class="fas fa-folder-open mr-1"></i> PC에서 불러오기
@@ -133,15 +131,13 @@
                     </div>
                 </div>
 
-                <!-- Dropzone 영역 (textarea 감싸기) -->
+                <!-- Dropzone 영역 -->
                 <div id="drop-zone" class="relative group">
-                    <!-- 드래그 오버 시 표시될 오버레이 -->
                     <div id="drop-overlay"
                         class="absolute inset-0 bg-primary/10 border-2 border-primary border-dashed rounded-lg flex flex-col items-center justify-center z-10 hidden pointer-events-none">
                         <i class="fas fa-file-upload text-4xl text-primary mb-2"></i>
                         <p class="text-primary font-semibold">여기에 파일을 놓으세요</p>
                     </div>
-
                     <textarea id="korea-senior-script"
                         class="w-full h-48 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-700 text-gray-800 dark:text-white resize-none transition-colors"
                         placeholder="대본을 직접 입력하거나 TXT 파일을 드래그하여 놓으세요..."></textarea>
@@ -156,126 +152,118 @@
                 </div>
             </div>
 
-            <!-- AI 분석 탭 카드 (2개 파이프라인) -->
+            <!-- 1차 분석 버튼 -->
             <div class="mb-4">
-                <h3 class="font-semibold text-gray-800 dark:text-white flex items-center text-sm mb-3">
-                    <i class="fas fa-brain text-indigo-500 mr-2"></i>
-                    AI 분석
-                    <span
-                        class="ml-2 text-[10px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full dark:bg-indigo-900 dark:text-indigo-300">
-                        2-Stage Pipeline (Manual)
-                    </span>
-                </h3>
-
-                <!-- 2개 탭 그리드 -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="analysis-tabs-container">
-                    <!-- 탭 1: 1차 분석 (기본) -->
-                    <div class="tab-card bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all cursor-pointer"
-                        data-tab-id="stage1" onclick="selectAnalysisTab('stage1')">
-                        <div class="flex items-center justify-between mb-3">
-                            <h4 class="font-semibold text-gray-800 dark:text-white truncate">1차 분석 (기본 점검)</h4>
-                            <span class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full"
-                                id="status-stage1">대기</span>
-                        </div>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3 block">
-                            한국 배경, 인물 설정, 인물 관계 일관성
-                        </p>
-
-                        <!-- 진행도 바 -->
-                        <div class="progress-container hidden mb-3" id="progress-container-stage1">
-                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mb-1">
-                                <div class="progress-bar bg-indigo-600 h-1.5 rounded-full transition-all"
-                                    id="progress-bar-stage1" style="width: 0%"></div>
-                            </div>
-                            <p class="text-xs text-gray-600 dark:text-gray-400 text-right">
-                                <span id="progress-text-stage1">0%</span>
-                            </p>
-                        </div>
-
-                        <button
-                            class="btn-analyze w-full bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-                            data-tab-id="stage1" onclick="event.stopPropagation(); runAnalysisForTab('stage1')">
-                            <i class="fas fa-play mr-2"></i> 1차 분석 시작 (다시 분석)
-                        </button>
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="font-semibold text-gray-800 dark:text-white flex items-center text-sm">
+                        <i class="fas fa-search text-blue-500 mr-2"></i>
+                        1차 분석 (기본 점검)
+                        <span id="status-stage1" class="ml-2 status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">대기</span>
+                    </h3>
+                    <button id="btn-stage1"
+                        class="btn-analyze px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm rounded-lg transition-colors shadow-sm"
+                        data-tab-id="stage1">
+                        <i class="fas fa-play mr-1"></i> 1차 분석 시작
+                    </button>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">한국 배경, 인물 설정, 인물 관계 일관성 검수</p>
+                
+                <!-- 1차 진행률 -->
+                <div class="progress-container hidden mb-3" id="progress-container-stage1">
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mb-1">
+                        <div class="progress-bar bg-indigo-600 h-1.5 rounded-full transition-all" id="progress-bar-stage1" style="width: 0%"></div>
                     </div>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 text-right"><span id="progress-text-stage1">0%</span></p>
+                </div>
 
-                    <!-- 탭 2: 2차 분석 (심화) -->
-                    <div class="tab-card bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all cursor-pointer"
-                        data-tab-id="stage2" onclick="selectAnalysisTab('stage2')">
-                        <div class="flex items-center justify-between mb-3">
-                            <h4 class="font-semibold text-gray-800 dark:text-white truncate">2차 분석 (심화 점검)</h4>
-                            <span class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full"
-                                id="status-stage2">대기</span>
-                        </div>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3 block">
-                            이야기 흐름 왜곡, 재미/몰입 요소 (수동 실행)
-                        </p>
-
-                        <div class="progress-container hidden mb-3" id="progress-container-stage2">
-                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mb-1">
-                                <div class="progress-bar bg-indigo-600 h-1.5 rounded-full transition-all"
-                                    id="progress-bar-stage2" style="width: 0%"></div>
+                <!-- 1차 분석 결과 (2칸) -->
+                <div id="result-stage1" class="hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        <!-- 좌측: 1차 분석 결과 표 -->
+                        <div class="bg-gray-900 rounded-lg border border-gray-700 p-3 h-[40vh] flex flex-col">
+                            <h4 class="font-semibold text-white mb-2 flex items-center text-sm shrink-0">
+                                <i class="fas fa-table text-blue-400 mr-2"></i>
+                                1차 분석 결과
+                            </h4>
+                            <div id="result-table-stage1" class="text-sm text-gray-300 overflow-y-auto flex-1 pr-2">
+                                <p class="text-gray-500">분석 대기 중</p>
                             </div>
-                            <p class="text-xs text-gray-600 dark:text-gray-400 text-right">
-                                <span id="progress-text-stage2">0%</span>
-                            </p>
                         </div>
-
-                        <button
-                            class="btn-analyze w-full bg-gray-400 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-not-allowed"
-                            disabled data-tab-id="stage2"
-                            onclick="event.stopPropagation(); runAnalysisForTab('stage2')">
-                            <i class="fas fa-play mr-2"></i> 2차 분석 시작 (다시 분석)
-                        </button>
+                        <!-- 우측: 1차 수정 반영 -->
+                        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 h-[40vh] flex flex-col">
+                            <h4 class="font-semibold text-gray-800 dark:text-white mb-2 flex items-center text-sm shrink-0">
+                                <i class="fas fa-edit text-green-500 mr-2"></i>
+                                1차 수정 반영
+                            </h4>
+                            <div id="revised-stage1" class="text-sm text-gray-700 dark:text-gray-300 overflow-y-auto flex-1 pr-2">
+                                <p class="text-gray-500">분석 대기 중</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- 하단 2컬럼 결과 표시 영역 (뷰포트 높이 기반 확장) -->
-            <div id="result-section" class="hidden border-t border-gray-200 dark:border-gray-700 pt-3 mt-3">
-                <h3 id="result-title" class="font-semibold text-gray-800 dark:text-white mb-2 text-sm">
-                    분석 결과
-                </h3>
+            <!-- 구분선 -->
+            <hr class="border-gray-200 dark:border-gray-700 my-4">
 
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 h-[70vh]">
-                    <!-- 왼쪽: 분석 결과 -->
-                    <div class="result-column h-full">
-                        <div
-                            class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 h-full flex flex-col">
-                            <h4
-                                class="font-semibold text-gray-800 dark:text-white mb-2 flex items-center text-sm shrink-0">
-                                <i class="fas fa-clipboard-list text-indigo-500 mr-2"></i>
-                                분석 결과 (오류 강조)
+            <!-- 2차 분석 버튼 -->
+            <div class="mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="font-semibold text-gray-800 dark:text-white flex items-center text-sm">
+                        <i class="fas fa-search-plus text-purple-500 mr-2"></i>
+                        2차 분석 (심화 점검)
+                        <span id="status-stage2" class="ml-2 status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">대기</span>
+                    </h3>
+                    <button id="btn-stage2"
+                        class="btn-analyze px-4 py-2 bg-gray-400 text-white text-sm rounded-lg cursor-not-allowed"
+                        data-tab-id="stage2" disabled>
+                        <i class="fas fa-play mr-1"></i> 2차 분석 시작
+                    </button>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">이야기 흐름 왜곡, 재미/몰입 요소 검수 (1차 완료 후 실행 가능)</p>
+
+                <!-- 2차 진행률 -->
+                <div class="progress-container hidden mb-3" id="progress-container-stage2">
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mb-1">
+                        <div class="progress-bar bg-purple-600 h-1.5 rounded-full transition-all" id="progress-bar-stage2" style="width: 0%"></div>
+                    </div>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 text-right"><span id="progress-text-stage2">0%</span></p>
+                </div>
+
+                <!-- 2차 분석 결과 (2칸) -->
+                <div id="result-stage2" class="hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        <!-- 좌측: 2차 분석 결과 표 -->
+                        <div class="bg-gray-900 rounded-lg border border-gray-700 p-3 h-[40vh] flex flex-col">
+                            <h4 class="font-semibold text-white mb-2 flex items-center text-sm shrink-0">
+                                <i class="fas fa-table text-purple-400 mr-2"></i>
+                                2차 분석 결과
                             </h4>
-                            <div id="result-text"
-                                class="result-content text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-y-auto flex-1 h-full pr-2">
-                                <p class="text-gray-500 dark:text-gray-400">탭을 선택하고 AI 분석을 시작해주세요.</p>
+                            <div id="result-table-stage2" class="text-sm text-gray-300 overflow-y-auto flex-1 pr-2">
+                                <p class="text-gray-500">분석 대기 중</p>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- 오른쪽: 수정된 대본 -->
-                    <div class="revised-column h-full">
-                        <div
-                            class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 h-full flex flex-col">
+                        <!-- 우측: 최종 수정 반영 + 다운로드 -->
+                        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 h-[40vh] flex flex-col">
                             <div class="flex items-center justify-between mb-2 shrink-0">
                                 <h4 class="font-semibold text-gray-800 dark:text-white flex items-center text-sm">
-                                    <i class="fas fa-file-alt text-green-500 mr-2"></i>
-                                    <span id="revised-title">수정된 대본</span>
+                                    <i class="fas fa-check-circle text-green-500 mr-2"></i>
+                                    최종 수정 대본
                                 </h4>
-                                <button id="download-revised-btn" disabled
-                                    class="px-2 py-1 bg-green-500 hover:bg-green-600 text-white text-[10px] rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                    <i class="fas fa-download mr-1"></i> 저장
+                                <button id="download-revised-btn"
+                                    class="px-3 py-1 bg-green-500 hover:bg-green-600 text-white text-xs rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled>
+                                    <i class="fas fa-download mr-1"></i> 다운로드
                                 </button>
                             </div>
-                            <div id="revised-script"
-                                class="result-content text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-y-auto flex-1 h-full pr-2">
-                                <p class="text-gray-500 dark:text-gray-400">분석 완료 후 수정된 대본이 표시됩니다.</p>
+                            <div id="revised-stage2" class="text-sm text-gray-700 dark:text-gray-300 overflow-y-auto flex-1 pr-2">
+                                <p class="text-gray-500">분석 대기 중</p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+
         </section>
     </main>
 
@@ -283,7 +271,7 @@
     <footer class="bg-dark text-gray-400 mt-2">
         <div class="w-full px-4 py-3">
             <div class="flex flex-col md:flex-row justify-between items-center text-xs">
-                <p>© 2025 대본 검수 시스템. v2.1 (Pipeline)</p>
+                <p>© 2025 대본 검수 시스템. v2.2 (4-Panel Layout)</p>
                 <p class="mt-1 md:mt-0">
                     <i class="fas fa-code mr-1"></i> Built with passion
                 </p>
@@ -291,32 +279,22 @@
         </div>
     </footer>
 
-    <!-- JavaScript - Error Handling Logic -->
+    <!-- JavaScript -->
     <script>
-        // 네트워크 로드 실패(404)와 JS 내부 실행 오류를 엄격히 분리합니다.
-        // 이 함수는 <script onerror="..."> 에서만 호출됩니다.
         function handleNetworkLoadError(url) {
             var msg = '⚠️ 스크립트 파일을 찾을 수 없습니다 (404/Network Error).\n\n대상: ' + url + '\n\n서버 실행 여부와 파일 경로를 확인해주세요.';
             console.error('[FATAL] Network Load Error:', url);
             alert(msg);
         }
     </script>
-
-    <!-- Scripts -->
-    <!-- gemini-api.js 로드 실패 시에만 handleNetworkLoadError 실행 -->
     <script src="./js/gemini-api.js" onerror="handleNetworkLoadError('./js/gemini-api.js')"></script>
-
-    <!-- main.js 로드 실패 시에만 handleNetworkLoadError 실행 -->
     <script src="./js/main.js" onerror="handleNetworkLoadError('./js/main.js')"></script>
-
-    <!-- 검증: 콘솔에만 기록하고 팝업 띄우지 않음 -->
     <script>
         window.addEventListener('load', function () {
             if (window.__MAIN_JS_LOADED__) {
                 console.log('[BOOT] 정상: main.js 로드 및 초기화 완료');
             } else {
-                // 경고 팝업 없음. 단순 콘솔 로그만 남김. (User Request: 오탐 방지)
-                console.warn('[BOOT] 주의: main.js 플래그가 확인되지 않음. (실행 오류일 수 있음, 콘솔 확인 요망)');
+                console.warn('[BOOT] 주의: main.js 플래그가 확인되지 않음.');
             }
         });
     </script>
