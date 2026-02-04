@@ -1,6 +1,7 @@
 /** ======================================================
  * KORE-JA SCRIPT LINTER - MAIN.JS
- * 5 Tabs Independent Analysis System v2.0
+ * 5 Tabs Independent Analysis System v2.1
+ * Features: Drag & Drop, File Upload, Enhanced UI
  * ====================================================== */
 
 // [CRITICAL] main.js 로드 확인 마커 (최상단 필수)
@@ -50,7 +51,7 @@ var ANALYSIS_TABS = [
 
 // 탭 상태 저장소
 var tabStates = {};
-ANALYSIS_TABS.forEach(function (tab) {
+ANALYSIS_TABS.forEach(function(tab) {
     tabStates[tab.id] = {
         id: tab.id,
         title: tab.title,
@@ -67,7 +68,7 @@ ANALYSIS_TABS.forEach(function (tab) {
 /* ======================================================
    BOOT & ERROR HANDLING
 ====================================================== */
-console.log('[BOOT] main.js loaded - 5 Tabs Independent Analysis System v2.0');
+console.log('[BOOT] main.js loaded - v2.1 (Upload Supported)');
 
 window.addEventListener('error', function (e) {
     console.error('[GLOBAL ERROR]', e.message, e.filename, e.lineno);
@@ -103,13 +104,12 @@ function showNotification(message, type) {
     var color = colors[type] || colors.info;
 
     var notification = document.createElement('div');
-    notification.className = 'fixed top-4 right-4 ' + color + ' text-white px-6 py-3 rounded-lg shadow-lg z-50 max-w-md';
+    notification.className = 'fixed top-4 right-4 ' + color + ' text-white px-4 py-2 rounded-lg shadow-lg z-50 max-w-sm text-sm transition-opacity duration-300';
     notification.textContent = message;
     document.body.appendChild(notification);
 
     setTimeout(function () {
         notification.style.opacity = '0';
-        notification.style.transition = 'opacity 0.3s';
         setTimeout(function () {
             if (notification.parentNode) {
                 document.body.removeChild(notification);
@@ -117,6 +117,91 @@ function showNotification(message, type) {
         }, 300);
     }, 3000);
 }
+
+/* ======================================================
+   FILE UPLOAD & DRAG DROP
+====================================================== */
+function initFileUpload() {
+    var dropZone = document.getElementById('drop-zone');
+    var dropOverlay = document.getElementById('drop-overlay');
+    var fileInput = document.getElementById('file-upload-input');
+    var uploadBtn = document.getElementById('btn-upload-file');
+    var textarea = document.getElementById('korea-senior-script');
+    var charCounter = document.getElementById('korea-char-counter');
+
+    if (!dropZone || !textarea) return;
+
+    // 1. Drag & Drop Events
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(function(eventName) {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    dropZone.addEventListener('dragenter', function() {
+        if(dropOverlay) dropOverlay.classList.remove('hidden');
+        dropZone.classList.add('border-primary');
+    });
+
+    dropZone.addEventListener('dragleave', function(e) {
+        // dragleave가 자식 요소에서 발생할 때 깜빡임 방지
+        if (e.relatedTarget && !dropZone.contains(e.relatedTarget)) {
+            if(dropOverlay) dropOverlay.classList.add('hidden');
+            dropZone.classList.remove('border-primary');
+        }
+    });
+
+    dropZone.addEventListener('drop', function(e) {
+        if(dropOverlay) dropOverlay.classList.add('hidden');
+        dropZone.classList.remove('border-primary');
+
+        var dt = e.dataTransfer;
+        var files = dt.files;
+        handleFiles(files);
+    });
+
+    // 2. Button & File Input Events
+    if (uploadBtn && fileInput) {
+        uploadBtn.addEventListener('click', function() {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', function(e) {
+            handleFiles(this.files);
+            // 같은 파일 다시 선택 가능하게 초기화
+            this.value = '';
+        });
+    }
+
+    // 3. File Processing Logic
+    function handleFiles(files) {
+        if (!files || files.length === 0) return;
+
+        var file = files[0];
+        if (file.type !== 'text/plain' && !file.name.endsWith('.txt')) {
+            showNotification('TXT 파일만 업로드 가능합니다.', 'error');
+            return;
+        }
+
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            textarea.value = e.target.result;
+            // 글자수 업데이트
+            if (charCounter) {
+                charCounter.textContent = textarea.value.length + '자 / 무제한';
+            }
+            showNotification('파일이 로드되었습니다: ' + file.name, 'success');
+        };
+        reader.onerror = function() {
+            showNotification('파일 읽기 실패', 'error');
+        };
+        reader.readAsText(file, 'UTF-8');
+    }
+}
+
 
 /* ======================================================
    PROMPT GENERATION
@@ -206,16 +291,16 @@ ${script}
 /* ======================================================
    TAB ANALYSIS EXECUTION (NO AUTO-RETRY)
 ====================================================== */
-window.runAnalysisForTab = function (tabId) {
+window.runAnalysisForTab = function(tabId) {
     var tab = tabStates[tabId];
-
+    
     // 1. 상태 검증
     if (tab.status === 'running') {
         console.warn('[' + tabId + '] 이미 실행 중입니다.');
         showNotification(tab.title + ' 분석이 이미 실행 중입니다.', 'warning');
         return;
     }
-
+    
     // 2. 대본 확인
     var scriptTextarea = document.getElementById('korea-senior-script');
     if (!scriptTextarea) {
@@ -223,106 +308,106 @@ window.runAnalysisForTab = function (tabId) {
         showNotification('대본 입력 영역을 찾을 수 없습니다.', 'error');
         return;
     }
-
+    
     var script = scriptTextarea.value;
     if (!script.trim()) {
         showNotification('대본을 입력해주세요.', 'warning');
         return;
     }
-
+    
     // 3. 의존성 체크
     if (!checkDependencyBeforeAction('AI 분석')) {
         return;
     }
-
+    
     // 4. API 키 확인
     var apiKey = localStorage.getItem('GEMINI_API_KEY');
     if (!apiKey) {
         showNotification('API 키를 먼저 설정해주세요.', 'warning');
         return;
     }
-
+    
     // 5. 상태 초기화
     tab.status = 'running';
     tab.progress = 0;
     tab.resultText = null;
     tab.revisedScript = null;
     tab.errorMessage = null;
-
+    
     // 6. UI 업데이트
     updateTabUI(tabId);
     disableTabButton(tabId, true);
-
+    
     console.log('[' + tabId + '] AI 분석 시작');
-
+    
     // 7. 비동기 분석 실행
     executeAnalysis(tabId, script);
 };
 
 function executeAnalysis(tabId, script) {
     var tab = tabStates[tabId];
-
+    
     // 진행도 시뮬레이션 시작
     updateTabProgress(tabId, 10);
-
-    setTimeout(function () {
+    
+    setTimeout(function() {
         updateTabProgress(tabId, 30);
-
+        
         // 프롬프트 생성
         var prompt = generatePromptForTab(tab.promptKey, script);
-
+        
         // API 호출
         updateTabProgress(tabId, 50);
-
+        
         var geminiAPI = window.GeminiAPI;
         if (!geminiAPI || !geminiAPI.generateContent) {
             handleAnalysisError(tabId, new Error('GeminiAPI가 로드되지 않았습니다.'));
             return;
         }
-
+        
         geminiAPI.generateContent(prompt, {
             temperature: 0.3,
             maxOutputTokens: 4096
         })
-            .then(function (response) {
-                updateTabProgress(tabId, 80);
-
-                // 결과 파싱
-                var parsed = parseAnalysisResult(response);
-                tab.resultText = parsed.analysis || '분석 결과가 없습니다.';
-                tab.revisedScript = parsed.revised || script;
-                tab.status = 'success';
-                tab.progress = 100;
-
-                // UI 업데이트
-                updateTabUI(tabId);
-                updateTabProgress(tabId, 100);
-                showNotification(tab.title + ' 분석 완료', 'success');
-
-                // 결과 표시 (자동으로 해당 탭 선택)
-                selectAnalysisTab(tabId);
-
-                // 버튼 활성화
-                disableTabButton(tabId, false);
-            })
-            .catch(function (error) {
-                handleAnalysisError(tabId, error);
-            });
-
+        .then(function(response) {
+            updateTabProgress(tabId, 80);
+            
+            // 결과 파싱
+            var parsed = parseAnalysisResult(response);
+            tab.resultText = parsed.analysis || '분석 결과가 없습니다.';
+            tab.revisedScript = parsed.revised || script;
+            tab.status = 'success';
+            tab.progress = 100;
+            
+            // UI 업데이트
+            updateTabUI(tabId);
+            updateTabProgress(tabId, 100);
+            showNotification(tab.title + ' 분석 완료', 'success');
+            
+            // 결과 표시 (자동으로 해당 탭 선택)
+            selectAnalysisTab(tabId);
+            
+            // 버튼 활성화
+            disableTabButton(tabId, false);
+        })
+        .catch(function(error) {
+            handleAnalysisError(tabId, error);
+        });
+        
     }, 300);
 }
 
 function handleAnalysisError(tabId, error) {
     var tab = tabStates[tabId];
-
+    
     console.error('[' + tabId + '] 분석 실패:', error);
     tab.status = 'error';
     tab.errorMessage = error.message || '분석 중 오류가 발생했습니다.';
     tab.progress = 0;
-
+    
     updateTabUI(tabId);
     showNotification(tab.title + ' 분석 실패: ' + tab.errorMessage, 'error');
-
+    
     // 버튼 활성화
     disableTabButton(tabId, false);
 }
@@ -331,23 +416,23 @@ function parseAnalysisResult(responseText) {
     if (!responseText) {
         return { analysis: '응답이 비어있습니다.', revised: null };
     }
-
+    
     // JSON 파싱 시도
     var cleaned = String(responseText)
         .replace(/```json/gi, '')
         .replace(/```/g, '')
         .trim();
-
+    
     var parsed = null;
     var parseError = null;
-
+    
     // try-catch는 JSON 파싱에만 사용 (오류 은폐 아님)
     try {
         parsed = JSON.parse(cleaned);
     } catch (e) {
         parseError = e;
     }
-
+    
     if (parseError) {
         // JSON 파싱 실패 시 텍스트 그대로 반환
         console.warn('[PARSE] JSON 파싱 실패, 텍스트로 처리:', parseError);
@@ -356,7 +441,7 @@ function parseAnalysisResult(responseText) {
             revised: null
         };
     }
-
+    
     return {
         analysis: parsed.analysis || '분석 결과 없음',
         revised: parsed.revised || null
@@ -366,69 +451,77 @@ function parseAnalysisResult(responseText) {
 /* ======================================================
    TAB SELECTION & RESULT DISPLAY
 ====================================================== */
-window.selectAnalysisTab = function (tabId) {
+window.selectAnalysisTab = function(tabId) {
     var tab = tabStates[tabId];
     window.AppState.currentSelectedTab = tabId;
-
+    
     // 탭 카드 하이라이트
     var allCards = document.querySelectorAll('.tab-card');
-    allCards.forEach(function (card) {
+    allCards.forEach(function(card) {
         card.classList.remove('border-indigo-500', 'dark:border-indigo-400');
         card.classList.add('border-gray-200', 'dark:border-gray-700');
     });
-
+    
     var selectedCard = document.querySelector('.tab-card[data-tab-id="' + tabId + '"]');
     if (selectedCard) {
         selectedCard.classList.remove('border-gray-200', 'dark:border-gray-700');
         selectedCard.classList.add('border-indigo-500', 'dark:border-indigo-400');
     }
-
+    
     // 결과 섹션 표시
     var resultSection = document.getElementById('result-section');
     var resultTitle = document.getElementById('result-title');
     var resultText = document.getElementById('result-text');
     var revisedScript = document.getElementById('revised-script');
-
+    
     if (!resultSection || !resultTitle || !resultText || !revisedScript) {
-        console.error('[SELECT TAB] 결과 표시 영역을 찾을 수 없습니다.');
-        return;
+        // 결과 섹션이 아직 렌더링되지 않았거나 숨겨져 있을 수 있음 (하지만 요소는 존재해야 함)
+        // console.warn('[SELECT TAB] 일부 UI 요소를 찾을 수 없습니다.'); // 조용한 실패 허용하지 않음
+        // return; 
     }
-
-    resultTitle.textContent = '분석 결과: ' + tab.title;
+    
+    if(resultTitle) resultTitle.textContent = '분석 결과: ' + tab.title;
+    
+    var contentHtml = '';
+    var revisedHtml = '';
 
     if (tab.status === 'success' && tab.resultText) {
-        resultText.innerHTML = formatResultText(tab.resultText);
-        revisedScript.innerHTML = formatRevisedScript(tab.revisedScript);
-        resultSection.classList.remove('hidden');
+        contentHtml = formatResultText(tab.resultText);
+        revisedHtml = formatRevisedScript(tab.revisedScript);
+        if(resultSection) resultSection.classList.remove('hidden');
     } else if (tab.status === 'error') {
-        resultText.innerHTML = '<p class="text-red-600 dark:text-red-400">❌ 오류: ' + escapeHtml(tab.errorMessage) + '</p>';
-        revisedScript.innerHTML = '<p class="text-gray-500 dark:text-gray-400">수정된 대본이 없습니다.</p>';
-        resultSection.classList.remove('hidden');
+        contentHtml = '<p class="text-red-600 dark:text-red-400">❌ 오류: ' + escapeHtml(tab.errorMessage) + '</p>';
+        revisedHtml = '<p class="text-gray-500 dark:text-gray-400">수정된 대본이 없습니다.</p>';
+        if(resultSection) resultSection.classList.remove('hidden');
     } else if (tab.status === 'running') {
-        resultText.innerHTML = '<p class="text-blue-600 dark:text-blue-400">⏳ 분석 진행 중...</p>';
-        revisedScript.innerHTML = '<p class="text-gray-500 dark:text-gray-400">분석이 완료되면 표시됩니다.</p>';
-        resultSection.classList.remove('hidden');
+        contentHtml = '<p class="text-blue-600 dark:text-blue-400">⏳ 분석 진행 중...</p>';
+        revisedHtml = '<p class="text-gray-500 dark:text-gray-400">분석이 완료되면 표시됩니다.</p>';
+        if(resultSection) resultSection.classList.remove('hidden');
     } else {
-        resultText.innerHTML = '<p class="text-gray-500 dark:text-gray-400">아직 분석 결과가 없습니다. "AI 분석 시작" 버튼을 클릭하세요.</p>';
-        revisedScript.innerHTML = '<p class="text-gray-500 dark:text-gray-400">분석을 시작해주세요.</p>';
-        resultSection.classList.remove('hidden');
+        contentHtml = '<p class="text-gray-500 dark:text-gray-400">아직 분석 결과가 없습니다. "시작" 버튼을 클릭하세요.</p>';
+        revisedHtml = '<p class="text-gray-500 dark:text-gray-400">분석을 시작해주세요.</p>';
+        if(resultSection) resultSection.classList.remove('hidden');
     }
 
+    if(resultText) resultText.innerHTML = contentHtml;
+    if(revisedScript) revisedScript.innerHTML = revisedHtml;
+    
     // 다운로드 버튼 상태 업데이트
     updateDownloadButtonState(tabId);
 };
 
 function formatResultText(text) {
     if (!text) return '<p class="text-gray-500">결과 없음</p>';
-    return '<pre class="whitespace-pre-wrap">' + escapeHtml(text) + '</pre>';
+    return '<div class="whitespace-pre-wrap">' + escapeHtml(text) + '</div>';
 }
 
 function formatRevisedScript(script) {
     if (!script) return '<p class="text-gray-500">수정된 대본 없음</p>';
-    return '<pre class="whitespace-pre-wrap">' + escapeHtml(script) + '</pre>';
+    return '<div class="whitespace-pre-wrap font-mono text-sm">' + escapeHtml(script) + '</div>';
 }
 
 function escapeHtml(text) {
+    if (!text) return '';
     var div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
@@ -441,29 +534,29 @@ function updateTabUI(tabId) {
     var tab = tabStates[tabId];
     var statusBadge = document.getElementById('status-' + tabId);
     var progressContainer = document.getElementById('progress-container-' + tabId);
-
+    
     if (!statusBadge) return;
-
+    
     // 상태 배지 업데이트
     switch (tab.status) {
         case 'idle':
             statusBadge.textContent = '대기';
-            statusBadge.className = 'status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full';
+            statusBadge.className = 'status-badge bg-gray-200 text-gray-600 text-[10px] px-1.5 py-0.5 rounded-full';
             break;
         case 'running':
-            statusBadge.textContent = '분석 중';
-            statusBadge.className = 'status-badge bg-blue-500 text-white text-xs px-2 py-1 rounded-full';
+            statusBadge.textContent = '분석중';
+            statusBadge.className = 'status-badge bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full';
             break;
         case 'success':
             statusBadge.textContent = '완료';
-            statusBadge.className = 'status-badge bg-green-500 text-white text-xs px-2 py-1 rounded-full';
+            statusBadge.className = 'status-badge bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded-full';
             break;
         case 'error':
             statusBadge.textContent = '실패';
-            statusBadge.className = 'status-badge bg-red-500 text-white text-xs px-2 py-1 rounded-full';
+            statusBadge.className = 'status-badge bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full';
             break;
     }
-
+    
     // 진행도 바 표시/숨김
     if (progressContainer) {
         if (tab.status === 'running') {
@@ -477,10 +570,10 @@ function updateTabUI(tabId) {
 function updateTabProgress(tabId, percent) {
     var tab = tabStates[tabId];
     tab.progress = percent;
-
+    
     var progressBar = document.getElementById('progress-bar-' + tabId);
     var progressText = document.getElementById('progress-text-' + tabId);
-
+    
     if (progressBar) {
         progressBar.style.width = percent + '%';
     }
@@ -492,7 +585,7 @@ function updateTabProgress(tabId, percent) {
 function disableTabButton(tabId, disabled) {
     var button = document.querySelector('.btn-analyze[data-tab-id="' + tabId + '"]');
     if (!button) return;
-
+    
     button.disabled = disabled;
     if (disabled) {
         button.classList.add('opacity-50', 'cursor-not-allowed');
@@ -507,20 +600,22 @@ function disableTabButton(tabId, disabled) {
 function initDarkMode() {
     var darkModeToggle = document.getElementById('dark-mode-toggle');
     if (!darkModeToggle) return;
-
-    // 로컬스토리지에서 다크모드 설정 불러오기
+    
+    // 로컬스토리지에서 다크모드 설정 불러오기 (기본값 false)
     var isDark = localStorage.getItem('darkMode') === 'true';
     if (isDark) {
         document.documentElement.classList.add('dark');
         window.AppState.isDarkMode = true;
-        darkModeToggle.innerHTML = '<i class="fas fa-sun"></i>';
+        darkModeToggle.innerHTML = '<i class="fas fa-sun"></i>'; // ☀️
+    } else {
+        darkModeToggle.innerHTML = '<i class="fas fa-moon"></i>'; // 🌙
     }
-
-    darkModeToggle.addEventListener('click', function () {
+    
+    darkModeToggle.addEventListener('click', function() {
         document.documentElement.classList.toggle('dark');
         window.AppState.isDarkMode = !window.AppState.isDarkMode;
         localStorage.setItem('darkMode', window.AppState.isDarkMode);
-
+        
         if (window.AppState.isDarkMode) {
             darkModeToggle.innerHTML = '<i class="fas fa-sun"></i>';
         } else {
@@ -541,35 +636,35 @@ function initApiKeyUI() {
     var input = document.getElementById('api-key-input');
     var statusText = document.getElementById('api-key-status-text');
     var statusIcon = document.getElementById('api-key-status-icon');
-
+    
     if (!toggleBtn || !panel) return;
-
+    
     // API 키 상태 확인
     var apiKey = localStorage.getItem('GEMINI_API_KEY');
     if (apiKey) {
-        statusText.textContent = 'API 키 등록됨';
+        statusText.textContent = '설정됨';
         statusIcon.textContent = '✅';
     }
-
-    toggleBtn.addEventListener('click', function () {
+    
+    toggleBtn.addEventListener('click', function() {
         panel.classList.toggle('hidden');
         if (!panel.classList.contains('hidden')) {
             input.value = localStorage.getItem('GEMINI_API_KEY') || '';
         }
     });
-
+    
     if (closeBtn) {
-        closeBtn.addEventListener('click', function () {
+        closeBtn.addEventListener('click', function() {
             panel.classList.add('hidden');
         });
     }
-
+    
     if (saveBtn) {
-        saveBtn.addEventListener('click', function () {
+        saveBtn.addEventListener('click', function() {
             var key = input.value.trim();
             if (key) {
                 localStorage.setItem('GEMINI_API_KEY', key);
-                statusText.textContent = 'API 키 등록됨';
+                statusText.textContent = '설정됨';
                 statusIcon.textContent = '✅';
                 showNotification('API 키가 저장되었습니다.', 'success');
                 panel.classList.add('hidden');
@@ -578,9 +673,9 @@ function initApiKeyUI() {
             }
         });
     }
-
+    
     if (deleteBtn) {
-        deleteBtn.addEventListener('click', function () {
+        deleteBtn.addEventListener('click', function() {
             localStorage.removeItem('GEMINI_API_KEY');
             input.value = '';
             statusText.textContent = 'API 키 설정';
@@ -599,9 +694,9 @@ function initScriptButtons() {
     var clearBtn = document.getElementById('korea-senior-clear-btn');
     var textarea = document.getElementById('korea-senior-script');
     var charCounter = document.getElementById('korea-char-counter');
-
+    
     if (sampleBtn && textarea) {
-        sampleBtn.addEventListener('click', function () {
+        sampleBtn.addEventListener('click', function() {
             textarea.value = '[제 1회 드라마 대본 / 씬1]\n\n' +
                 '나레이션:\n' +
                 '1995년 여름, 서울 강남의 한 아파트 단지.\n' +
@@ -612,16 +707,16 @@ function initScriptButtons() {
                 '순자: 그러게. 이렇게 맑은 날은 오랜만이야.\n\n' +
                 '나레이션:\n' +
                 '두 사람은 따뜻한 햇살 아래에서 옛 이야기를 나누기 시작했다.';
-
+            
             if (charCounter) {
                 charCounter.textContent = textarea.value.length + '자 / 무제한';
             }
             showNotification('샘플 대본이 로드되었습니다.', 'success');
         });
     }
-
+    
     if (clearBtn && textarea) {
-        clearBtn.addEventListener('click', function () {
+        clearBtn.addEventListener('click', function() {
             textarea.value = '';
             if (charCounter) {
                 charCounter.textContent = '0자 / 무제한';
@@ -629,9 +724,9 @@ function initScriptButtons() {
             showNotification('대본이 지워졌습니다.', 'info');
         });
     }
-
+    
     if (textarea && charCounter) {
-        textarea.addEventListener('input', function () {
+        textarea.addEventListener('input', function() {
             charCounter.textContent = textarea.value.length + '자 / 무제한';
         });
     }
@@ -643,20 +738,20 @@ function initScriptButtons() {
 function initDownloadButton() {
     var downloadBtn = document.getElementById('download-revised-btn');
     if (!downloadBtn) return;
-
-    downloadBtn.addEventListener('click', function () {
+    
+    downloadBtn.addEventListener('click', function() {
         var currentTab = window.AppState.currentSelectedTab;
         if (!currentTab) {
             showNotification('탭을 먼저 선택해주세요.', 'warning');
             return;
         }
-
+        
         var tab = tabStates[currentTab];
         if (!tab || !tab.revisedScript) {
             showNotification('다운로드할 수정된 대본이 없습니다.', 'warning');
             return;
         }
-
+        
         downloadRevisedScript(tab.title, tab.revisedScript);
     });
 }
@@ -664,9 +759,9 @@ function initDownloadButton() {
 function updateDownloadButtonState(tabId) {
     var downloadBtn = document.getElementById('download-revised-btn');
     if (!downloadBtn) return;
-
+    
     var tab = tabStates[tabId];
-
+    
     // revisedScript가 있고 성공 상태일 때만 활성화
     if (tab && tab.status === 'success' && tab.revisedScript) {
         downloadBtn.disabled = false;
@@ -678,14 +773,14 @@ function updateDownloadButtonState(tabId) {
 function downloadRevisedScript(tabTitle, scriptContent) {
     // 파일명 생성: 탭제목_YYYY-MM-DD.txt
     var today = new Date();
-    var dateStr = today.getFullYear() + '-' +
-        String(today.getMonth() + 1).padStart(2, '0') + '-' +
-        String(today.getDate()).padStart(2, '0');
-
+    var dateStr = today.getFullYear() + '-' + 
+                  String(today.getMonth() + 1).padStart(2, '0') + '-' + 
+                  String(today.getDate()).padStart(2, '0');
+    
     // 특수문자 제거 (공백은 언더스코어로)
     var safeTitle = tabTitle.replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, '').replace(/\s+/g, '_');
     var filename = safeTitle + '_' + dateStr + '.txt';
-
+    
     // Blob 생성 및 다운로드
     var blob = new Blob([scriptContent], { type: 'text/plain;charset=utf-8' });
     var url = URL.createObjectURL(blob);
@@ -696,32 +791,33 @@ function downloadRevisedScript(tabTitle, scriptContent) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-
-    showNotification('수정된 대본이 다운로드되었습니다: ' + filename, 'success');
+    
+    showNotification('다운로드 완료: ' + filename, 'success');
 }
 
 /* ======================================================
    DOM READY - SINGLE ENTRY POINT
 ====================================================== */
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', function() {
     console.log('[BOOT] DOMContentLoaded fired');
-
+    
     // 의존성 체크 (경고만, 중단하지 않음)
     var depErrors = [];
     if (typeof GeminiAPI === 'undefined') depErrors.push('GeminiAPI');
-
+    
     if (depErrors.length > 0) {
         console.warn('[DEPENDENCY] ⚠️ 일부 스크립트 누락:', depErrors.join(', '));
         console.warn('[DEPENDENCY] 기본 UI는 동작하지만, AI 분석 기능이 제한될 수 있습니다.');
     } else {
         console.log('[BOOT] ✅ 필수 의존성 체크 통과');
     }
-
+    
     // 초기화
     initDarkMode();
     initApiKeyUI();
     initScriptButtons();
     initDownloadButton();
-
+    initFileUpload(); // New: 파일 업로드 초기화
+    
     console.log('[BOOT] ✅ 초기화 완료');
 });
