@@ -187,70 +187,38 @@ function initFileUpload() {
 ====================================================== */
 function generatePromptForTab(promptKey, script) {
     if (promptKey === 'stage1') {
-        return `너는 “한국 시니어 낭독용 대본 1차 검수 전문가”다.
-입력 대본을 분석하고 즉시 수정본을 만든다.
+        return `당신은 한국 시니어 낭독용 대본 검수 전문가입니다.
+다음 대본에 대해 "1차 기본 점검"을 수행하세요.
 
-[검수 항목]
-1) 국가 배경 검증
-- 도시/지명/화폐/문화 요소가 국가와 일치하는지
-- 한국 배경 기준에서 타국 요소 혼입 여부
+[점검 항목]
+1. 한국 배경 확인: 지명/장소/문화 요소가 한국적인지, 타국(일본/중국) 요소가 없는지
+2. 인물 설정 일관성: 이름/나이/직업/특성이 일관된지
+3. 인물 관계 일관성: 가족/사회 관계가 앞뒤가 맞는지
 
-2) 시대 배경 검증
-- 조선/일제/현대/70·80·90년대 단서 분석
-- 시대에 맞지 않는 사물·문화·표현 수정
+대본:
+${script}
 
-3) 등장인물 설정 일관성
-- 이름/나이/외형/성격/말투가 처음부터 끝까지 동일한지
-- 충돌 시 최초 등장 설정을 기준으로 하나로 통일
-
-4) 등장인물 관계 일관성
-- 가족/친족/이웃/사회적 관계 및 호칭 일관성
-- 가장 자연스러운 관계 1개로 고정
-
-5) 즉시 반영
-- 위 문제를 모두 반영해 1차 수정 대본 생성
-
-[analysis 작성 규칙]
-- 항목별로 구분해 작성
-- 문제 라인은 반드시 아래 토큰 중 하나 포함:
-  오류:, 불일치:, 주의:, 경고:, ❌
-- 문제 없으면 “문제 없음” 명시
-
-[출력(JSON만)]
-{"analysis":"...","revised":"..."}
-
-[대본]
-${script}`;
+다음 JSON 형식으로 응답하세요:
+{
+  "analysis": "분석 결과 텍스트 (위 3가지 항목별로 문제점과 분석 내용을 상세히 기술)",
+  "revised": "수정된 대본 전체 (문제가 해결된 검수본)"
+}`;
     } else if (promptKey === 'stage2') {
-        return `너는 “한국 시니어 낭독용 대본 2차 심화 검수 전문가”다.
-입력 대본은 1차 수정이 완료된 상태다.
+        return `당신은 한국 시니어 낭독용 대본 검수 전문가입니다.
+다음 대본(1차 검수를 마친 상태)에 대해 "2차 심화 점검"을 수행하세요.
 
-[검수 항목]
-1) 이야기 시간·장소 흐름 왜곡
-- 아침/점심/저녁, 오전/오후, 계절, 날짜 흐름
-- 장소 이동의 논리성 점검
+[점검 항목]
+1. 이야기 흐름/왜곡 확인: 씬 구조, 시간/장소 흐름이 논리적인지
+2. 재미/몰입 요소: 갈등 불명확, 대화 어색함, 시니어 공감 요소 부족 여부
 
-2) 재미/몰입 요소 분석
-- 시니어 낭독 채널 기준으로 공감·몰입·이탈 리스크 점검
-- 웹 검색 언급 금지
-- 채널 정보 부족 시 일반적인 시니어 낭독 기준으로 판단
+대본:
+${script}
 
-3) 최종 수정 대본 생성
-- 1차 수정본을 바탕으로 최종 수정 대본 작성
-- VREW 1줄=1클립 규칙 동일 적용
-
-[analysis 작성 규칙]
-- 섹션:
-  (1) 시간/장소 왜곡
-  (2) 몰입/이탈 리스크
-  (3) 핵심 수정 요약
-- 문제 라인은 오류/불일치/주의/경고/❌ 중 하나 포함
-
-[출력(JSON만)]
-{"analysis":"...","revised":"..."}
-
-[대본]
-${script}`;
+다음 JSON 형식으로 응답하세요:
+{
+  "analysis": "분석 결과 텍스트 (위 2가지 항목별로 심층 분석)",
+  "revised": "최종 수정된 대본 전체 (모든 문제가 해결된 최종 완성본)"
+}`;
     }
     return '';
 }
@@ -616,3 +584,35 @@ function initScriptButtons() {
 
 function initDownloadButton() {
     var btn = document.getElementById('download-revised-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+        var id = window.AppState.currentSelectedTab;
+        if (!id) return;
+        var tab = tabStates[id];
+        if (tab && tab.revisedScript) {
+            var blob = new Blob([tab.revisedScript], { type: 'text/plain;charset=utf-8' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = tab.title.replace(/\s/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    });
+}
+
+function updateDownloadButtonState(tabId) {
+    var btn = document.getElementById('download-revised-btn');
+    var tab = tabStates[tabId];
+    if (btn && tab) btn.disabled = !(tab.status === 'success' && tab.revisedScript);
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    console.log('[BOOT] DOMContentLoaded');
+    initDarkMode();
+    initApiKeyUI();
+    initScriptButtons();
+    initFileUpload();
+    initDownloadButton();
+});
