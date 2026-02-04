@@ -719,7 +719,6 @@ function downloadRevisedScript(tabTitle, scriptContent) {
 /* ======================================================
    DOM READY
 ====================================================== */
-document.addEventListener('DOMContentLoaded', function () {
     console.log('[BOOT] DOMContentLoaded fired');
 
     // 의존성 체크 (경고만, 중단하지 않음)
@@ -740,7 +739,4 @@ document.addEventListener('DOMContentLoaded', function () {
     initDownloadButton();
 
     console.log('[BOOT] ✅ 초기화 완료');
-});
-document.addEventListener('DOMContentLoaded', function () {
-    ...
 });
