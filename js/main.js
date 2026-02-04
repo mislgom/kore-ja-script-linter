@@ -1,742 +1,368 @@
-/* ======================================================
-   DEPENDENCY GUARD - 최상단 실행
-====================================================== */
-// [PATCH] main.js 로드 확인용 마커
-window.__MAIN_JS_LOADED__ = true;
+<!DOCTYPE html>
+<html lang="ko">
 
-(function () {
-    window._DependencyStatus = {
-        missing: [],
-        loaded: [],
-        allLoaded: false
-    };
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>대본 검수 시스템 | Script Review Pro</title>
 
-    var checkList = [
-        { name: 'GeminiAPI', obj: 'GeminiAPI' }
-    ];
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
 
-    checkList.forEach(function (item) {
-        if (typeof window[item.obj] !== 'undefined') {
-            window._DependencyStatus.loaded.push(item.name);
-        } else {
-            window._DependencyStatus.missing.push(item.name);
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="./css/style.css">
+
+    <!-- Tailwind Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'korean': ['Noto Sans KR', 'sans-serif'],
+                    },
+                    colors: {
+                        'primary': '#2563eb',
+                        'primary-dark': '#1d4ed8',
+                        'secondary': '#64748b',
+                        'accent': '#f59e0b',
+                        'success': '#10b981',
+                        'warning': '#f59e0b',
+                        'danger': '#ef4444',
+                        'dark': '#1e293b',
+                        'light': '#f8fafc',
+                    }
+                }
+            }
         }
-    });
+    </script>
+</head>
 
-    if (window._DependencyStatus.missing.length > 0) {
-        console.error('[DEPENDENCY] MISSING:', window._DependencyStatus.missing);
-    } else {
-        window._DependencyStatus.allLoaded = true;
-    }
-})();
+<body class="font-korean bg-gray-50 min-h-screen transition-colors duration-300 dark:bg-gray-900">
 
-/* ======================================================
-   BOOT
-====================================================== */
-console.log('[BOOT] main.js loaded - 5 Tabs Independent Analysis System v2.0');
+    <!-- Header -->
+    <header class="bg-dark text-white shadow-lg dark:bg-gray-800">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                        <i class="fas fa-film text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold">대본 검수 시스템</h1>
+                        <p class="text-xs text-gray-400">Script Review Pro v2.0</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-400 hidden sm:inline">
+                        <i class="fas fa-circle text-success text-xs mr-1"></i> 시스템 정상
+                    </span>
 
-window.addEventListener('error', function (e) {
-    console.error('[GLOBAL ERROR]', e.message, e.filename, e.lineno);
-    try { window.showNotification('GLOBAL ERROR: ' + (e && e.message ? e.message : 'unknown'), 'error'); } catch (_) { }
-});
-window.addEventListener('unhandledrejection', function (e) {
-    console.error('[UNHANDLED REJECTION]', e.reason);
-    try {
-        var r = e && e.reason ? (e.reason.message || e.reason.toString ? e.reason.toString() : String(e.reason)) : 'unknown';
-        window.showNotification('UNHANDLED: ' + String(r).slice(0, 180), 'error');
-    } catch (_) { }
-});
+                    <!-- API KEY UI -->
+                    <div id="api-key-container" class="relative">
+                        <button id="api-key-toggle-btn" type="button"
+                            class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-600 bg-gray-700 text-white text-sm font-medium hover:bg-gray-600 transition-colors">
+                            <span id="api-key-status-icon" aria-hidden="true">🔑</span>
+                            <span id="api-key-status-text">API 키 설정</span>
+                        </button>
 
-/* ======================================================
-   GLOBAL STATE
-====================================================== */
-window.AppState = {
-    isDarkMode: false,
-    currentSelectedTab: null
-};
+                        <div id="api-key-panel"
+                            class="hidden absolute right-0 mt-2 w-[360px] rounded-xl border border-gray-200 bg-white shadow-lg p-4 z-50">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="font-semibold text-sm text-gray-800">Gemini API 키</div>
+                                <button id="api-key-close-btn" type="button"
+                                    class="px-2 py-1 rounded-md hover:bg-gray-100 text-gray-600">✕</button>
+                            </div>
+                            <input id="api-key-input" type="password" autocomplete="off"
+                                placeholder="AIza... (Gemini API Key)"
+                                class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800" />
+                            <div class="flex gap-2 mt-3">
+                                <button id="api-key-save-btn" type="button"
+                                    class="flex-1 px-3 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700">저장</button>
+                                <button id="api-key-delete-btn" type="button"
+                                    class="px-3 py-2 rounded-lg border border-gray-300 bg-white font-semibold hover:bg-gray-50 text-gray-800">삭제</button>
+                            </div>
+                            <div class="mt-3 text-xs text-gray-500">저장된 키는 로컬스토리지(GEMINI_API_KEY)에만 보관됩니다.</div>
+                        </div>
+                    </div>
 
-// 5개 탭 정의
-var ANALYSIS_TABS = [
-    {
-        id: 'background',
-        title: '한국 배경 확인',
-        description: '지명, 장소, 문화 요소 검사',
-        promptKey: 'background',
-        progress: 0,
-        status: 'idle', // idle, running, success, error
-        resultText: null,
-        revisedScript: null,
-        errorMessage: null
-    },
-    {
-        id: 'character',
-        title: '인물 설정 일관성 확인',
-        description: '이름, 나이, 특성 변경 감지',
-        promptKey: 'character',
-        progress: 0,
-        status: 'idle',
-        resultText: null,
-        revisedScript: null,
-        errorMessage: null
-    },
-    {
-        id: 'relationship',
-        title: '인물 관계 일관성 확인',
-        description: '가족/사회 관계 변경 감지',
-        promptKey: 'relationship',
-        progress: 0,
-        status: 'idle',
-        resultText: null,
-        revisedScript: null,
-        errorMessage: null
-    },
-    {
-        id: 'distortion',
-        title: '이야기 흐름 시간/장소 왜곡 확인',
-        description: '씬 구조, 시간/장소 흐름 분석',
-        promptKey: 'distortion',
-        progress: 0,
-        status: 'idle',
-        resultText: null,
-        revisedScript: null,
-        errorMessage: null
-    },
-    {
-        id: 'immersion',
-        title: '재미/몰입 요소',
-        description: '갈등, 대화, 시니어 공감 분석',
-        promptKey: 'immersion',
-        progress: 0,
-        status: 'idle',
-        resultText: null,
-        revisedScript: null,
-        errorMessage: null
-    }
-];
+                    <!-- 다크모드 토글 버튼 -->
+                    <button id="dark-mode-toggle"
+                        class="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors"
+                        title="다크모드 전환">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
 
-// 탭 상태 저장소
-var tabStates = {};
-ANALYSIS_TABS.forEach(function (tab) {
-    tabStates[tab.id] = JSON.parse(JSON.stringify(tab)); // Deep copy
-});
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8">
+        <section class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-6">
+            <!-- 대본 입력 영역 -->
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-white flex items-center">
+                        <i class="fas fa-file-alt text-primary mr-2"></i>
+                        대본 입력
+                    </h2>
+                    <div class="flex space-x-2">
+                        <button id="korea-senior-sample-btn"
+                            class="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg transition-colors">
+                            <i class="fas fa-file-import mr-1"></i> 샘플 대본
+                        </button>
+                        <button id="korea-senior-clear-btn"
+                            class="px-3 py-2 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                            <i class="fas fa-eraser mr-1"></i> 지우기
+                        </button>
+                    </div>
+                </div>
+                <textarea id="korea-senior-script"
+                    class="w-full h-48 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-700 text-gray-800 dark:text-white resize-none"
+                    placeholder="대본을 입력하세요..."></textarea>
+                <div class="flex items-center justify-between mt-2">
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        한국 시니어 낭독용 대본을 입력해주세요.
+                    </p>
+                    <p id="korea-char-counter" class="text-xs text-gray-500 dark:text-gray-400">0자 / 무제한</p>
+                </div>
+            </div>
 
-/* ======================================================
-   HELPERS
-====================================================== */
-function checkDependencyBeforeAction(actionName) {
-    if (!window._DependencyStatus || !window._DependencyStatus.allLoaded) {
-        var miss = (window._DependencyStatus && window._DependencyStatus.missing)
-            ? window._DependencyStatus.missing.join(', ')
-            : 'unknown';
+            <!-- AI 분석 탭 카드 (5개) -->
+            <div class="mb-6">
+                <h3 class="font-semibold text-gray-800 dark:text-white flex items-center mb-4">
+                    <i class="fas fa-brain text-indigo-500 mr-2"></i>
+                    AI 분석
+                    <span
+                        class="ml-2 text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded-full dark:bg-indigo-900 dark:text-indigo-300">
+                        Gemini Flash 2.5
+                    </span>
+                </h3>
 
-        console.error('[BLOCKED]', actionName, miss);
-        showNotification('필수 스크립트 누락: ' + miss, 'error');
-        return false;
-    }
-    return true;
-}
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4" id="analysis-tabs-container">
+                    <!-- 탭 1: 한국 배경 확인 -->
+                    <div class="tab-card bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-200 dark:border-gray-700 p-4 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all cursor-pointer"
+                        data-tab-id="background" onclick="selectAnalysisTab('background')">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="font-semibold text-gray-800 dark:text-white text-sm">1. 한국 배경 확인</h4>
+                            <span class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full"
+                                id="status-background">대기</span>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">지명, 장소, 문화 요소 검사</p>
 
-function showNotification(message, type) {
-    type = type || 'info';
-    var colors = {
-        success: 'bg-green-500',
-        error: 'bg-red-500',
-        warning: 'bg-yellow-500',
-        info: 'bg-blue-500'
-    };
-    var color = colors[type] || colors.info;
+                        <!-- 진행도 바 -->
+                        <div class="progress-container hidden mb-3" id="progress-container-background">
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1">
+                                <div class="progress-bar bg-indigo-600 h-2 rounded-full transition-all"
+                                    id="progress-bar-background" style="width: 0%"></div>
+                            </div>
+                            <p class="text-xs text-gray-600 dark:text-gray-400 text-right">
+                                <span id="progress-text-background">0%</span>
+                            </p>
+                        </div>
 
-    var notification = document.createElement('div');
-    notification.className = 'fixed top-4 right-4 ' + color + ' text-white px-6 py-3 rounded-lg shadow-lg z-50 max-w-md';
-    notification.textContent = message;
-    document.body.appendChild(notification);
+                        <button
+                            class="btn-analyze w-full bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                            data-tab-id="background" onclick="event.stopPropagation(); runAnalysisForTab('background')">
+                            <i class="fas fa-brain mr-1"></i> AI 분석 시작
+                        </button>
+                    </div>
 
-    setTimeout(function () {
-        notification.style.opacity = '0';
-        notification.style.transition = 'opacity 0.3s';
+                    <!-- 탭 2: 인물 설정 일관성 확인 -->
+                    <div class="tab-card bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-200 dark:border-gray-700 p-4 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all cursor-pointer"
+                        data-tab-id="character" onclick="selectAnalysisTab('character')">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="font-semibold text-gray-800 dark:text-white text-sm">2. 인물 설정 일관성 확인</h4>
+                            <span class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full"
+                                id="status-character">대기</span>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">이름, 나이, 특성 변경 감지</p>
+
+                        <div class="progress-container hidden mb-3" id="progress-container-character">
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1">
+                                <div class="progress-bar bg-indigo-600 h-2 rounded-full transition-all"
+                                    id="progress-bar-character" style="width: 0%"></div>
+                            </div>
+                            <p class="text-xs text-gray-600 dark:text-gray-400 text-right">
+                                <span id="progress-text-character">0%</span>
+                            </p>
+                        </div>
+
+                        <button
+                            class="btn-analyze w-full bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                            data-tab-id="character" onclick="event.stopPropagation(); runAnalysisForTab('character')">
+                            <i class="fas fa-brain mr-1"></i> AI 분석 시작
+                        </button>
+                    </div>
+
+                    <!-- 탭 3: 인물 관계 일관성 확인 -->
+                    <div class="tab-card bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-200 dark:border-gray-700 p-4 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all cursor-pointer"
+                        data-tab-id="relationship" onclick="selectAnalysisTab('relationship')">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="font-semibold text-gray-800 dark:text-white text-sm">3. 인물 관계 일관성 확인</h4>
+                            <span class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full"
+                                id="status-relationship">대기</span>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">가족/사회 관계 변경 감지</p>
+
+                        <div class="progress-container hidden mb-3" id="progress-container-relationship">
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1">
+                                <div class="progress-bar bg-indigo-600 h-2 rounded-full transition-all"
+                                    id="progress-bar-relationship" style="width: 0%"></div>
+                            </div>
+                            <p class="text-xs text-gray-600 dark:text-gray-400 text-right">
+                                <span id="progress-text-relationship">0%</span>
+                            </p>
+                        </div>
+
+                        <button
+                            class="btn-analyze w-full bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                            data-tab-id="relationship"
+                            onclick="event.stopPropagation(); runAnalysisForTab('relationship')">
+                            <i class="fas fa-brain mr-1"></i> AI 분석 시작
+                        </button>
+                    </div>
+
+                    <!-- 탭 4: 이야기 흐름 시간/장소 왜곡 확인 -->
+                    <div class="tab-card bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-200 dark:border-gray-700 p-4 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all cursor-pointer"
+                        data-tab-id="distortion" onclick="selectAnalysisTab('distortion')">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="font-semibold text-gray-800 dark:text-white text-sm">4. 이야기 흐름 시간/장소 왜곡 확인</h4>
+                            <span class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full"
+                                id="status-distortion">대기</span>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">씬 구조, 시간/장소 흐름 분석</p>
+
+                        <div class="progress-container hidden mb-3" id="progress-container-distortion">
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1">
+                                <div class="progress-bar bg-indigo-600 h-2 rounded-full transition-all"
+                                    id="progress-bar-distortion" style="width: 0%"></div>
+                            </div>
+                            <p class="text-xs text-gray-600 dark:text-gray-400 text-right">
+                                <span id="progress-text-distortion">0%</span>
+                            </p>
+                        </div>
+
+                        <button
+                            class="btn-analyze w-full bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                            data-tab-id="distortion" onclick="event.stopPropagation(); runAnalysisForTab('distortion')">
+                            <i class="fas fa-brain mr-1"></i> AI 분석 시작
+                        </button>
+                    </div>
+
+                    <!-- 탭 5: 재미/몰입 요소 -->
+                    <div class="tab-card bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-200 dark:border-gray-700 p-4 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all cursor-pointer"
+                        data-tab-id="immersion" onclick="selectAnalysisTab('immersion')">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="font-semibold text-gray-800 dark:text-white text-sm">5. 재미/몰입 요소</h4>
+                            <span class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full"
+                                id="status-immersion">대기</span>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">갈등, 대화, 시니어 공감 분석</p>
+
+                        <div class="progress-container hidden mb-3" id="progress-container-immersion">
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1">
+                                <div class="progress-bar bg-indigo-600 h-2 rounded-full transition-all"
+                                    id="progress-bar-immersion" style="width: 0%"></div>
+                            </div>
+                            <p class="text-xs text-gray-600 dark:text-gray-400 text-right">
+                                <span id="progress-text-immersion">0%</span>
+                            </p>
+                        </div>
+
+                        <button
+                            class="btn-analyze w-full bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                            data-tab-id="immersion" onclick="event.stopPropagation(); runAnalysisForTab('immersion')">
+                            <i class="fas fa-brain mr-1"></i> AI 분석 시작
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 하단 2컬럼 결과 표시 영역 -->
+            <div id="result-section" class="hidden border-t border-gray-200 dark:border-gray-700 pt-6 mt-6">
+                <h3 id="result-title" class="font-semibold text-gray-800 dark:text-white mb-4">
+                    분석 결과
+                </h3>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- 왼쪽: 분석 결과 -->
+                    <div class="result-column">
+                        <div
+                            class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                            <h4 class="font-semibold text-gray-800 dark:text-white mb-3 flex items-center">
+                                <i class="fas fa-clipboard-list text-indigo-500 mr-2"></i>
+                                분석 결과
+                            </h4>
+                            <div id="result-text"
+                                class="result-content text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-[32rem] overflow-y-auto">
+                                <p class="text-gray-500 dark:text-gray-400">탭을 선택하고 AI 분석을 시작해주세요.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 오른쪽: 수정된 대본 -->
+                    <div class="revised-column">
+                        <div
+                            class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="font-semibold text-gray-800 dark:text-white flex items-center">
+                                    <i class="fas fa-file-alt text-green-500 mr-2"></i>
+                                    수정된 대본
+                                </h4>
+                                <button id="download-revised-btn" disabled
+                                    class="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <i class="fas fa-download mr-1"></i> TXT 다운로드
+                                </button>
+                            </div>
+                            <div id="revised-script"
+                                class="result-content text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-[32rem] overflow-y-auto">
+                                <p class="text-gray-500 dark:text-gray-400">분석 완료 후 수정된 대본이 표시됩니다.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-gray-400 mt-8">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <p class="text-sm">© 2025 대본 검수 시스템. All rights reserved.</p>
+                <p class="text-sm mt-2 md:mt-0">
+                    <i class="fas fa-code mr-1"></i> Built with passion for content creators
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="./js/gemini-api.js"></script>
+    <script src="./js/main.js"></script>
+
+    <!-- main.js 로드 검증 -->
+    <script>
         setTimeout(function () {
-            document.body.removeChild(notification);
-        }, 300);
-    }, 3000);
-}
-
-/* ======================================================
-   PROMPT GENERATION
-====================================================== */
-function generatePromptForTab(promptKey, script) {
-    var prompts = {
-        background: `당신은 한국 시니어 낭독용 대본 검수 전문가입니다.
-
-다음 대본에서 "한국 배경 확인"을 수행하세요:
-- 지명, 장소가 한국 실제 지명인지 확인
-- 한국 문화 요소가 적절한지 확인
-- 일본/중국 등 타국 요소가 섞이지 않았는지 확인
-
-대본:
-${script}
-
-다음 JSON 형식으로 응답하세요:
-{
-  "analysis": "분석 결과 텍스트 (문제점 나열)",
-  "revised": "수정된 대본 전체 (문제가 없으면 원본 그대로)"
-}`,
-        character: `당신은 한국 시니어 낭독용 대본 검수 전문가입니다.
-
-다음 대본에서 "인물 설정 일관성 확인"을 수행하세요:
-- 등장인물 이름이 중간에 바뀌지 않았는지 확인
-- 나이, 직업, 특성이 일관되는지 확인
-- 인물 설정 오류 발견 시 지적
-
-대본:
-${script}
-
-다음 JSON 형식으로 응답하세요:
-{
-  "analysis": "분석 결과 텍스트",
-  "revised": "수정된 대본 전체"
-}`,
-        relationship: `당신은 한국 시니어 낭독용 대본 검수 전문가입니다.
-
-다음 대본에서 "인물 관계 일관성 확인"을 수행하세요:
-- 가족 관계가 일관되는지 확인 (부모-자식, 형제 등)
-- 사회 관계가 일관되는지 확인 (친구, 동료 등)
-- 관계 설정 오류 발견 시 지적
-
-대본:
-${script}
-
-다음 JSON 형식으로 응답하세요:
-{
-  "analysis": "분석 결과 텍스트",
-  "revised": "수정된 대본 전체"
-}`,
-        distortion: `당신은 한국 시니어 낭독용 대본 검수 전문가입니다.
-
-다음 대본에서 "이야기 흐름 시간/장소 왜곡 확인"을 수행하세요:
-- 씬 구조가 논리적인지 확인
-- 시간 흐름이 자연스러운지 확인
-- 장소 이동이 합리적인지 확인
-
-대본:
-${script}
-
-다음 JSON 형식으로 응답하세요:
-{
-  "analysis": "분석 결과 텍스트",
-  "revised": "수정된 대본 전체"
-}`,
-        immersion: `당신은 한국 시니어 낭독용 대본 검수 전문가입니다.
-
-다음 대본에서 "재미/몰입 요소"를 분석하세요:
-- 갈등 구조가 명확한지 확인
-- 대화가 자연스러운지 확인
-- 시니어 청취자가 공감할 수 있는지 평가
-
-대본:
-${script}
-
-다음 JSON 형식으로 응답하세요:
-{
-  "analysis": "분석 결과 텍스트",
-  "revised": "수정된 대본 전체"
-}`
-    };
-
-    return prompts[promptKey] || prompts.background;
-}
-
-/* ======================================================
-   TAB ANALYSIS EXECUTION
-====================================================== */
-window.runAnalysisForTab = async function (tabId) {
-    var tab = tabStates[tabId];
-
-    // 1. 상태 검증
-    if (tab.status === 'running') {
-        console.warn('[' + tabId + '] 이미 실행 중입니다.');
-        showNotification(tab.title + ' 분석이 이미 실행 중입니다.', 'warning');
-        return;
-    }
-
-    // 2. 대본 확인
-    var scriptTextarea = document.getElementById('korea-senior-script');
-    if (!scriptTextarea) {
-        console.error('[' + tabId + '] 대본 입력 영역을 찾을 수 없습니다.');
-        showNotification('대본 입력 영역을 찾을 수 없습니다.', 'error');
-        return;
-    }
-
-    var script = scriptTextarea.value;
-    if (!script.trim()) {
-        showNotification('대본을 입력해주세요.', 'warning');
-        return;
-    }
-
-    // 3. 의존성 체크
-    if (!checkDependencyBeforeAction('AI 분석')) {
-        return;
-    }
-
-    // 4. API 키 확인
-    var apiKey = localStorage.getItem('GEMINI_API_KEY');
-    if (!apiKey) {
-        showNotification('API 키를 먼저 설정해주세요.', 'warning');
-        return;
-    }
-
-    // 5. 상태 초기화
-    tab.status = 'running';
-    tab.progress = 0;
-    tab.resultText = null;
-    tab.revisedScript = null;
-    tab.errorMessage = null;
-
-    // 6. UI 업데이트
-    updateTabUI(tabId);
-    disableTabButton(tabId, true);
-
-    console.log('[' + tabId + '] AI 분석 시작');
-
-    try {
-        // 7. 진행도 시뮬레이션 (0% -> 30%)
-        updateTabProgress(tabId, 10);
-        await sleep(300);
-        updateTabProgress(tabId, 30);
-
-        // 8. 프롬프트 생성
-        var prompt = generatePromptForTab(tab.promptKey, script);
-
-        // 9. API 호출
-        updateTabProgress(tabId, 50);
-        var geminiAPI = window.GeminiAPI;
-        if (!geminiAPI || !geminiAPI.generateContent) {
-            throw new Error('GeminiAPI가 로드되지 않았습니다.');
-        }
-
-        var response = await geminiAPI.generateContent(prompt, {
-            temperature: 0.3,
-            maxOutputTokens: 4096
-        });
-
-        updateTabProgress(tabId, 80);
-
-        // 10. 결과 파싱
-        var parsed = parseAnalysisResult(response);
-        tab.resultText = parsed.analysis || '분석 결과가 없습니다.';
-        tab.revisedScript = parsed.revised || script;
-        tab.status = 'success';
-        tab.progress = 100;
-
-        // 11. UI 업데이트
-        updateTabUI(tabId);
-        updateTabProgress(tabId, 100);
-        showNotification(tab.title + ' 분석 완료', 'success');
-
-        // 12. 결과 표시 (자동으로 해당 탭 선택)
-        selectAnalysisTab(tabId);
-
-    } catch (error) {
-        // 13. 실패 처리 (자동 재시도 없음)
-        console.error('[' + tabId + '] 분석 실패:', error);
-        tab.status = 'error';
-        tab.errorMessage = error.message || '분석 중 오류가 발생했습니다.';
-        tab.progress = 0;
-
-        updateTabUI(tabId);
-        showNotification(tab.title + ' 분석 실패: ' + tab.errorMessage, 'error');
-
-    } finally {
-        // 14. 버튼 활성화
-        disableTabButton(tabId, false);
-    }
-};
-
-function parseAnalysisResult(responseText) {
-    if (!responseText) {
-        return { analysis: '응답이 비어있습니다.', revised: null };
-    }
-
-    try {
-        // JSON 파싱 시도
-        var cleaned = String(responseText)
-            .replace(/```json/gi, '')
-            .replace(/```/g, '')
-            .trim();
-
-        var parsed = JSON.parse(cleaned);
-        return {
-            analysis: parsed.analysis || '분석 결과 없음',
-            revised: parsed.revised || null
-        };
-    } catch (e) {
-        // JSON 파싱 실패 시 텍스트 그대로 반환
-        console.warn('[PARSE] JSON 파싱 실패, 텍스트로 처리:', e);
-        return {
-            analysis: responseText,
-            revised: null
-        };
-    }
-}
-
-function sleep(ms) {
-    return new Promise(function (resolve) {
-        setTimeout(resolve, ms);
-    });
-}
-
-/* ======================================================
-   TAB SELECTION & RESULT DISPLAY
-====================================================== */
-window.selectAnalysisTab = function (tabId) {
-    var tab = tabStates[tabId];
-    window.AppState.currentSelectedTab = tabId;
-
-    // 탭 카드 하이라이트
-    var allCards = document.querySelectorAll('.tab-card');
-    allCards.forEach(function (card) {
-        card.classList.remove('border-indigo-500', 'dark:border-indigo-400');
-        card.classList.add('border-gray-200', 'dark:border-gray-700');
-    });
-
-    var selectedCard = document.querySelector('.tab-card[data-tab-id="' + tabId + '"]');
-    if (selectedCard) {
-        selectedCard.classList.remove('border-gray-200', 'dark:border-gray-700');
-        selectedCard.classList.add('border-indigo-500', 'dark:border-indigo-400');
-    }
-
-    // 결과 섹션 표시
-    var resultSection = document.getElementById('result-section');
-    var resultTitle = document.getElementById('result-title');
-    var resultText = document.getElementById('result-text');
-    var revisedScript = document.getElementById('revised-script');
-
-    if (!resultSection || !resultTitle || !resultText || !revisedScript) {
-        console.error('[SELECT TAB] 결과 표시 영역을 찾을 수 없습니다.');
-        return;
-    }
-
-    resultTitle.textContent = '분석 결과: ' + tab.title;
-
-    if (tab.status === 'success' && tab.resultText) {
-        resultText.innerHTML = formatResultText(tab.resultText);
-        revisedScript.innerHTML = formatRevisedScript(tab.revisedScript);
-        resultSection.classList.remove('hidden');
-    } else if (tab.status === 'error') {
-        resultText.innerHTML = '<p class="text-red-600 dark:text-red-400">❌ 오류: ' + escapeHtml(tab.errorMessage) + '</p>';
-        revisedScript.innerHTML = '<p class="text-gray-500 dark:text-gray-400">수정된 대본이 없습니다.</p>';
-        resultSection.classList.remove('hidden');
-    } else if (tab.status === 'running') {
-        resultText.innerHTML = '<p class="text-blue-600 dark:text-blue-400">⏳ 분석 진행 중...</p>';
-        revisedScript.innerHTML = '<p class="text-gray-500 dark:text-gray-400">분석이 완료되면 표시됩니다.</p>';
-        resultSection.classList.remove('hidden');
-    } else {
-        resultText.innerHTML = '<p class="text-gray-500 dark:text-gray-400">아직 분석 결과가 없습니다. "AI 분석 시작" 버튼을 클릭하세요.</p>';
-        revisedScript.innerHTML = '<p class="text-gray-500 dark:text-gray-400">분석을 시작해주세요.</p>';
-        resultSection.classList.remove('hidden');
-    }
-
-    // 다운로드 버튼 상태 업데이트
-    updateDownloadButtonState(tabId);
-};
-
-function formatResultText(text) {
-    if (!text) return '<p class="text-gray-500">결과 없음</p>';
-    return '<pre class="whitespace-pre-wrap">' + escapeHtml(text) + '</pre>';
-}
-
-function formatRevisedScript(script) {
-    if (!script) return '<p class="text-gray-500">수정된 대본 없음</p>';
-    return '<pre class="whitespace-pre-wrap">' + escapeHtml(script) + '</pre>';
-}
-
-function escapeHtml(text) {
-    var div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-/* ======================================================
-   UI UPDATE FUNCTIONS
-====================================================== */
-function updateTabUI(tabId) {
-    var tab = tabStates[tabId];
-    var statusBadge = document.getElementById('status-' + tabId);
-    var progressContainer = document.getElementById('progress-container-' + tabId);
-
-    if (!statusBadge) return;
-
-    // 상태 배지 업데이트
-    switch (tab.status) {
-        case 'idle':
-            statusBadge.textContent = '대기';
-            statusBadge.className = 'status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full';
-            break;
-        case 'running':
-            statusBadge.textContent = '분석 중';
-            statusBadge.className = 'status-badge bg-blue-500 text-white text-xs px-2 py-1 rounded-full';
-            break;
-        case 'success':
-            statusBadge.textContent = '완료';
-            statusBadge.className = 'status-badge bg-green-500 text-white text-xs px-2 py-1 rounded-full';
-            break;
-        case 'error':
-            statusBadge.textContent = '실패';
-            statusBadge.className = 'status-badge bg-red-500 text-white text-xs px-2 py-1 rounded-full';
-            break;
-    }
-
-    // 진행도 바 표시/숨김
-    if (progressContainer) {
-        if (tab.status === 'running') {
-            progressContainer.classList.remove('hidden');
-        } else {
-            progressContainer.classList.add('hidden');
-        }
-    }
-}
-
-function updateTabProgress(tabId, percent) {
-    var tab = tabStates[tabId];
-    tab.progress = percent;
-
-    var progressBar = document.getElementById('progress-bar-' + tabId);
-    var progressText = document.getElementById('progress-text-' + tabId);
-
-    if (progressBar) {
-        progressBar.style.width = percent + '%';
-    }
-    if (progressText) {
-        progressText.textContent = percent + '%';
-    }
-}
-
-function disableTabButton(tabId, disabled) {
-    var button = document.querySelector('.btn-analyze[data-tab-id="' + tabId + '"]');
-    if (!button) return;
-
-    button.disabled = disabled;
-    if (disabled) {
-        button.classList.add('opacity-50', 'cursor-not-allowed');
-    } else {
-        button.classList.remove('opacity-50', 'cursor-not-allowed');
-    }
-}
-
-/* ======================================================
-   INITIALIZATION
-====================================================== */
-function initDarkMode() {
-    var darkModeToggle = document.getElementById('dark-mode-toggle');
-    if (!darkModeToggle) return;
-
-    // 로컬스토리지에서 다크모드 설정 불러오기
-    var isDark = localStorage.getItem('darkMode') === 'true';
-    if (isDark) {
-        document.documentElement.classList.add('dark');
-        window.AppState.isDarkMode = true;
-        darkModeToggle.innerHTML = '<i class="fas fa-sun"></i>';
-    }
-
-    darkModeToggle.addEventListener('click', function () {
-        document.documentElement.classList.toggle('dark');
-        window.AppState.isDarkMode = !window.AppState.isDarkMode;
-        localStorage.setItem('darkMode', window.AppState.isDarkMode);
-
-        if (window.AppState.isDarkMode) {
-            darkModeToggle.innerHTML = '<i class="fas fa-sun"></i>';
-        } else {
-            darkModeToggle.innerHTML = '<i class="fas fa-moon"></i>';
-        }
-    });
-}
-
-function initApiKeyUI() {
-    var toggleBtn = document.getElementById('api-key-toggle-btn');
-    var panel = document.getElementById('api-key-panel');
-    var closeBtn = document.getElementById('api-key-close-btn');
-    var saveBtn = document.getElementById('api-key-save-btn');
-    var deleteBtn = document.getElementById('api-key-delete-btn');
-    var input = document.getElementById('api-key-input');
-    var statusText = document.getElementById('api-key-status-text');
-    var statusIcon = document.getElementById('api-key-status-icon');
-
-    if (!toggleBtn || !panel) return;
-
-    // API 키 상태 확인
-    var apiKey = localStorage.getItem('GEMINI_API_KEY');
-    if (apiKey) {
-        statusText.textContent = 'API 키 등록됨';
-        statusIcon.textContent = '✅';
-    }
-
-    toggleBtn.addEventListener('click', function () {
-        panel.classList.toggle('hidden');
-        if (!panel.classList.contains('hidden')) {
-            input.value = localStorage.getItem('GEMINI_API_KEY') || '';
-        }
-    });
-
-    if (closeBtn) {
-        closeBtn.addEventListener('click', function () {
-            panel.classList.add('hidden');
-        });
-    }
-
-    if (saveBtn) {
-        saveBtn.addEventListener('click', function () {
-            var key = input.value.trim();
-            if (key) {
-                localStorage.setItem('GEMINI_API_KEY', key);
-                statusText.textContent = 'API 키 등록됨';
-                statusIcon.textContent = '✅';
-                showNotification('API 키가 저장되었습니다.', 'success');
-                panel.classList.add('hidden');
+            if (!window.__MAIN_JS_LOADED__) {
+                alert('⚠️ main.js 로드 실패\n\n경로 또는 404 오류를 확인하세요.\n\nDevTools → Network → JS 필터에서 main.js 상태를 확인하세요.');
+                console.error('[FATAL] main.js 로드 실패 - 경로/404 확인 필요');
             } else {
-                showNotification('API 키를 입력해주세요.', 'warning');
+                console.log('[BOOT] ✅ main.js 로드 성공');
             }
-        });
-    }
+        }, 500);
+    </script>
+</body>
 
-    if (deleteBtn) {
-        deleteBtn.addEventListener('click', function () {
-            localStorage.removeItem('GEMINI_API_KEY');
-            input.value = '';
-            statusText.textContent = 'API 키 설정';
-            statusIcon.textContent = '🔑';
-            showNotification('API 키가 삭제되었습니다.', 'info');
-            panel.classList.add('hidden');
-        });
-    }
-}
-
-function initScriptButtons() {
-    var sampleBtn = document.getElementById('korea-senior-sample-btn');
-    var clearBtn = document.getElementById('korea-senior-clear-btn');
-    var textarea = document.getElementById('korea-senior-script');
-    var charCounter = document.getElementById('korea-char-counter');
-
-    if (sampleBtn && textarea) {
-        sampleBtn.addEventListener('click', function () {
-            textarea.value = '[제 1회 드라마 대본 / 씬1]\n\n' +
-                '나레이션:\n' +
-                '1995년 여름, 서울 강남의 한 아파트 단지.\n' +
-                '오랜만에 가족들이 한자리에 모였다.\n\n' +
-                '[씬 1. 서울 강남 아파트 거실 / 낮]\n\n' +
-                '(거실. 소파에 앉아 있는 할머니(75세, 김순자)와 손녀(20세, 이지은))\n\n' +
-                '지은: 할머니, 오늘 날씨 정말 좋죠?\n' +
-                '순자: 그러게. 이렇게 맑은 날은 오랜만이야.\n\n' +
-                '나레이션:\n' +
-                '두 사람은 따뜻한 햇살 아래에서 옛 이야기를 나누기 시작했다.';
-
-            if (charCounter) {
-                charCounter.textContent = textarea.value.length + '자 / 무제한';
-            }
-            showNotification('샘플 대본이 로드되었습니다.', 'success');
-        });
-    }
-
-    if (clearBtn && textarea) {
-        clearBtn.addEventListener('click', function () {
-            textarea.value = '';
-            if (charCounter) {
-                charCounter.textContent = '0자 / 무제한';
-            }
-            showNotification('대본이 지워졌습니다.', 'info');
-        });
-    }
-
-    if (textarea && charCounter) {
-        textarea.addEventListener('input', function () {
-            charCounter.textContent = textarea.value.length + '자 / 무제한';
-        });
-    }
-}
-
-/* ======================================================
-   DOWNLOAD REVISED SCRIPT
-====================================================== */
-function initDownloadButton() {
-    var downloadBtn = document.getElementById('download-revised-btn');
-    if (!downloadBtn) return;
-
-    downloadBtn.addEventListener('click', function () {
-        var currentTab = window.AppState.currentSelectedTab;
-        if (!currentTab) {
-            showNotification('탭을 먼저 선택해주세요.', 'warning');
-            return;
-        }
-
-        var tab = tabStates[currentTab];
-        if (!tab || !tab.revisedScript) {
-            showNotification('다운로드할 수정된 대본이 없습니다.', 'warning');
-            return;
-        }
-
-        downloadRevisedScript(tab.title, tab.revisedScript);
-    });
-}
-
-function updateDownloadButtonState(tabId) {
-    var downloadBtn = document.getElementById('download-revised-btn');
-    if (!downloadBtn) return;
-
-    var tab = tabStates[tabId];
-
-    // revisedScript가 있고 성공 상태일 때만 활성화
-    if (tab && tab.status === 'success' && tab.revisedScript) {
-        downloadBtn.disabled = false;
-    } else {
-        downloadBtn.disabled = true;
-    }
-}
-
-function downloadRevisedScript(tabTitle, scriptContent) {
-    // 파일명 생성: 탭제목_YYYY-MM-DD.txt
-    var today = new Date();
-    var dateStr = today.getFullYear() + '-' +
-        String(today.getMonth() + 1).padStart(2, '0') + '-' +
-        String(today.getDate()).padStart(2, '0');
-
-    // 특수문자 제거 (공백은 언더스코어로)
-    var safeTitle = tabTitle.replace(/[^\w\sㄱ-ㅎㅏ-ㅣ가-힣]/g, '').replace(/\s+/g, '_');
-    var filename = safeTitle + '_' + dateStr + '.txt';
-
-    // Blob 생성 및 다운로드
-    var blob = new Blob([scriptContent], { type: 'text/plain;charset=utf-8' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    showNotification('수정된 대본이 다운로드되었습니다: ' + filename, 'success');
-}
-
-
-/* ======================================================
-   DOM READY
-====================================================== */
-    console.log('[BOOT] DOMContentLoaded fired');
-
-    // 의존성 체크 (경고만, 중단하지 않음)
-    var depErrors = [];
-    if (typeof GeminiAPI === 'undefined') depErrors.push('GeminiAPI');
-
-    if (depErrors.length > 0) {
-        console.warn('[DEPENDENCY] ⚠️ 일부 스크립트 누락:', depErrors.join(', '));
-        console.warn('[DEPENDENCY] 기본 UI는 동작하지만, AI 분석 기능이 제한될 수 있습니다.');
-    } else {
-        console.log('[BOOT] ✅ 필수 의존성 체크 통과');
-    }
-
-    // 초기화
-    initDarkMode();
-    initApiKeyUI();
-    initScriptButtons();
-    initDownloadButton();
-
-    console.log('[BOOT] ✅ 초기화 완료');
-});
+</html>
