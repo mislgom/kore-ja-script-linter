@@ -127,7 +127,7 @@
                     </div>
                 </div>
                 <textarea id="korea-senior-script"
-                    class="w-full h-64 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-700 text-gray-800 dark:text-white resize-none"
+                    class="w-full h-48 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-700 text-gray-800 dark:text-white resize-none"
                     placeholder="대본을 입력하세요..."></textarea>
                 <div class="flex items-center justify-between mt-2">
                     <p class="text-xs text-gray-500 dark:text-gray-400">
@@ -149,7 +149,7 @@
                     </span>
                 </h3>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="analysis-tabs-container">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4" id="analysis-tabs-container">
                     <!-- 탭 1: 한국 배경 확인 -->
                     <div class="tab-card bg-white dark:bg-gray-800 rounded-lg border-2 border-gray-200 dark:border-gray-700 p-4 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all cursor-pointer"
                         data-tab-id="background" onclick="selectAnalysisTab('background')">
@@ -305,7 +305,7 @@
                                 분석 결과
                             </h4>
                             <div id="result-text"
-                                class="result-content text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-96 overflow-y-auto">
+                                class="result-content text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-[32rem] overflow-y-auto">
                                 <p class="text-gray-500 dark:text-gray-400">탭을 선택하고 AI 분석을 시작해주세요.</p>
                             </div>
                         </div>
@@ -315,12 +315,18 @@
                     <div class="revised-column">
                         <div
                             class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                            <h4 class="font-semibold text-gray-800 dark:text-white mb-3 flex items-center">
-                                <i class="fas fa-file-alt text-green-500 mr-2"></i>
-                                수정된 대본
-                            </h4>
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="font-semibold text-gray-800 dark:text-white flex items-center">
+                                    <i class="fas fa-file-alt text-green-500 mr-2"></i>
+                                    수정된 대본
+                                </h4>
+                                <button id="download-revised-btn" disabled
+                                    class="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white text-xs rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <i class="fas fa-download mr-1"></i> TXT 다운로드
+                                </button>
+                            </div>
                             <div id="revised-script"
-                                class="result-content text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-96 overflow-y-auto">
+                                class="result-content text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap max-h-[32rem] overflow-y-auto">
                                 <p class="text-gray-500 dark:text-gray-400">분석 완료 후 수정된 대본이 표시됩니다.</p>
                             </div>
                         </div>
