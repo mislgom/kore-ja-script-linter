@@ -4,7 +4,7 @@
  * Features: Pipeline Execution, Error Highlighting, Drag & Drop
  * ====================================================== */
 
-// [CRITICAL] main.js 로드 확인 마커 (최상단 필수)
+// [CRITICAL] main.js 로드 확인 마커 (실패 방지용 필수 플래그)
 window.__MAIN_JS_LOADED__ = true;
 
 /* ======================================================
@@ -52,12 +52,15 @@ ANALYSIS_TABS.forEach(function (tab) {
 ====================================================== */
 console.log('[BOOT] main.js loaded - v3.0 (Pipeline)');
 
+/* [User Request] 내부 런타임 오류는 사용자에게 팝업으로 표시하지 않고 콘솔에만 기록 */
 window.addEventListener('error', function (e) {
-    console.error('[GLOBAL ERROR]', e.message, e.filename, e.lineno);
+    // 주의: handleScriptError과 중복되지 않도록 단순 로깅만 수행
+    console.warn('[RUNTIME WARN] JS 내부 오류 감지 (팝업 표시 안 함):', e.message);
+    // e.preventDefault(); // 필요 시 기본 동작 방지 가능하나, 디버깅 위해 남김
 });
 
 window.addEventListener('unhandledrejection', function (e) {
-    console.error('[UNHANDLED REJECTION]', e.reason);
+    console.warn('[RUNTIME WARN] Unhandled Promise Rejection (팝업 표시 안 함):', e.reason);
 });
 
 /* ======================================================
@@ -66,6 +69,7 @@ window.addEventListener('unhandledrejection', function (e) {
 function checkDependencyBeforeAction(actionName) {
     if (typeof window.GeminiAPI === 'undefined') {
         console.error('[DEPENDENCY] GeminiAPI not loaded for action:', actionName);
+        // 의존성 로드 실패는 명확한 조치가 필요하므로 예외적으로 알림
         showNotification('GeminiAPI가 로드되지 않았습니다. gemini-api.js를 확인하세요.', 'error');
         return false;
     }
@@ -616,3 +620,58 @@ function initApiKeyUI() {
     if (del) del.addEventListener('click', function () {
         localStorage.removeItem('GEMINI_API_KEY');
         status.textContent = 'API 키 설정';
+        icon.textContent = '🔑';
+        panel.classList.add('hidden');
+    });
+}
+
+function initScriptButtons() {
+    var sample = document.getElementById('korea-senior-sample-btn');
+    var clear = document.getElementById('korea-senior-clear-btn');
+    var text = document.getElementById('korea-senior-script');
+
+    if (sample && text) {
+        sample.addEventListener('click', function () {
+            text.value = '[제 1회 드라마 대본 / 씬1]\n\n나레이션:\n1995년 여름, 서울 강남의 한 아파트 단지.\n오랜만에 가족들이 한자리에 모였다.\n\n[씬 1. 서울 강남 아파트 거실 / 낮]\n\n(거실. 소파에 앉아 있는 할머니(75세, 김순자)와 손녀(20세, 이지은))\n\n지은: 할머니, 오늘 날씨 정말 좋죠?\n순자: 그러게. 이렇게 맑은 날은 오랜만이야.\n\n나레이션:\n두 사람은 따뜻한 햇살 아래에서 옛 이야기를 나누기 시작했다.';
+            text.dispatchEvent(new Event('input'));
+        });
+    }
+    if (clear && text) {
+        clear.addEventListener('click', function () { text.value = ''; text.dispatchEvent(new Event('input')); });
+    }
+}
+
+function initDownloadButton() {
+    var btn = document.getElementById('download-revised-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+        var id = window.AppState.currentSelectedTab;
+        if (!id) return;
+        var tab = tabStates[id];
+        if (tab && tab.revisedScript) {
+            var blob = new Blob([tab.revisedScript], { type: 'text/plain;charset=utf-8' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = tab.title.replace(/\s/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    });
+}
+
+function updateDownloadButtonState(tabId) {
+    var btn = document.getElementById('download-revised-btn');
+    var tab = tabStates[tabId];
+    if (btn && tab) btn.disabled = !(tab.status === 'success' && tab.revisedScript);
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    console.log('[BOOT] DOMContentLoaded');
+    initDarkMode();
+    initApiKeyUI();
+    initScriptButtons();
+    initFileUpload();
+    initDownloadButton();
+});
