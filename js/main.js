@@ -555,19 +555,19 @@ function parseAnalysisResult(rawText) {
         return { analysis: '', revised: '', parseError: true };
     }
     
-    let jsonStr = rawText;
+    let jsonStr = rawText.trim();
     
-    // ```json ... ``` 형식 처리
-    const jsonBlockMatch = rawText.match(/```json\s*([\s\S]*?)\s*```/);
-    if (jsonBlockMatch) {
-        jsonStr = jsonBlockMatch[1];
-        console.log('📦 JSON 블록 추출됨');
-    }
+    // ```json 또는 ``` 제거 (여러 형식 대응)
+    jsonStr = jsonStr.replace(/^```json\s*/i, '');
+    jsonStr = jsonStr.replace(/^```\s*/i, '');
+    jsonStr = jsonStr.replace(/\s*```$/i, '');
+    jsonStr = jsonStr.trim();
     
     // { } 블록만 추출
     const braceMatch = jsonStr.match(/\{[\s\S]*\}/);
     if (braceMatch) {
         jsonStr = braceMatch[0];
+        console.log('📦 JSON 블록 추출됨');
     }
     
     try {
@@ -583,7 +583,31 @@ function parseAnalysisResult(rawText) {
         };
     } catch (e) {
         console.error('❌ JSON 파싱 실패:', e.message);
-        console.log('📄 파싱 시도한 텍스트 앞부분:', jsonStr.substring(0, 300));
+        console.log('📄 파싱 시도한 텍스트:', jsonStr.substring(0, 500));
+        
+        // 폴백: analysis와 revised를 수동 추출 시도
+        let analysis = '';
+        let revised = '';
+        
+        const analysisMatch = rawText.match(/"analysis"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"revised"|"\s*})/);
+        if (analysisMatch) {
+            analysis = analysisMatch[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
+            console.log('🔧 analysis 수동 추출 성공');
+        }
+        
+        const revisedMatch = rawText.match(/"revised"\s*:\s*"([\s\S]*?)"\s*}/);
+        if (revisedMatch) {
+            revised = revisedMatch[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
+            console.log('🔧 revised 수동 추출 성공');
+        }
+        
+        if (analysis || revised) {
+            return {
+                analysis: analysis,
+                revised: revised,
+                parseError: false
+            };
+        }
         
         return {
             analysis: rawText,
