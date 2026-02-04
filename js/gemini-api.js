@@ -1,6 +1,10 @@
 /**
- * Gemini API 연동 모듈 (v3.0 Final)
+ * Gemini API 연동 모듈 (v3.0 Final Fixed)
  * Google Gemini 2.5 Flash API 통합
+ * 
+ * [수정 사항]
+ * 전역 객체 window.GeminiAPI를 "클래스"가 아닌 "인스턴스"로 확정.
+ * main.js에서 window.GeminiAPI.generateContent() 호출 시 오류가 없도록 조치.
  */
 
 // ========================================
@@ -14,12 +18,13 @@ var GeminiConfig = {
 };
 
 // ========================================
-// Gemini API 클래스
+// Gemini API 클래스 정의
 // ========================================
 function GeminiAPI() {
     this.endpoint = GeminiConfig.endpoint;
     this.isAvailable = false;
     this.lastError = null;
+    console.log('[GeminiAPI] Constructor initialized');
 }
 
 /**
@@ -51,7 +56,6 @@ GeminiAPI.prototype.forceGeminiAnalyze = async function (prompt, options) {
         var errorMsg = 'API 키가 설정되지 않았습니다. 우측 상단 🔑 버튼에서 설정해주세요.';
         console.warn('⚠️ Gemini API:', errorMsg);
 
-        // 사용자 경고 (기존 showNotification 함수 사용)
         if (typeof window.showNotification === 'function') {
             window.showNotification(errorMsg, 'warning');
         } else {
@@ -84,37 +88,26 @@ GeminiAPI.prototype.forceGeminiAnalyze = async function (prompt, options) {
         ]
     };
 
-    // 5) API 호출 (fetch)
     console.log('🚀 Gemini API 호출 시작...');
 
     try {
         var response = await fetch(url, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody)
         });
 
-        // 6) 응답 상태 확인
         if (!response.ok) {
             var errorData = await response.json().catch(function () { return {}; });
-            var errorMessage = (errorData.error && errorData.error.message)
-                ? errorData.error.message
-                : 'API 오류: ' + response.status;
-
+            var errorMessage = (errorData.error && errorData.error.message) ? errorData.error.message : 'API 오류: ' + response.status;
             console.error('❌ Gemini API 오류:', errorMessage);
             this.lastError = errorMessage;
-
-            // API 오류는 네트워크/모델 오류이므로 상단 알림 표시 (정책상 허용)
             if (typeof window.showNotification === 'function') {
                 window.showNotification('API 호출 실패: ' + errorMessage, 'error');
             }
-
             throw new Error(errorMessage);
         }
 
-        // 7) 응답 파싱
         var data = await response.json();
 
         if (data.candidates && data.candidates[0] &&
@@ -122,7 +115,7 @@ GeminiAPI.prototype.forceGeminiAnalyze = async function (prompt, options) {
             data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text) {
 
             var resultText = data.candidates[0].content.parts[0].text;
-            console.log('✅ Gemini API 응답 수신 완료 (길이:', resultText.length, '자)');
+            console.log('✅ Gemini API 응답 수신 완료');
             return resultText;
         }
 
@@ -131,13 +124,13 @@ GeminiAPI.prototype.forceGeminiAnalyze = async function (prompt, options) {
     } catch (error) {
         this.lastError = error.message;
         console.error('❌ Gemini API 호출 실패:', error);
-        throw error; // 상위 호출자(main.js)에게 전파하여 처리
+        throw error;
     }
 };
 
 /**
  * 대본 종합 분석 (generateContent = forceGeminiAnalyze 매핑)
- * [User Request] window.GeminiAPI.generateContent 노출 요구 충족
+ * [중요] window.GeminiAPI.generateContent() 형태로 호출됨
  */
 GeminiAPI.prototype.generateContent = async function (prompt, options) {
     return this.forceGeminiAnalyze(prompt, options);
@@ -145,17 +138,24 @@ GeminiAPI.prototype.generateContent = async function (prompt, options) {
 
 
 // ========================================
-// 전역 인스턴스 및 노출
+// [CRITICAL] 전역 인스턴스 노출 설정
 // ========================================
-var geminiAPI = new GeminiAPI();
 
-// [User Request] window.GeminiAPI 및 인스턴스 노출
-window.GeminiAPI = GeminiAPI; // Note: main.js에서는 window.GeminiAPI.generateContent(...) 형태로 사용함
-window.geminiAPI = geminiAPI;
+// 1. 인스턴스 생성
+const geminiInstance = new GeminiAPI();
+
+// 2. window.GeminiAPI에 "인스턴스" 할당 (클래스 아님!)
+// 이제 window.GeminiAPI.generateContent() 호출 시 undefined가 아님.
+window.GeminiAPI = geminiInstance;
+window.geminiAPI = geminiInstance;
+
+// 3. (선택사항) 클래스가 필요한 경우 별도 이름으로 노출
+window.GeminiAPIClass = GeminiAPI;
 
 // 호환성 유지
 window.forceGeminiAnalyze = function (prompt, options) {
-    return geminiAPI.forceGeminiAnalyze(prompt, options);
+    return geminiInstance.forceGeminiAnalyze(prompt, options);
 };
 
-console.log('✅ Gemini API 모듈 로드 완료 (v3.0 Final)');
+console.log('✅ Gemini API 모듈 로드 완료: window.GeminiAPI는 이제 인스턴스입니다.');
+console.log('   - window.GeminiAPI.generateContent type check:', typeof window.GeminiAPI.generateContent);
