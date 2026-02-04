@@ -117,7 +117,7 @@
                     <div class="flex space-x-2">
                         <!-- 파일 업로드 (숨김) -->
                         <input type="file" id="file-upload-input" accept=".txt,text/plain" class="hidden" />
-                        
+
                         <button id="btn-upload-file"
                             class="px-3 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white text-xs rounded-lg transition-colors shadow-sm">
                             <i class="fas fa-folder-open mr-1"></i> PC에서 불러오기
@@ -132,11 +132,12 @@
                         </button>
                     </div>
                 </div>
-                
+
                 <!-- Dropzone 영역 (textarea 감싸기) -->
                 <div id="drop-zone" class="relative group">
-                     <!-- 드래그 오버 시 표시될 오버레이 -->
-                    <div id="drop-overlay" class="absolute inset-0 bg-primary/10 border-2 border-primary border-dashed rounded-lg flex flex-col items-center justify-center z-10 hidden pointer-events-none">
+                    <!-- 드래그 오버 시 표시될 오버레이 -->
+                    <div id="drop-overlay"
+                        class="absolute inset-0 bg-primary/10 border-2 border-primary border-dashed rounded-lg flex flex-col items-center justify-center z-10 hidden pointer-events-none">
                         <i class="fas fa-file-upload text-4xl text-primary mb-2"></i>
                         <p class="text-primary font-semibold">여기에 파일을 놓으세요</p>
                     </div>
@@ -145,7 +146,7 @@
                         class="w-full h-48 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-700 text-gray-800 dark:text-white resize-none transition-colors"
                         placeholder="대본을 직접 입력하거나 TXT 파일을 드래그하여 놓으세요..."></textarea>
                 </div>
-                
+
                 <div class="flex items-center justify-between mt-1">
                     <p class="text-[10px] text-gray-500 dark:text-gray-400">
                         <i class="fas fa-info-circle mr-1"></i>
@@ -155,145 +156,75 @@
                 </div>
             </div>
 
-            <!-- AI 분석 탭 카드 (5개) -->
+            <!-- AI 분석 탭 카드 (2개 파이프라인) -->
             <div class="mb-4">
                 <h3 class="font-semibold text-gray-800 dark:text-white flex items-center text-sm mb-3">
                     <i class="fas fa-brain text-indigo-500 mr-2"></i>
                     AI 분석
-                    <span class="ml-2 text-[10px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full dark:bg-indigo-900 dark:text-indigo-300">
-                        Gemini Flash 2.5
+                    <span
+                        class="ml-2 text-[10px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full dark:bg-indigo-900 dark:text-indigo-300">
+                        2-Stage Pipeline
                     </span>
                 </h3>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3" id="analysis-tabs-container">
-                    <!-- 탭 1: 한국 배경 확인 -->
-                    <div class="tab-card bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all cursor-pointer"
-                        data-tab-id="background" onclick="selectAnalysisTab('background')">
-                        <div class="flex items-center justify-between mb-2">
-                            <h4 class="font-semibold text-gray-800 dark:text-white text-xs truncate">1. 한국 배경 확인</h4>
-                            <span class="status-badge bg-gray-200 text-gray-600 text-[10px] px-1.5 py-0.5 rounded-full"
-                                id="status-background">대기</span>
+                <!-- 2개 탭 그리드 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="analysis-tabs-container">
+                    <!-- 탭 1: 1차 분석 (기본) -->
+                    <div class="tab-card bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all cursor-pointer"
+                        data-tab-id="stage1" onclick="selectAnalysisTab('stage1')">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="font-semibold text-gray-800 dark:text-white truncate">1차 분석 (기본 점검)</h4>
+                            <span class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full"
+                                id="status-stage1">대기</span>
                         </div>
-                        <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-2 truncate">지명, 장소, 문화 요소</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3 block">
+                            한국 배경, 인물 설정, 인물 관계 일관성
+                        </p>
 
                         <!-- 진행도 바 -->
-                        <div class="progress-container hidden mb-2" id="progress-container-background">
-                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1 mb-1">
-                                <div class="progress-bar bg-indigo-600 h-1 rounded-full transition-all"
-                                    id="progress-bar-background" style="width: 0%"></div>
+                        <div class="progress-container hidden mb-3" id="progress-container-stage1">
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mb-1">
+                                <div class="progress-bar bg-indigo-600 h-1.5 rounded-full transition-all"
+                                    id="progress-bar-stage1" style="width: 0%"></div>
                             </div>
-                            <p class="text-[10px] text-gray-600 dark:text-gray-400 text-right">
-                                <span id="progress-text-background">0%</span>
+                            <p class="text-xs text-gray-600 dark:text-gray-400 text-right">
+                                <span id="progress-text-stage1">0%</span>
                             </p>
                         </div>
 
-                        <button class="btn-analyze w-full bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1.5 rounded text-xs font-medium transition-colors"
-                            data-tab-id="background" onclick="event.stopPropagation(); runAnalysisForTab('background')">
-                            <i class="fas fa-play mr-1"></i> 시작
+                        <button
+                            class="btn-analyze w-full bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                            data-tab-id="stage1" onclick="event.stopPropagation(); runAnalysisForTab('stage1')">
+                            <i class="fas fa-play mr-2"></i> 시작 (1차 -> 2차 자동 실행)
                         </button>
                     </div>
 
-                    <!-- 탭 2: 인물 설정 -->
-                    <div class="tab-card bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all cursor-pointer"
-                        data-tab-id="character" onclick="selectAnalysisTab('character')">
-                        <div class="flex items-center justify-between mb-2">
-                            <h4 class="font-semibold text-gray-800 dark:text-white text-xs truncate">2. 인물 설정 일관성</h4>
-                            <span class="status-badge bg-gray-200 text-gray-600 text-[10px] px-1.5 py-0.5 rounded-full"
-                                id="status-character">대기</span>
+                    <!-- 탭 2: 2차 분석 (심화) -->
+                    <div class="tab-card bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all cursor-pointer"
+                        data-tab-id="stage2" onclick="selectAnalysisTab('stage2')">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="font-semibold text-gray-800 dark:text-white truncate">2차 분석 (심화 점검)</h4>
+                            <span class="status-badge bg-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full"
+                                id="status-stage2">대기</span>
                         </div>
-                        <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-2 truncate">이름, 나이, 특성 변경</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3 block">
+                            이야기 흐름 왜곡, 재미/몰입 요소 (1차 자동연계)
+                        </p>
 
-                        <div class="progress-container hidden mb-2" id="progress-container-character">
-                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1 mb-1">
-                                <div class="progress-bar bg-indigo-600 h-1 rounded-full transition-all"
-                                    id="progress-bar-character" style="width: 0%"></div>
+                        <div class="progress-container hidden mb-3" id="progress-container-stage2">
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mb-1">
+                                <div class="progress-bar bg-indigo-600 h-1.5 rounded-full transition-all"
+                                    id="progress-bar-stage2" style="width: 0%"></div>
                             </div>
-                            <p class="text-[10px] text-gray-600 dark:text-gray-400 text-right">
-                                <span id="progress-text-character">0%</span>
+                            <p class="text-xs text-gray-600 dark:text-gray-400 text-right">
+                                <span id="progress-text-stage2">0%</span>
                             </p>
                         </div>
 
-                        <button class="btn-analyze w-full bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1.5 rounded text-xs font-medium transition-colors"
-                            data-tab-id="character" onclick="event.stopPropagation(); runAnalysisForTab('character')">
-                            <i class="fas fa-play mr-1"></i> 시작
-                        </button>
-                    </div>
-
-                    <!-- 탭 3: 인물 관계 -->
-                    <div class="tab-card bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all cursor-pointer"
-                        data-tab-id="relationship" onclick="selectAnalysisTab('relationship')">
-                        <div class="flex items-center justify-between mb-2">
-                            <h4 class="font-semibold text-gray-800 dark:text-white text-xs truncate">3. 인물 관계 일관성</h4>
-                            <span class="status-badge bg-gray-200 text-gray-600 text-[10px] px-1.5 py-0.5 rounded-full"
-                                id="status-relationship">대기</span>
-                        </div>
-                        <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-2 truncate">가족, 사회 관계 변경</p>
-
-                        <div class="progress-container hidden mb-2" id="progress-container-relationship">
-                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1 mb-1">
-                                <div class="progress-bar bg-indigo-600 h-1 rounded-full transition-all"
-                                    id="progress-bar-relationship" style="width: 0%"></div>
-                            </div>
-                            <p class="text-[10px] text-gray-600 dark:text-gray-400 text-right">
-                                <span id="progress-text-relationship">0%</span>
-                            </p>
-                        </div>
-
-                        <button class="btn-analyze w-full bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1.5 rounded text-xs font-medium transition-colors"
-                            data-tab-id="relationship" onclick="event.stopPropagation(); runAnalysisForTab('relationship')">
-                            <i class="fas fa-play mr-1"></i> 시작
-                        </button>
-                    </div>
-
-                    <!-- 탭 4: 이야기 흐름/왜곡 -->
-                    <div class="tab-card bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all cursor-pointer"
-                        data-tab-id="distortion" onclick="selectAnalysisTab('distortion')">
-                        <div class="flex items-center justify-between mb-2">
-                            <h4 class="font-semibold text-gray-800 dark:text-white text-xs truncate">4. 이야기 흐름 왜곡</h4>
-                            <span class="status-badge bg-gray-200 text-gray-600 text-[10px] px-1.5 py-0.5 rounded-full"
-                                id="status-distortion">대기</span>
-                        </div>
-                        <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-2 truncate">씬 구조, 시간/장소 흐름</p>
-
-                        <div class="progress-container hidden mb-2" id="progress-container-distortion">
-                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1 mb-1">
-                                <div class="progress-bar bg-indigo-600 h-1 rounded-full transition-all"
-                                    id="progress-bar-distortion" style="width: 0%"></div>
-                            </div>
-                            <p class="text-[10px] text-gray-600 dark:text-gray-400 text-right">
-                                <span id="progress-text-distortion">0%</span>
-                            </p>
-                        </div>
-
-                        <button class="btn-analyze w-full bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1.5 rounded text-xs font-medium transition-colors"
-                            data-tab-id="distortion" onclick="event.stopPropagation(); runAnalysisForTab('distortion')">
-                            <i class="fas fa-play mr-1"></i> 시작
-                        </button>
-                    </div>
-
-                    <!-- 탭 5: 재미/몰입 요소 -->
-                    <div class="tab-card bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all cursor-pointer"
-                        data-tab-id="immersion" onclick="selectAnalysisTab('immersion')">
-                        <div class="flex items-center justify-between mb-2">
-                            <h4 class="font-semibold text-gray-800 dark:text-white text-xs truncate">5. 재미/몰입 요소</h4>
-                            <span class="status-badge bg-gray-200 text-gray-600 text-[10px] px-1.5 py-0.5 rounded-full"
-                                id="status-immersion">대기</span>
-                        </div>
-                        <p class="text-[10px] text-gray-500 dark:text-gray-400 mb-2 truncate">갈등, 대화, 시니어 공감</p>
-
-                        <div class="progress-container hidden mb-2" id="progress-container-immersion">
-                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1 mb-1">
-                                <div class="progress-bar bg-indigo-600 h-1 rounded-full transition-all"
-                                    id="progress-bar-immersion" style="width: 0%"></div>
-                            </div>
-                            <p class="text-[10px] text-gray-600 dark:text-gray-400 text-right">
-                                <span id="progress-text-immersion">0%</span>
-                            </p>
-                        </div>
-
-                        <button class="btn-analyze w-full bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1.5 rounded text-xs font-medium transition-colors"
-                            data-tab-id="immersion" onclick="event.stopPropagation(); runAnalysisForTab('immersion')">
-                            <i class="fas fa-play mr-1"></i> 시작
+                        <button
+                            class="btn-analyze w-full bg-gray-400 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-not-allowed"
+                            disabled data-tab-id="stage2">
+                            <i class="fas fa-link mr-2"></i> 1차 완료 후 자동 실행
                         </button>
                     </div>
                 </div>
@@ -308,10 +239,12 @@
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 h-[70vh]">
                     <!-- 왼쪽: 분석 결과 -->
                     <div class="result-column h-full">
-                        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 h-full flex flex-col">
-                            <h4 class="font-semibold text-gray-800 dark:text-white mb-2 flex items-center text-sm shrink-0">
+                        <div
+                            class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 h-full flex flex-col">
+                            <h4
+                                class="font-semibold text-gray-800 dark:text-white mb-2 flex items-center text-sm shrink-0">
                                 <i class="fas fa-clipboard-list text-indigo-500 mr-2"></i>
-                                분석 결과
+                                분석 결과 (오류 강조)
                             </h4>
                             <div id="result-text"
                                 class="result-content text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap overflow-y-auto flex-1 h-full pr-2">
@@ -322,11 +255,12 @@
 
                     <!-- 오른쪽: 수정된 대본 -->
                     <div class="revised-column h-full">
-                        <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 h-full flex flex-col">
+                        <div
+                            class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 h-full flex flex-col">
                             <div class="flex items-center justify-between mb-2 shrink-0">
                                 <h4 class="font-semibold text-gray-800 dark:text-white flex items-center text-sm">
                                     <i class="fas fa-file-alt text-green-500 mr-2"></i>
-                                    수정된 대본
+                                    <span id="revised-title">수정된 대본</span>
                                 </h4>
                                 <button id="download-revised-btn" disabled
                                     class="px-2 py-1 bg-green-500 hover:bg-green-600 text-white text-[10px] rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
@@ -348,7 +282,7 @@
     <footer class="bg-dark text-gray-400 mt-2">
         <div class="w-full px-4 py-3">
             <div class="flex flex-col md:flex-row justify-between items-center text-xs">
-                <p>© 2025 대본 검수 시스템. v2.1</p>
+                <p>© 2025 대본 검수 시스템. v2.1 (Pipeline)</p>
                 <p class="mt-1 md:mt-0">
                     <i class="fas fa-code mr-1"></i> Built with passion
                 </p>
@@ -359,10 +293,10 @@
     <!-- JavaScript -->
     <script src="./js/gemini-api.js"></script>
     <script src="./js/main.js"></script>
-    
+
     <!-- main.js 로드 검증 -->
     <script>
-        setTimeout(function() {
+        setTimeout(function () {
             if (!window.__MAIN_JS_LOADED__) {
                 alert('⚠️ main.js 로드 실패\n\n경로 또는 404 오류를 확인하세요.\n\nDevTools → Network → JS 필터에서 main.js 상태를 확인하세요.');
                 console.error('[FATAL] main.js 로드 실패 - 경로/404 확인 필요');
