@@ -525,8 +525,10 @@ const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini
                 }]
             }],
             generationConfig: {
-                temperature: 0.3,
-                maxOutputTokens: 8192
+    temperature: 0.3,
+    maxOutputTokens: 65536
+}
+
             }
         })
     });
