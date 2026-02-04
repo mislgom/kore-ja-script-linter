@@ -1,10 +1,10 @@
 /** ======================================================
  * KORE-JA SCRIPT LINTER - MAIN.JS
- * 2-Stage Pipeline Analysis System v3.3
- * Features: TSV Table + Diff Highlight (ID Fixed)
+ * 2-Stage Pipeline Analysis System v3.4
+ * Features: TSV Table + Diff Highlight + Drag Fix
  * ====================================================== */
 
-console.log('🚀 main.js v3.3 (ID Fixed) 로드됨');
+console.log('🚀 main.js v3.4 로드됨');
 
 // ========== 전역 상태 ==========
 const tabStates = {
@@ -134,7 +134,6 @@ function initApiKeyPanel() {
         });
     }
     
-    // 외부 클릭 시 닫기
     document.addEventListener('click', function(e) {
         if (panel && toggleBtn && !panel.contains(e.target) && !toggleBtn.contains(e.target)) {
             panel.classList.add('hidden');
@@ -209,14 +208,14 @@ function initFileUpload() {
         fileInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file && textarea) {
-                currentFileName = file.name.replace('.txt', '');
+                currentFileName = file.name.replace(/\.txt$/i, '');
                 const reader = new FileReader();
                 reader.onload = function(event) {
                     textarea.value = event.target.result;
                     updateCharCounter();
                     console.log('📂 파일 로드됨:', file.name);
                 };
-                reader.readAsText(file);
+                reader.readAsText(file, 'UTF-8');
             }
         });
     }
@@ -235,7 +234,7 @@ function updateCharCounter() {
     const textarea = document.getElementById('korea-senior-script');
     const counter = document.getElementById('korea-char-counter');
     if (textarea && counter) {
-        counter.textContent = `${textarea.value.length}자 / 무제한`;
+        counter.textContent = textarea.value.length + '자 / 무제한';
     }
 }
 
@@ -252,44 +251,19 @@ function initDragAndDrop() {
     
     console.log('✅ 드래그 앤 드롭 초기화됨');
     
-    // 드래그 오버
-    dropZone.addEventListener('dragover', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (dropOverlay) dropOverlay.classList.remove('hidden');
-        dropZone.classList.add('border-blue-500');
-    });
-    
-    // 드래그 나감
-    dropZone.addEventListener('dragleave', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (dropOverlay) dropOverlay.classList.add('hidden');
-        dropZone.classList.remove('border-blue-500');
-    });
-    
-    // 드롭
-    dropZone.addEventListener('drop', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (dropOverlay) dropOverlay.classList.add('hidden');
-        dropZone.classList.remove('border-blue-500');
-        
-        const file = e.dataTransfer.files[0];
+    function handleFile(file) {
         if (!file) {
-            console.warn('⚠️ 드롭된 파일 없음');
+            console.warn('⚠️ 파일 없음');
             return;
         }
         
-        console.log('📁 드롭된 파일:', file.name, '타입:', file.type);
+        console.log('📁 파일 감지:', file.name, '타입:', file.type);
         
-        // 파일 확장자 또는 타입으로 체크
-        const isTextFile = file.type === 'text/plain' || 
-                          file.name.toLowerCase().endsWith('.txt');
+        var isTextFile = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt');
         
         if (isTextFile) {
             currentFileName = file.name.replace(/\.txt$/i, '');
-            const reader = new FileReader();
+            var reader = new FileReader();
             reader.onload = function(event) {
                 textarea.value = event.target.result;
                 updateCharCounter();
@@ -301,11 +275,31 @@ function initDragAndDrop() {
             };
             reader.readAsText(file, 'UTF-8');
         } else {
-            alert('텍스트 파일(.txt)만 지원합니다.\n드롭된 파일: ' + file.name);
+            alert('텍스트 파일(.txt)만 지원합니다.\n파일: ' + file.name);
         }
+    }
+    
+    dropZone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (dropOverlay) dropOverlay.classList.remove('hidden');
     });
     
-    // textarea에도 드롭 이벤트 추가 (직접 드롭 시)
+    dropZone.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (dropOverlay) dropOverlay.classList.add('hidden');
+    });
+    
+    dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (dropOverlay) dropOverlay.classList.add('hidden');
+        
+        var file = e.dataTransfer.files[0];
+        handleFile(file);
+    });
+    
     textarea.addEventListener('dragover', function(e) {
         e.preventDefault();
         e.stopPropagation();
@@ -315,26 +309,8 @@ function initDragAndDrop() {
         e.preventDefault();
         e.stopPropagation();
         
-        const file = e.dataTransfer.files[0];
-        if (!file) return;
-        
-        console.log('📁 textarea에 드롭된 파일:', file.name);
-        
-        const isTextFile = file.type === 'text/plain' || 
-                          file.name.toLowerCase().endsWith('.txt');
-        
-        if (isTextFile) {
-            currentFileName = file.name.replace(/\.txt$/i, '');
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                textarea.value = event.target.result;
-                updateCharCounter();
-                console.log('📂 textarea 드래그 파일 로드 완료:', file.name);
-            };
-            reader.readAsText(file, 'UTF-8');
-        } else {
-            alert('텍스트 파일(.txt)만 지원합니다.');
-        }
+        var file = e.dataTransfer.files[0];
+        handleFile(file);
     });
 }
 
@@ -348,8 +324,6 @@ function initAnalysisButtons() {
             startAnalysis('stage1');
         });
         console.log('✅ 1차 분석 버튼 연결됨');
-    } else {
-        console.error('❌ btn-stage1 버튼을 찾을 수 없음');
     }
     
     if (btn2) {
@@ -361,20 +335,18 @@ function initAnalysisButtons() {
 }
 
 async function startAnalysis(stage) {
-    console.log(`🔍 ${stage} 분석 시작`);
+    console.log('🔍 ' + stage + ' 분석 시작');
     
-    // API 키 확인
-    const apiKey = localStorage.getItem('GEMINI_API_KEY');
+    var apiKey = localStorage.getItem('GEMINI_API_KEY');
     if (!apiKey) {
-        alert('API 키를 먼저 설정해주세요.\n우측 상단의 "API 키 설정" 버튼을 클릭하세요.');
+        alert('API 키를 먼저 설정해주세요.');
         return;
     }
     
-    // 입력 텍스트 가져오기
-    let inputScript = '';
+    var inputScript = '';
     if (stage === 'stage1') {
-        const textarea = document.getElementById('korea-senior-script');
-        inputScript = textarea?.value?.trim() || '';
+        var textarea = document.getElementById('korea-senior-script');
+        inputScript = textarea ? textarea.value.trim() : '';
         if (!inputScript) {
             alert('분석할 대본을 입력해주세요.');
             return;
@@ -389,55 +361,49 @@ async function startAnalysis(stage) {
         tabStates.stage2.originalScript = inputScript;
     }
     
-    // UI 상태 변경
-    const btn = document.getElementById(`btn-${stage}`);
-    const statusBadge = document.getElementById(`status-${stage}`);
-    const progressContainer = document.getElementById(`progress-container-${stage}`);
-    const progressBar = document.getElementById(`progress-bar-${stage}`);
-    const progressText = document.getElementById(`progress-text-${stage}`);
-    const resultContainer = document.getElementById(`result-${stage}`);
+    var btn = document.getElementById('btn-' + stage);
+    var statusBadge = document.getElementById('status-' + stage);
+    var progressContainer = document.getElementById('progress-container-' + stage);
+    var progressBar = document.getElementById('progress-bar-' + stage);
+    var progressText = document.getElementById('progress-text-' + stage);
+    var resultContainer = document.getElementById('result-' + stage);
     
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> 분석 중...';
-        btn.classList.remove('bg-indigo-500', 'hover:bg-indigo-600', 'bg-purple-500', 'hover:bg-purple-600');
-        btn.classList.add('bg-gray-400', 'cursor-not-allowed');
+        btn.className = 'btn-analyze px-4 py-2 bg-gray-400 text-white text-sm rounded-lg cursor-not-allowed';
     }
     
     if (statusBadge) {
         statusBadge.textContent = '분석 중';
-        statusBadge.classList.remove('bg-gray-200', 'text-gray-600', 'bg-green-200', 'text-green-700');
-        statusBadge.classList.add('bg-yellow-200', 'text-yellow-700');
+        statusBadge.className = 'ml-2 status-badge bg-yellow-200 text-yellow-700 text-xs px-2 py-1 rounded-full';
     }
     
     if (progressContainer) {
         progressContainer.classList.remove('hidden');
     }
     
-    // 프로그레스 시뮬레이션
-    let progress = 0;
-    const progressInterval = setInterval(() => {
+    var progress = 0;
+    var progressInterval = setInterval(function() {
         progress += Math.random() * 15;
         if (progress > 90) progress = 90;
-        if (progressBar) progressBar.style.width = `${progress}%`;
-        if (progressText) progressText.textContent = `${Math.round(progress)}%`;
+        if (progressBar) progressBar.style.width = progress + '%';
+        if (progressText) progressText.textContent = Math.round(progress) + '%';
     }, 500);
     
     tabStates[stage].isAnalyzing = true;
     
     try {
-        const prompt = generatePrompt(stage, inputScript);
+        var prompt = generatePrompt(stage, inputScript);
         console.log('📤 프롬프트 생성 완료');
         
-        const result = await callGeminiAPI(prompt);
+        var result = await callGeminiAPI(prompt);
         console.log('📥 API 응답 수신');
         
-        // 프로그레스 완료
         clearInterval(progressInterval);
         if (progressBar) progressBar.style.width = '100%';
         if (progressText) progressText.textContent = '100%';
         
-        // 결과 표시
         if (resultContainer) {
             resultContainer.classList.remove('hidden');
         }
@@ -446,61 +412,52 @@ async function startAnalysis(stage) {
         
         tabStates[stage].isComplete = true;
         
-        // 상태 업데이트
         if (statusBadge) {
             statusBadge.textContent = '완료';
-            statusBadge.classList.remove('bg-yellow-200', 'text-yellow-700');
-            statusBadge.classList.add('bg-green-200', 'text-green-700');
+            statusBadge.className = 'ml-2 status-badge bg-green-200 text-green-700 text-xs px-2 py-1 rounded-full';
         }
         
-        // 1차 완료 시 2차 버튼 활성화
         if (stage === 'stage1') {
-            const btn2 = document.getElementById('btn-stage2');
+            var btn2 = document.getElementById('btn-stage2');
             if (btn2) {
                 btn2.disabled = false;
-                btn2.classList.remove('bg-gray-400', 'cursor-not-allowed');
-                btn2.classList.add('bg-purple-500', 'hover:bg-purple-600');
+                btn2.className = 'btn-analyze px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white text-sm rounded-lg transition-colors shadow-sm';
             }
         }
         
-        // 2차 완료 시 다운로드 버튼 활성화
         if (stage === 'stage2') {
-            const downloadBtn = document.getElementById('download-revised-btn');
+            var downloadBtn = document.getElementById('download-revised-btn');
             if (downloadBtn) {
                 downloadBtn.disabled = false;
             }
         }
         
-        console.log(`✅ ${stage} 분석 완료`);
+        console.log('✅ ' + stage + ' 분석 완료');
         
     } catch (error) {
-        console.error(`❌ ${stage} 분석 실패:`, error);
+        console.error('❌ ' + stage + ' 분석 실패:', error);
         clearInterval(progressInterval);
         
         if (statusBadge) {
             statusBadge.textContent = '오류';
-            statusBadge.classList.remove('bg-yellow-200', 'text-yellow-700');
-            statusBadge.classList.add('bg-red-200', 'text-red-700');
+            statusBadge.className = 'ml-2 status-badge bg-red-200 text-red-700 text-xs px-2 py-1 rounded-full';
         }
         
-        alert(`분석 중 오류가 발생했습니다:\n${error.message}`);
+        alert('분석 중 오류가 발생했습니다:\n' + error.message);
     } finally {
-        // 버튼 복원
         if (btn) {
             btn.disabled = false;
-            btn.innerHTML = stage === 'stage1' 
-                ? '<i class="fas fa-play mr-1"></i> 1차 분석 시작'
-                : '<i class="fas fa-play mr-1"></i> 2차 분석 시작';
-            btn.classList.remove('bg-gray-400', 'cursor-not-allowed');
             if (stage === 'stage1') {
-                btn.classList.add('bg-indigo-500', 'hover:bg-indigo-600');
+                btn.innerHTML = '<i class="fas fa-play mr-1"></i> 1차 분석 시작';
+                btn.className = 'btn-analyze px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm rounded-lg transition-colors shadow-sm';
             } else {
-                btn.classList.add('bg-purple-500', 'hover:bg-purple-600');
+                btn.innerHTML = '<i class="fas fa-play mr-1"></i> 2차 분석 시작';
+                btn.className = 'btn-analyze px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white text-sm rounded-lg transition-colors shadow-sm';
             }
         }
         
         if (progressContainer) {
-            setTimeout(() => {
+            setTimeout(function() {
                 progressContainer.classList.add('hidden');
             }, 1000);
         }
@@ -512,71 +469,47 @@ async function startAnalysis(stage) {
 // ========== 프롬프트 생성 ==========
 function generatePrompt(stage, script) {
     if (stage === 'stage1') {
-        return `당신은 한국 시니어 낭독용 대본 검수 전문가입니다.
-
-## 분석 대상 대본:
-${script}
-
-## 검수 항목:
-1. 맞춤법/문법 오류 (예: 오타, 띄어쓰기, 조사 오류)
-2. 어색한 표현/문장 (예: 부자연스러운 어순, 중복 표현)
-3. 시니어 낭독에 부적절한 표현 (예: 너무 빠른 전개, 어려운 단어)
-4. 문장 흐름/연결 문제 (예: 갑작스러운 전환)
-5. 기타 개선 필요 사항
-
-## 출력 형식 (반드시 JSON으로만 응답):
-{
-  "analysis": "번호\\t유형\\t위치\\t변경 내용\\t검수 포인트\\n1\\t맞춤법\\t15번째 줄\\t'만낫습니다' → '만났습니다'\\t받침 오류 수정",
-  "revised": "(분석에서 지적한 오류를 모두 수정한 전체 대본)"
-}
-
-## 중요 규칙:
-1. analysis: 탭(\\t)으로 구분된 TSV 형식. 첫 줄은 헤더, 이후 발견된 각 문제를 한 줄씩 작성
-2. revised: analysis에서 지적한 모든 문제를 실제로 수정 적용한 전체 대본
-3. 수정할 내용이 없으면 analysis는 "번호\\t유형\\t위치\\t변경 내용\\t검수 포인트\\n(검수 결과 수정 필요 없음)"으로 작성
-4. revised는 반드시 수정사항을 반영해야 함. 절대 원본을 그대로 복사하지 마세요
-5. JSON 형식 외 다른 텍스트(설명, 인사말 등)는 절대 포함하지 마세요
-6. analysis는 최대 10개 항목까지만 작성하세요
-7. 반드시 완전한 JSON 형식으로 응답을 마무리하세요`;
+        return '당신은 한국 시니어 낭독용 대본 검수 전문가입니다.\n\n' +
+            '## 분석 대상 대본:\n' + script + '\n\n' +
+            '## 검수 항목:\n' +
+            '1. 맞춤법/문법 오류\n' +
+            '2. 어색한 표현/문장\n' +
+            '3. 시니어 낭독에 부적절한 표현\n' +
+            '4. 문장 흐름/연결 문제\n' +
+            '5. 기타 개선 필요 사항\n\n' +
+            '## 출력 형식 (반드시 JSON으로만 응답):\n' +
+            '{"analysis": "번호\\t유형\\t위치\\t변경 내용\\t검수 포인트\\n1\\t맞춤법\\t15번째 줄\\t원문 → 수정문\\t설명", "revised": "수정된 전체 대본"}\n\n' +
+            '## 중요 규칙:\n' +
+            '1. analysis: TSV 형식, 최대 10개 항목\n' +
+            '2. revised: 수정사항 반영한 전체 대본\n' +
+            '3. 반드시 완전한 JSON으로 응답 마무리\n' +
+            '4. JSON 외 다른 텍스트 금지';
     } else {
-        return `당신은 한국 시니어 낭독용 대본 2차 심화 검수 전문가입니다.
-
-## 1차 검수 완료된 대본:
-${script}
-
-## 2차 심화 검수 항목:
-1. 1차에서 놓친 맞춤법/문법 오류
-2. 문장의 자연스러움 및 가독성
-3. 시니어 청취자를 위한 표현 최적화
-4. 전체적인 흐름과 완성도
-5. 낭독 시 호흡 단위 적절성
-
-## 출력 형식 (반드시 JSON으로만 응답):
-{
-  "analysis": "번호\\t유형\\t위치\\t변경 내용\\t검수 포인트\\n1\\t표현\\t5번째 줄\\t'깨달았어요' → '깨달았습니다'\\t어미 통일",
-  "revised": "(2차 검수에서 지적한 오류를 모두 수정한 최종 대본)"
-}
-
-## 중요 규칙:
-1. analysis: 탭(\\t)으로 구분된 TSV 형식
-2. revised: 2차 검수 결과를 반영한 최종 대본
-3. 더 이상 수정할 내용이 없으면 analysis에 "(2차 검수 결과 추가 수정 필요 없음)" 작성
-4. JSON 형식만 출력하세요`;
+        return '당신은 한국 시니어 낭독용 대본 2차 심화 검수 전문가입니다.\n\n' +
+            '## 1차 검수 완료된 대본:\n' + script + '\n\n' +
+            '## 2차 검수 항목:\n' +
+            '1. 1차에서 놓친 오류\n' +
+            '2. 문장 자연스러움\n' +
+            '3. 시니어 표현 최적화\n' +
+            '4. 전체 흐름과 완성도\n\n' +
+            '## 출력 형식 (반드시 JSON으로만 응답):\n' +
+            '{"analysis": "번호\\t유형\\t위치\\t변경 내용\\t검수 포인트\\n1\\t표현\\t5번째 줄\\t원문 → 수정문\\t설명", "revised": "최종 수정 대본"}\n\n' +
+            '## 중요 규칙:\n' +
+            '1. 반드시 완전한 JSON으로 응답\n' +
+            '2. JSON 외 다른 텍스트 금지';
     }
 }
 
 // ========== Gemini API 호출 ==========
 async function callGeminiAPI(prompt) {
-    const apiKey = localStorage.getItem('GEMINI_API_KEY');
+    var apiKey = localStorage.getItem('GEMINI_API_KEY');
     if (!apiKey) {
         throw new Error('API 키가 설정되지 않았습니다.');
     }
     
-const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
-
+    var endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey;
     
-    const response = await fetch(endpoint, {
+    var response = await fetch(endpoint, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -588,21 +521,19 @@ const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini
                 }]
             }],
             generationConfig: {
-    temperature: 0.3,
-    maxOutputTokens: 65536
-}
-
+                temperature: 0.3,
+                maxOutputTokens: 65536
             }
         })
     });
     
     if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || `API 오류: ${response.status}`);
+        var errorData = await response.json().catch(function() { return {}; });
+        throw new Error(errorData.error?.message || 'API 오류: ' + response.status);
     }
     
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    var data = await response.json();
+    var text = data.candidates?.[0]?.content?.parts?.[0]?.text;
     
     if (!text) {
         throw new Error('API 응답이 비어있습니다.');
@@ -613,34 +544,28 @@ const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini
 
 // ========== 결과 파싱 ==========
 function parseAnalysisResult(rawText) {
-    console.log('📝 파싱 시작, 원본 길이:', rawText?.length);
+    console.log('📝 파싱 시작, 원본 길이:', rawText ? rawText.length : 0);
     
     if (!rawText || typeof rawText !== 'string') {
-        console.warn('⚠️ 빈 응답');
         return { analysis: '', revised: '', parseError: true };
     }
     
-    let jsonStr = rawText.trim();
+    var jsonStr = rawText.trim();
     
-    // ```json 또는 ``` 제거 (여러 형식 대응)
     jsonStr = jsonStr.replace(/^```json\s*/i, '');
     jsonStr = jsonStr.replace(/^```\s*/i, '');
     jsonStr = jsonStr.replace(/\s*```$/i, '');
     jsonStr = jsonStr.trim();
     
-    // { } 블록만 추출
-    const braceMatch = jsonStr.match(/\{[\s\S]*\}/);
+    var braceMatch = jsonStr.match(/\{[\s\S]*\}/);
     if (braceMatch) {
         jsonStr = braceMatch[0];
         console.log('📦 JSON 블록 추출됨');
     }
     
     try {
-        const parsed = JSON.parse(jsonStr);
+        var parsed = JSON.parse(jsonStr);
         console.log('✅ JSON 파싱 성공');
-        console.log('📊 analysis 길이:', parsed.analysis?.length || 0);
-        console.log('📝 revised 길이:', parsed.revised?.length || 0);
-        
         return {
             analysis: parsed.analysis || '',
             revised: parsed.revised || '',
@@ -648,97 +573,68 @@ function parseAnalysisResult(rawText) {
         };
     } catch (e) {
         console.error('❌ JSON 파싱 실패:', e.message);
-        console.log('📄 파싱 시도한 텍스트:', jsonStr.substring(0, 500));
         
-        // 폴백: analysis와 revised를 수동 추출 시도
-        let analysis = '';
-        let revised = '';
+        var analysis = '';
+        var revised = '';
         
-        const analysisMatch = rawText.match(/"analysis"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"revised"|"\s*})/);
+        var analysisMatch = rawText.match(/"analysis"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"revised"|"\s*})/);
         if (analysisMatch) {
             analysis = analysisMatch[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
             console.log('🔧 analysis 수동 추출 성공');
         }
         
-        const revisedMatch = rawText.match(/"revised"\s*:\s*"([\s\S]*?)"\s*}/);
+        var revisedMatch = rawText.match(/"revised"\s*:\s*"([\s\S]*?)"\s*}/);
         if (revisedMatch) {
             revised = revisedMatch[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
             console.log('🔧 revised 수동 추출 성공');
         }
         
         if (analysis || revised) {
-            return {
-                analysis: analysis,
-                revised: revised,
-                parseError: false
-            };
+            return { analysis: analysis, revised: revised, parseError: false };
         }
         
-        return {
-            analysis: rawText,
-            revised: '',
-            parseError: true
-        };
+        return { analysis: rawText, revised: '', parseError: true };
     }
 }
 
 // ========== 결과 렌더링 ==========
 function renderResults(stage, result) {
-    console.log(`🎨 renderResults 호출: ${stage}`);
+    console.log('🎨 renderResults 호출: ' + stage);
     
-    const parsed = parseAnalysisResult(result);
+    var parsed = parseAnalysisResult(result);
     
-    // 상태 저장
     if (stage === 'stage1') {
         tabStates.stage1.analysisResult = parsed.analysis;
         tabStates.stage1.revisedScript = parsed.revised;
-        
         console.log('=== Stage1 원본 ===');
-        console.log(tabStates.stage1.originalScript?.substring(0, 200) + '...');
+        console.log(tabStates.stage1.originalScript ? tabStates.stage1.originalScript.substring(0, 200) + '...' : '');
         console.log('=== Stage1 수정본 ===');
-        console.log(tabStates.stage1.revisedScript?.substring(0, 200) + '...');
+        console.log(tabStates.stage1.revisedScript ? tabStates.stage1.revisedScript.substring(0, 200) + '...' : '');
         console.log('=== 동일 여부 ===', tabStates.stage1.originalScript === tabStates.stage1.revisedScript);
     } else {
         tabStates.stage2.analysisResult = parsed.analysis;
         tabStates.stage2.revisedScript = parsed.revised;
-        
-        console.log('=== Stage2 원본 ===');
-        console.log(tabStates.stage2.originalScript?.substring(0, 200) + '...');
-        console.log('=== Stage2 수정본 ===');
-        console.log(tabStates.stage2.revisedScript?.substring(0, 200) + '...');
     }
     
-    // 좌측: 분석 결과 표
-    const tableContainer = document.getElementById(`result-table-${stage}`);
+    var tableContainer = document.getElementById('result-table-' + stage);
     if (tableContainer) {
         tableContainer.innerHTML = renderAnalysisTable(parsed.analysis, parsed.parseError);
     }
     
-    // 우측: 수정 반영 대본
-    const revisedContainer = document.getElementById(`revised-${stage}`);
+    var revisedContainer = document.getElementById('revised-' + stage);
     if (revisedContainer) {
-        const original = stage === 'stage1' 
-            ? tabStates.stage1.originalScript 
-            : tabStates.stage1.revisedScript;
-        const revised = parsed.revised;
+        var original = stage === 'stage1' ? tabStates.stage1.originalScript : tabStates.stage1.revisedScript;
+        var revised = parsed.revised;
         
-        if (revised && revised.trim() !== original?.trim()) {
+        if (revised && revised.trim() !== (original ? original.trim() : '')) {
             revisedContainer.innerHTML = renderDiffHighlight(original, revised);
             console.log('✅ 차이점 하이라이트 적용됨');
         } else if (revised) {
-            revisedContainer.innerHTML = `
-                <div class="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg">
-                    <p class="text-yellow-700 dark:text-yellow-300 font-medium mb-2 text-sm">⚠️ 수정사항 없음</p>
-                    <p class="text-yellow-600 dark:text-yellow-400 text-xs mb-3">AI가 원본과 동일한 텍스트를 반환했거나, 수정이 필요 없다고 판단했습니다.</p>
-                    <div class="bg-white dark:bg-gray-800 p-3 rounded border border-yellow-100 dark:border-yellow-800">
-                        <pre class="whitespace-pre-wrap text-gray-700 dark:text-gray-300 text-sm">${escapeHtml(revised)}</pre>
-                    </div>
-                </div>`;
+            revisedContainer.innerHTML = '<div class="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg">' +
+                '<p class="text-yellow-700 dark:text-yellow-300 font-medium mb-2 text-sm">⚠️ 수정사항 없음</p>' +
+                '<pre class="whitespace-pre-wrap text-gray-700 dark:text-gray-300 text-sm">' + escapeHtml(revised) + '</pre></div>';
         } else {
-            revisedContainer.innerHTML = `
-                <div class="p-4 text-gray-500 text-center">
-                    <i class="fas fa-info-circle mr-2"></i>수정본이 생성되지 않았습니다.
-                </div>`;
+            revisedContainer.innerHTML = '<div class="p-4 text-gray-500 text-center"><i class="fas fa-info-circle mr-2"></i>수정본이 생성되지 않았습니다.</div>';
         }
     }
 }
@@ -750,81 +646,57 @@ function renderAnalysisTable(analysisText, isParseError) {
     }
     
     if (isParseError) {
-        return `
-            <div class="p-3">
-                <div class="bg-orange-900/30 border border-orange-700 rounded-lg p-3 mb-3">
-                    <p class="text-orange-300 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>JSON 파싱 실패 - 원본 응답 표시</p>
-                </div>
-                <pre class="whitespace-pre-wrap text-sm text-gray-300 bg-gray-800 p-3 rounded">${escapeHtml(analysisText)}</pre>
-            </div>`;
+        return '<div class="p-3"><div class="bg-orange-900/30 border border-orange-700 rounded-lg p-3 mb-3">' +
+            '<p class="text-orange-300 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>JSON 파싱 실패 - 원본 응답 표시</p></div>' +
+            '<pre class="whitespace-pre-wrap text-sm text-gray-300 bg-gray-800 p-3 rounded">' + escapeHtml(analysisText) + '</pre></div>';
     }
     
-    // 이스케이프된 문자 복원
-    let text = analysisText
-        .replace(/\\n/g, '\n')
-        .replace(/\\t/g, '\t');
-    
-    const lines = text.trim().split('\n').filter(line => line.trim());
+    var text = analysisText.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+    var lines = text.trim().split('\n').filter(function(line) { return line.trim(); });
     
     if (lines.length === 0) {
         return '<div class="p-4 text-gray-400 text-center"><i class="fas fa-check-circle mr-2 text-green-400"></i>분석 결과가 없습니다.</div>';
     }
     
-    const hasTabs = lines.some(line => line.includes('\t'));
+    var hasTabs = lines.some(function(line) { return line.indexOf('\t') !== -1; });
     
     if (!hasTabs) {
-        return `
-            <div class="p-3">
-                <div class="bg-blue-900/30 border border-blue-700 rounded-lg p-3 mb-3">
-                    <p class="text-blue-300 text-sm"><i class="fas fa-clipboard-list mr-2"></i>분석 결과</p>
-                </div>
-                <pre class="whitespace-pre-wrap text-sm text-gray-300">${escapeHtml(text)}</pre>
-            </div>`;
+        return '<div class="p-3"><pre class="whitespace-pre-wrap text-sm text-gray-300">' + escapeHtml(text) + '</pre></div>';
     }
     
-    // TSV를 테이블로 변환
-    let html = `
-        <div class="overflow-x-auto p-2">
-            <table class="w-full text-xs border-collapse">
-                <thead>
-                    <tr class="bg-gray-700">
-                        <th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">번호</th>
-                        <th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">유형</th>
-                        <th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">위치</th>
-                        <th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">변경 내용</th>
-                        <th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">검수 포인트</th>
-                    </tr>
-                </thead>
-                <tbody>`;
+    var html = '<div class="overflow-x-auto p-2"><table class="w-full text-xs border-collapse">' +
+        '<thead><tr class="bg-gray-700">' +
+        '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">번호</th>' +
+        '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">유형</th>' +
+        '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">위치</th>' +
+        '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">변경 내용</th>' +
+        '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">검수 포인트</th>' +
+        '</tr></thead><tbody>';
     
-    const firstCols = lines[0].split('\t');
-    const isHeader = firstCols[0] === '번호' || firstCols[0].includes('번호');
-    const startIdx = isHeader ? 1 : 0;
+    var firstCols = lines[0].split('\t');
+    var isHeader = firstCols[0] === '번호' || firstCols[0].indexOf('번호') !== -1;
+    var startIdx = isHeader ? 1 : 0;
     
-    let rowCount = 0;
-    for (let i = startIdx; i < lines.length; i++) {
-        const cols = lines[i].split('\t');
+    var rowCount = 0;
+    for (var i = startIdx; i < lines.length; i++) {
+        var cols = lines[i].split('\t');
         if (cols.length < 2) continue;
         
         rowCount++;
         html += '<tr class="hover:bg-gray-700/50">';
-        for (let j = 0; j < 5; j++) {
-            const cellContent = (cols[j] || '').trim();
-            html += `<td class="border border-gray-600 px-2 py-1.5 text-gray-300">${escapeHtml(cellContent)}</td>`;
+        for (var j = 0; j < 5; j++) {
+            var cellContent = (cols[j] || '').trim();
+            html += '<td class="border border-gray-600 px-2 py-1.5 text-gray-300">' + escapeHtml(cellContent) + '</td>';
         }
         html += '</tr>';
     }
     
     if (rowCount === 0) {
-        return `
-            <div class="p-4 text-center">
-                <i class="fas fa-check-circle text-green-400 text-2xl mb-2"></i>
-                <p class="text-gray-400">검수 결과 수정이 필요한 항목이 없습니다.</p>
-            </div>`;
+        return '<div class="p-4 text-center"><i class="fas fa-check-circle text-green-400 text-2xl mb-2"></i>' +
+            '<p class="text-gray-400">검수 결과 수정이 필요한 항목이 없습니다.</p></div>';
     }
     
     html += '</tbody></table></div>';
-    
     return html;
 }
 
@@ -834,47 +706,37 @@ function renderDiffHighlight(original, revised) {
         return '<div class="p-4 text-gray-500">비교할 텍스트가 없습니다.</div>';
     }
     
-    const originalLines = original.split('\n');
-    const revisedLines = revised.split('\n');
+    var originalLines = original.split('\n');
+    var revisedLines = revised.split('\n');
     
-    let html = '<div class="p-3 space-y-0.5 text-sm">';
+    var html = '<div class="p-3 space-y-0.5 text-sm">';
+    var maxLines = Math.max(originalLines.length, revisedLines.length);
+    var changeCount = 0;
     
-    const maxLines = Math.max(originalLines.length, revisedLines.length);
-    let changeCount = 0;
-    
-    for (let i = 0; i < maxLines; i++) {
-        const origLine = (originalLines[i] || '').trim();
-        const revLine = (revisedLines[i] || '').trim();
+    for (var i = 0; i < maxLines; i++) {
+        var origLine = (originalLines[i] || '').trim();
+        var revLine = (revisedLines[i] || '').trim();
         
         if (origLine !== revLine) {
             changeCount++;
-            html += `
-                <div class="bg-green-50 dark:bg-green-900/30 border-l-4 border-green-400 pl-3 py-1 rounded-r">
-                    <span class="text-green-800 dark:text-green-300">${escapeHtml(revisedLines[i] || '') || '<span class="italic text-green-600">(삭제됨)</span>'}</span>
-                </div>`;
+            html += '<div class="bg-green-50 dark:bg-green-900/30 border-l-4 border-green-400 pl-3 py-1 rounded-r">' +
+                '<span class="text-green-800 dark:text-green-300">' + (escapeHtml(revisedLines[i] || '') || '<span class="italic text-green-600">(삭제됨)</span>') + '</span></div>';
         } else {
-            html += `
-                <div class="pl-4 py-0.5">
-                    <span class="text-gray-700 dark:text-gray-300">${escapeHtml(revisedLines[i] || '')}</span>
-                </div>`;
+            html += '<div class="pl-4 py-0.5"><span class="text-gray-700 dark:text-gray-300">' + escapeHtml(revisedLines[i] || '') + '</span></div>';
         }
     }
     
     html += '</div>';
     
-    const summary = `
-        <div class="bg-blue-50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-700 px-3 py-2">
-            <span class="text-blue-700 dark:text-blue-300 text-sm font-medium">
-                <i class="fas fa-edit mr-2"></i>총 ${changeCount}개 라인 수정됨
-            </span>
-        </div>`;
+    var summary = '<div class="bg-blue-50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-700 px-3 py-2">' +
+        '<span class="text-blue-700 dark:text-blue-300 text-sm font-medium"><i class="fas fa-edit mr-2"></i>총 ' + changeCount + '개 라인 수정됨</span></div>';
     
     return summary + html;
 }
 
 // ========== 다운로드 ==========
 function initDownloadButtons() {
-    const downloadBtn = document.getElementById('download-revised-btn');
+    var downloadBtn = document.getElementById('download-revised-btn');
     
     if (downloadBtn) {
         downloadBtn.addEventListener('click', function() {
@@ -884,19 +746,19 @@ function initDownloadButtons() {
 }
 
 function downloadScript(format) {
-    const script = tabStates.stage2.revisedScript || tabStates.stage1.revisedScript;
+    var script = tabStates.stage2.revisedScript || tabStates.stage1.revisedScript;
     
     if (!script) {
         alert('다운로드할 수정본이 없습니다.');
         return;
     }
     
-    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const filename = `${currentFileName}_reviewed_${date}.txt`;
+    var date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    var filename = currentFileName + '_reviewed_' + date + '.txt';
     
-    const blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    var blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
     a.href = url;
     a.download = filename;
     a.click();
@@ -908,7 +770,7 @@ function downloadScript(format) {
 // ========== 유틸리티 ==========
 function escapeHtml(text) {
     if (!text) return '';
-    const div = document.createElement('div');
+    var div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
@@ -918,4 +780,4 @@ window.__MAIN_JS_LOADED__ = true;
 window.MAIN_JS_LOADED = true;
 window.tabStates = tabStates;
 
-console.log('✅ main.js v3.3 초기화 준비 완료');
+console.log('✅ main.js v3.4 초기화 준비 완료');
