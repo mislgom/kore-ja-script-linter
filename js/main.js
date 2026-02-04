@@ -434,6 +434,9 @@ window.selectAnalysisTab = function (tabId) {
         revisedScript.innerHTML = '<p class="text-gray-500 dark:text-gray-400">분석을 시작해주세요.</p>';
         resultSection.classList.remove('hidden');
     }
+
+    // 다운로드 버튼 상태 업데이트
+    updateDownloadButtonState(tabId);
 };
 
 function formatResultText(text) {
@@ -650,26 +653,23 @@ function initScriptButtons() {
 }
 
 /* ======================================================
-   DOM READY
+   DOWNLOAD REVISED SCRIPT
 ====================================================== */
-document.addEventListener('DOMContentLoaded', function () {
-    console.log('[BOOT] DOMContentLoaded fired');
+function initDownloadButton() {
+    var downloadBtn = document.getElementById('download-revised-btn');
+    if (!downloadBtn) return;
 
-    // 의존성 체크 (경고만, 중단하지 않음)
-    var depErrors = [];
-    if (typeof GeminiAPI === 'undefined') depErrors.push('GeminiAPI');
+    downloadBtn.addEventListener('click', function () {
+        var currentTab = window.AppState.currentSelectedTab;
+        if (!currentTab) {
+            showNotification('탭을 먼저 선택해주세요.', 'warning');
+            return;
+        }
 
-    if (depErrors.length > 0) {
-        console.warn('[DEPENDENCY] ⚠️ 일부 스크립트 누락:', depErrors.join(', '));
-        console.warn('[DEPENDENCY] 기본 UI는 동작하지만, AI 분석 기능이 제한될 수 있습니다.');
-    } else {
-        console.log('[BOOT] ✅ 필수 의존성 체크 통과');
-    }
+        var tab = tabStates[currentTab];
+        if (!tab || !tab.revisedScript) {
+            showNotification('다운로드할 수정된 대본이 없습니다.', 'warning');
+            return;
+        }
 
-    // 초기화
-    initDarkMode();
-    initApiKeyUI();
-    initScriptButtons();
-
-    console.log('[BOOT] ✅ 초기화 완료');
-});
+        downloadRevisedScript(tab.title, tab.revisedScript);
