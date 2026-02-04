@@ -1,10 +1,10 @@
 /** ======================================================
  * KORE-JA SCRIPT LINTER - MAIN.JS
- * 2-Stage Pipeline Analysis System v3.2
- * Features: TSV Table + Diff Highlight (Fixed)
+ * 2-Stage Pipeline Analysis System v3.3
+ * Features: TSV Table + Diff Highlight (ID Fixed)
  * ====================================================== */
 
-console.log('🚀 main.js v3.2 (TSV Table + Diff Fixed) 로드됨');
+console.log('🚀 main.js v3.3 (ID Fixed) 로드됨');
 
 // ========== 전역 상태 ==========
 const tabStates = {
@@ -38,8 +38,8 @@ function initializeApp() {
     initDarkMode();
     initApiKeyPanel();
     initTextarea();
+    initFileUpload();
     initDragAndDrop();
-    initTabs();
     initAnalysisButtons();
     initDownloadButtons();
     initCharCounter();
@@ -74,24 +74,26 @@ function updateDarkModeIcon(isDark) {
 
 // ========== API 키 관리 ==========
 function initApiKeyPanel() {
-    const toggleBtn = document.getElementById('api-key-toggle');
+    const toggleBtn = document.getElementById('api-key-toggle-btn');
     const panel = document.getElementById('api-key-panel');
-    const saveBtn = document.getElementById('save-api-key');
-    const deleteBtn = document.getElementById('delete-api-key');
-    const input = document.getElementById('gemini-api-key');
-    const statusDot = document.getElementById('api-status-dot');
+    const closeBtn = document.getElementById('api-key-close-btn');
+    const saveBtn = document.getElementById('api-key-save-btn');
+    const deleteBtn = document.getElementById('api-key-delete-btn');
+    const input = document.getElementById('api-key-input');
+    const statusText = document.getElementById('api-key-status-text');
+    const statusIcon = document.getElementById('api-key-status-icon');
     
-    // 상태 표시 업데이트
-    function updateStatus() {
+    function updateApiKeyStatus() {
         const hasKey = localStorage.getItem('GEMINI_API_KEY');
-        if (statusDot) {
-            statusDot.className = hasKey 
-                ? 'w-2 h-2 rounded-full bg-green-500' 
-                : 'w-2 h-2 rounded-full bg-red-500';
+        if (statusText) {
+            statusText.textContent = hasKey ? 'API 키 설정됨' : 'API 키 설정';
+        }
+        if (statusIcon) {
+            statusIcon.textContent = hasKey ? '✅' : '🔑';
         }
     }
     
-    updateStatus();
+    updateApiKeyStatus();
     
     if (toggleBtn && panel) {
         toggleBtn.addEventListener('click', function(e) {
@@ -101,12 +103,11 @@ function initApiKeyPanel() {
                 input.value = localStorage.getItem('GEMINI_API_KEY') || '';
             }
         });
-        
-        // 패널 외부 클릭 시 닫기
-        document.addEventListener('click', function(e) {
-            if (!panel.contains(e.target) && e.target !== toggleBtn) {
-                panel.classList.add('hidden');
-            }
+    }
+    
+    if (closeBtn && panel) {
+        closeBtn.addEventListener('click', function() {
+            panel.classList.add('hidden');
         });
     }
     
@@ -116,7 +117,7 @@ function initApiKeyPanel() {
             if (key) {
                 localStorage.setItem('GEMINI_API_KEY', key);
                 alert('API 키가 저장되었습니다.');
-                updateStatus();
+                updateApiKeyStatus();
                 panel.classList.add('hidden');
             } else {
                 alert('API 키를 입력해주세요.');
@@ -129,16 +130,23 @@ function initApiKeyPanel() {
             localStorage.removeItem('GEMINI_API_KEY');
             if (input) input.value = '';
             alert('API 키가 삭제되었습니다.');
-            updateStatus();
+            updateApiKeyStatus();
         });
     }
+    
+    // 외부 클릭 시 닫기
+    document.addEventListener('click', function(e) {
+        if (panel && toggleBtn && !panel.contains(e.target) && !toggleBtn.contains(e.target)) {
+            panel.classList.add('hidden');
+        }
+    });
 }
 
 // ========== 텍스트 영역 ==========
 function initTextarea() {
+    const sampleBtn = document.getElementById('korea-senior-sample-btn');
+    const clearBtn = document.getElementById('korea-senior-clear-btn');
     const textarea = document.getElementById('korea-senior-script');
-    const sampleBtn = document.getElementById('sample-btn');
-    const clearBtn = document.getElementById('clear-btn');
     
     if (sampleBtn) {
         sampleBtn.addEventListener('click', loadSampleScript);
@@ -187,6 +195,33 @@ function loadSampleScript() {
     console.log('📝 샘플 대본 로드됨');
 }
 
+// ========== 파일 업로드 ==========
+function initFileUpload() {
+    const uploadBtn = document.getElementById('btn-upload-file');
+    const fileInput = document.getElementById('file-upload-input');
+    const textarea = document.getElementById('korea-senior-script');
+    
+    if (uploadBtn && fileInput) {
+        uploadBtn.addEventListener('click', function() {
+            fileInput.click();
+        });
+        
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file && textarea) {
+                currentFileName = file.name.replace('.txt', '');
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    textarea.value = event.target.result;
+                    updateCharCounter();
+                    console.log('📂 파일 로드됨:', file.name);
+                };
+                reader.readAsText(file);
+            }
+        });
+    }
+}
+
 // ========== 글자 수 카운터 ==========
 function initCharCounter() {
     const textarea = document.getElementById('korea-senior-script');
@@ -206,22 +241,25 @@ function updateCharCounter() {
 
 // ========== 드래그 앤 드롭 ==========
 function initDragAndDrop() {
+    const dropZone = document.getElementById('drop-zone');
+    const dropOverlay = document.getElementById('drop-overlay');
     const textarea = document.getElementById('korea-senior-script');
-    if (!textarea) return;
     
-    textarea.addEventListener('dragover', function(e) {
+    if (!dropZone || !textarea) return;
+    
+    dropZone.addEventListener('dragover', function(e) {
         e.preventDefault();
-        textarea.classList.add('border-blue-500', 'bg-blue-50');
+        if (dropOverlay) dropOverlay.classList.remove('hidden');
     });
     
-    textarea.addEventListener('dragleave', function(e) {
+    dropZone.addEventListener('dragleave', function(e) {
         e.preventDefault();
-        textarea.classList.remove('border-blue-500', 'bg-blue-50');
+        if (dropOverlay) dropOverlay.classList.add('hidden');
     });
     
-    textarea.addEventListener('drop', function(e) {
+    dropZone.addEventListener('drop', function(e) {
         e.preventDefault();
-        textarea.classList.remove('border-blue-500', 'bg-blue-50');
+        if (dropOverlay) dropOverlay.classList.add('hidden');
         
         const file = e.dataTransfer.files[0];
         if (file && file.type === 'text/plain') {
@@ -230,7 +268,7 @@ function initDragAndDrop() {
             reader.onload = function(event) {
                 textarea.value = event.target.result;
                 updateCharCounter();
-                console.log('📂 파일 로드됨:', file.name);
+                console.log('📂 드래그 파일 로드됨:', file.name);
             };
             reader.readAsText(file);
         } else {
@@ -239,64 +277,25 @@ function initDragAndDrop() {
     });
 }
 
-// ========== 탭 관리 ==========
-function initTabs() {
-    const tab1 = document.getElementById('tab-stage1');
-    const tab2 = document.getElementById('tab-stage2');
-    const content1 = document.getElementById('stage1-content');
-    const content2 = document.getElementById('stage2-content');
-    
-    if (tab1) {
-        tab1.addEventListener('click', function() {
-            setActiveTab('stage1');
-        });
-    }
-    
-    if (tab2) {
-        tab2.addEventListener('click', function() {
-            setActiveTab('stage2');
-        });
-    }
-}
-
-function setActiveTab(stage) {
-    const tab1 = document.getElementById('tab-stage1');
-    const tab2 = document.getElementById('tab-stage2');
-    const content1 = document.getElementById('stage1-content');
-    const content2 = document.getElementById('stage2-content');
-    
-    if (stage === 'stage1') {
-        tab1?.classList.add('border-blue-500', 'text-blue-600');
-        tab1?.classList.remove('border-transparent', 'text-gray-500');
-        tab2?.classList.remove('border-blue-500', 'text-blue-600');
-        tab2?.classList.add('border-transparent', 'text-gray-500');
-        content1?.classList.remove('hidden');
-        content2?.classList.add('hidden');
-    } else {
-        tab2?.classList.add('border-blue-500', 'text-blue-600');
-        tab2?.classList.remove('border-transparent', 'text-gray-500');
-        tab1?.classList.remove('border-blue-500', 'text-blue-600');
-        tab1?.classList.add('border-transparent', 'text-gray-500');
-        content2?.classList.remove('hidden');
-        content1?.classList.add('hidden');
-    }
-}
-
 // ========== 분석 버튼 ==========
 function initAnalysisButtons() {
-    const btn1 = document.getElementById('start-stage1');
-    const btn2 = document.getElementById('start-stage2');
+    const btn1 = document.getElementById('btn-stage1');
+    const btn2 = document.getElementById('btn-stage2');
     
     if (btn1) {
         btn1.addEventListener('click', function() {
             startAnalysis('stage1');
         });
+        console.log('✅ 1차 분석 버튼 연결됨');
+    } else {
+        console.error('❌ btn-stage1 버튼을 찾을 수 없음');
     }
     
     if (btn2) {
         btn2.addEventListener('click', function() {
             startAnalysis('stage2');
         });
+        console.log('✅ 2차 분석 버튼 연결됨');
     }
 }
 
@@ -306,7 +305,7 @@ async function startAnalysis(stage) {
     // API 키 확인
     const apiKey = localStorage.getItem('GEMINI_API_KEY');
     if (!apiKey) {
-        alert('API 키를 먼저 설정해주세요.');
+        alert('API 키를 먼저 설정해주세요.\n우측 상단의 "API 키 설정" 버튼을 클릭하세요.');
         return;
     }
     
@@ -321,58 +320,130 @@ async function startAnalysis(stage) {
         }
         tabStates.stage1.originalScript = inputScript;
     } else {
-        // 2차 분석은 1차 수정본을 사용
-        if (!tabStates.stage1.revisedScript) {
+        if (!tabStates.stage1.revisedScript && !tabStates.stage1.originalScript) {
             alert('1차 분석을 먼저 완료해주세요.');
             return;
         }
-        inputScript = tabStates.stage1.revisedScript;
+        inputScript = tabStates.stage1.revisedScript || tabStates.stage1.originalScript;
         tabStates.stage2.originalScript = inputScript;
     }
     
     // UI 상태 변경
-    const btn = document.getElementById(`start-${stage}`);
-    const progressBar = document.getElementById(`${stage}-progress`);
+    const btn = document.getElementById(`btn-${stage}`);
+    const statusBadge = document.getElementById(`status-${stage}`);
+    const progressContainer = document.getElementById(`progress-container-${stage}`);
+    const progressBar = document.getElementById(`progress-bar-${stage}`);
+    const progressText = document.getElementById(`progress-text-${stage}`);
+    const resultContainer = document.getElementById(`result-${stage}`);
     
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>분석 중...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> 분석 중...';
+        btn.classList.remove('bg-indigo-500', 'hover:bg-indigo-600', 'bg-purple-500', 'hover:bg-purple-600');
+        btn.classList.add('bg-gray-400', 'cursor-not-allowed');
     }
-    if (progressBar) {
-        progressBar.classList.remove('hidden');
+    
+    if (statusBadge) {
+        statusBadge.textContent = '분석 중';
+        statusBadge.classList.remove('bg-gray-200', 'text-gray-600', 'bg-green-200', 'text-green-700');
+        statusBadge.classList.add('bg-yellow-200', 'text-yellow-700');
     }
+    
+    if (progressContainer) {
+        progressContainer.classList.remove('hidden');
+    }
+    
+    // 프로그레스 시뮬레이션
+    let progress = 0;
+    const progressInterval = setInterval(() => {
+        progress += Math.random() * 15;
+        if (progress > 90) progress = 90;
+        if (progressBar) progressBar.style.width = `${progress}%`;
+        if (progressText) progressText.textContent = `${Math.round(progress)}%`;
+    }, 500);
     
     tabStates[stage].isAnalyzing = true;
     
     try {
-        // 프롬프트 생성
         const prompt = generatePrompt(stage, inputScript);
         console.log('📤 프롬프트 생성 완료');
         
-        // API 호출
         const result = await callGeminiAPI(prompt);
         console.log('📥 API 응답 수신');
         
-        // 결과 렌더링
+        // 프로그레스 완료
+        clearInterval(progressInterval);
+        if (progressBar) progressBar.style.width = '100%';
+        if (progressText) progressText.textContent = '100%';
+        
+        // 결과 표시
+        if (resultContainer) {
+            resultContainer.classList.remove('hidden');
+        }
+        
         renderResults(stage, result);
         
         tabStates[stage].isComplete = true;
+        
+        // 상태 업데이트
+        if (statusBadge) {
+            statusBadge.textContent = '완료';
+            statusBadge.classList.remove('bg-yellow-200', 'text-yellow-700');
+            statusBadge.classList.add('bg-green-200', 'text-green-700');
+        }
+        
+        // 1차 완료 시 2차 버튼 활성화
+        if (stage === 'stage1') {
+            const btn2 = document.getElementById('btn-stage2');
+            if (btn2) {
+                btn2.disabled = false;
+                btn2.classList.remove('bg-gray-400', 'cursor-not-allowed');
+                btn2.classList.add('bg-purple-500', 'hover:bg-purple-600');
+            }
+        }
+        
+        // 2차 완료 시 다운로드 버튼 활성화
+        if (stage === 'stage2') {
+            const downloadBtn = document.getElementById('download-revised-btn');
+            if (downloadBtn) {
+                downloadBtn.disabled = false;
+            }
+        }
+        
         console.log(`✅ ${stage} 분석 완료`);
         
     } catch (error) {
         console.error(`❌ ${stage} 분석 실패:`, error);
-        alert(`분석 중 오류가 발생했습니다: ${error.message}`);
+        clearInterval(progressInterval);
+        
+        if (statusBadge) {
+            statusBadge.textContent = '오류';
+            statusBadge.classList.remove('bg-yellow-200', 'text-yellow-700');
+            statusBadge.classList.add('bg-red-200', 'text-red-700');
+        }
+        
+        alert(`분석 중 오류가 발생했습니다:\n${error.message}`);
     } finally {
-        // UI 복원
+        // 버튼 복원
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = stage === 'stage1' 
-                ? '<i class="fas fa-play mr-2"></i>1차 분석 시작'
-                : '<i class="fas fa-play mr-2"></i>2차 분석 시작';
+                ? '<i class="fas fa-play mr-1"></i> 1차 분석 시작'
+                : '<i class="fas fa-play mr-1"></i> 2차 분석 시작';
+            btn.classList.remove('bg-gray-400', 'cursor-not-allowed');
+            if (stage === 'stage1') {
+                btn.classList.add('bg-indigo-500', 'hover:bg-indigo-600');
+            } else {
+                btn.classList.add('bg-purple-500', 'hover:bg-purple-600');
+            }
         }
-        if (progressBar) {
-            progressBar.classList.add('hidden');
+        
+        if (progressContainer) {
+            setTimeout(() => {
+                progressContainer.classList.add('hidden');
+            }, 1000);
         }
+        
         tabStates[stage].isAnalyzing = false;
     }
 }
@@ -394,7 +465,7 @@ ${script}
 
 ## 출력 형식 (반드시 JSON으로만 응답):
 {
-  "analysis": "번호\t유형\t위치\t변경 내용\t검수 포인트\n1\t맞춤법\t15번째 줄\t'만낫습니다' → '만났습니다'\t받침 오류 수정",
+  "analysis": "번호\\t유형\\t위치\\t변경 내용\\t검수 포인트\\n1\\t맞춤법\\t15번째 줄\\t'만낫습니다' → '만났습니다'\\t받침 오류 수정",
   "revised": "(분석에서 지적한 오류를 모두 수정한 전체 대본)"
 }
 
@@ -419,7 +490,7 @@ ${script}
 
 ## 출력 형식 (반드시 JSON으로만 응답):
 {
-  "analysis": "번호\t유형\t위치\t변경 내용\t검수 포인트\n1\t표현\t5번째 줄\t'깨달았어요' → '깨달았습니다'\t어미 통일",
+  "analysis": "번호\\t유형\\t위치\\t변경 내용\\t검수 포인트\\n1\\t표현\\t5번째 줄\\t'깨달았어요' → '깨달았습니다'\\t어미 통일",
   "revised": "(2차 검수에서 지적한 오류를 모두 수정한 최종 대본)"
 }
 
@@ -438,7 +509,7 @@ async function callGeminiAPI(prompt) {
         throw new Error('API 키가 설정되지 않았습니다.');
     }
     
-    const endpoint = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
     
     const response = await fetch(endpoint, {
         method: 'POST',
@@ -482,7 +553,6 @@ function parseAnalysisResult(rawText) {
         return { analysis: '', revised: '', parseError: true };
     }
     
-    // JSON 블록 추출
     let jsonStr = rawText;
     
     // ```json ... ``` 형식 처리
@@ -541,36 +611,36 @@ function renderResults(stage, result) {
         tabStates.stage2.analysisResult = parsed.analysis;
         tabStates.stage2.revisedScript = parsed.revised;
         
-        console.log('=== Stage2 원본 (Stage1 수정본) ===');
+        console.log('=== Stage2 원본 ===');
         console.log(tabStates.stage2.originalScript?.substring(0, 200) + '...');
         console.log('=== Stage2 수정본 ===');
         console.log(tabStates.stage2.revisedScript?.substring(0, 200) + '...');
     }
     
     // 좌측: 분석 결과 표
-    const analysisContainer = document.getElementById(`${stage}-analysis-result`);
-    if (analysisContainer) {
-        analysisContainer.innerHTML = renderAnalysisTable(parsed.analysis, parsed.parseError);
+    const tableContainer = document.getElementById(`result-table-${stage}`);
+    if (tableContainer) {
+        tableContainer.innerHTML = renderAnalysisTable(parsed.analysis, parsed.parseError);
     }
     
     // 우측: 수정 반영 대본
-    const revisedContainer = document.getElementById(`${stage}-revised-script`);
+    const revisedContainer = document.getElementById(`revised-${stage}`);
     if (revisedContainer) {
         const original = stage === 'stage1' 
             ? tabStates.stage1.originalScript 
             : tabStates.stage1.revisedScript;
         const revised = parsed.revised;
         
-        if (revised && revised.trim() !== original.trim()) {
+        if (revised && revised.trim() !== original?.trim()) {
             revisedContainer.innerHTML = renderDiffHighlight(original, revised);
             console.log('✅ 차이점 하이라이트 적용됨');
         } else if (revised) {
             revisedContainer.innerHTML = `
-                <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <p class="text-yellow-700 font-medium mb-2">⚠️ 수정사항 없음</p>
-                    <p class="text-yellow-600 text-sm mb-3">AI가 원본과 동일한 텍스트를 반환했거나, 수정이 필요 없다고 판단했습니다.</p>
-                    <div class="bg-white p-3 rounded border border-yellow-100">
-                        <pre class="whitespace-pre-wrap text-gray-700 text-sm">${escapeHtml(revised)}</pre>
+                <div class="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg">
+                    <p class="text-yellow-700 dark:text-yellow-300 font-medium mb-2 text-sm">⚠️ 수정사항 없음</p>
+                    <p class="text-yellow-600 dark:text-yellow-400 text-xs mb-3">AI가 원본과 동일한 텍스트를 반환했거나, 수정이 필요 없다고 판단했습니다.</p>
+                    <div class="bg-white dark:bg-gray-800 p-3 rounded border border-yellow-100 dark:border-yellow-800">
+                        <pre class="whitespace-pre-wrap text-gray-700 dark:text-gray-300 text-sm">${escapeHtml(revised)}</pre>
                     </div>
                 </div>`;
         } else {
@@ -580,30 +650,21 @@ function renderResults(stage, result) {
                 </div>`;
         }
     }
-    
-    // 2차 분석 다운로드 버튼 표시
-    if (stage === 'stage2' && parsed.revised) {
-        const downloadArea = document.getElementById('stage2-download-area');
-        if (downloadArea) {
-            downloadArea.classList.remove('hidden');
-        }
-    }
 }
 
 // ========== 분석 결과 테이블 렌더링 ==========
 function renderAnalysisTable(analysisText, isParseError) {
     if (!analysisText || typeof analysisText !== 'string') {
-        return '<div class="p-4 text-gray-500 text-center"><i class="fas fa-info-circle mr-2"></i>분석 결과가 없습니다.</div>';
+        return '<div class="p-4 text-gray-400 text-center"><i class="fas fa-info-circle mr-2"></i>분석 결과가 없습니다.</div>';
     }
     
-    // 파싱 에러인 경우 원본 텍스트 표시
     if (isParseError) {
         return `
-            <div class="p-4">
-                <div class="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-3">
-                    <p class="text-orange-700 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>JSON 파싱 실패 - 원본 응답 표시</p>
+            <div class="p-3">
+                <div class="bg-orange-900/30 border border-orange-700 rounded-lg p-3 mb-3">
+                    <p class="text-orange-300 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>JSON 파싱 실패 - 원본 응답 표시</p>
                 </div>
-                <pre class="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-3 rounded">${escapeHtml(analysisText)}</pre>
+                <pre class="whitespace-pre-wrap text-sm text-gray-300 bg-gray-800 p-3 rounded">${escapeHtml(analysisText)}</pre>
             </div>`;
     }
     
@@ -615,38 +676,36 @@ function renderAnalysisTable(analysisText, isParseError) {
     const lines = text.trim().split('\n').filter(line => line.trim());
     
     if (lines.length === 0) {
-        return '<div class="p-4 text-gray-500 text-center"><i class="fas fa-check-circle mr-2 text-green-500"></i>분석 결과가 없습니다.</div>';
+        return '<div class="p-4 text-gray-400 text-center"><i class="fas fa-check-circle mr-2 text-green-400"></i>분석 결과가 없습니다.</div>';
     }
     
-    // TSV 형식 확인
     const hasTabs = lines.some(line => line.includes('\t'));
     
     if (!hasTabs) {
         return `
-            <div class="p-4">
-                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
-                    <p class="text-blue-700 text-sm"><i class="fas fa-clipboard-list mr-2"></i>분석 결과</p>
+            <div class="p-3">
+                <div class="bg-blue-900/30 border border-blue-700 rounded-lg p-3 mb-3">
+                    <p class="text-blue-300 text-sm"><i class="fas fa-clipboard-list mr-2"></i>분석 결과</p>
                 </div>
-                <pre class="whitespace-pre-wrap text-sm text-gray-700">${escapeHtml(text)}</pre>
+                <pre class="whitespace-pre-wrap text-sm text-gray-300">${escapeHtml(text)}</pre>
             </div>`;
     }
     
     // TSV를 테이블로 변환
     let html = `
         <div class="overflow-x-auto p-2">
-            <table class="w-full text-sm border-collapse bg-white">
+            <table class="w-full text-xs border-collapse">
                 <thead>
-                    <tr class="bg-gray-100">
-                        <th class="border border-gray-300 px-3 py-2 text-left font-medium text-gray-700">번호</th>
-                        <th class="border border-gray-300 px-3 py-2 text-left font-medium text-gray-700">유형</th>
-                        <th class="border border-gray-300 px-3 py-2 text-left font-medium text-gray-700">위치</th>
-                        <th class="border border-gray-300 px-3 py-2 text-left font-medium text-gray-700">변경 내용</th>
-                        <th class="border border-gray-300 px-3 py-2 text-left font-medium text-gray-700">검수 포인트</th>
+                    <tr class="bg-gray-700">
+                        <th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">번호</th>
+                        <th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">유형</th>
+                        <th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">위치</th>
+                        <th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">변경 내용</th>
+                        <th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">검수 포인트</th>
                     </tr>
                 </thead>
                 <tbody>`;
     
-    // 첫 줄이 헤더인지 확인
     const firstCols = lines[0].split('\t');
     const isHeader = firstCols[0] === '번호' || firstCols[0].includes('번호');
     const startIdx = isHeader ? 1 : 0;
@@ -654,13 +713,13 @@ function renderAnalysisTable(analysisText, isParseError) {
     let rowCount = 0;
     for (let i = startIdx; i < lines.length; i++) {
         const cols = lines[i].split('\t');
-        if (cols.length < 2) continue; // 최소 2개 컬럼 필요
+        if (cols.length < 2) continue;
         
         rowCount++;
-        html += '<tr class="hover:bg-gray-50">';
+        html += '<tr class="hover:bg-gray-700/50">';
         for (let j = 0; j < 5; j++) {
             const cellContent = (cols[j] || '').trim();
-            html += `<td class="border border-gray-300 px-3 py-2 text-gray-700">${escapeHtml(cellContent)}</td>`;
+            html += `<td class="border border-gray-600 px-2 py-1.5 text-gray-300">${escapeHtml(cellContent)}</td>`;
         }
         html += '</tr>';
     }
@@ -668,8 +727,8 @@ function renderAnalysisTable(analysisText, isParseError) {
     if (rowCount === 0) {
         return `
             <div class="p-4 text-center">
-                <i class="fas fa-check-circle text-green-500 text-2xl mb-2"></i>
-                <p class="text-gray-600">검수 결과 수정이 필요한 항목이 없습니다.</p>
+                <i class="fas fa-check-circle text-green-400 text-2xl mb-2"></i>
+                <p class="text-gray-400">검수 결과 수정이 필요한 항목이 없습니다.</p>
             </div>`;
     }
     
@@ -687,7 +746,7 @@ function renderDiffHighlight(original, revised) {
     const originalLines = original.split('\n');
     const revisedLines = revised.split('\n');
     
-    let html = '<div class="p-4 space-y-1 font-mono text-sm">';
+    let html = '<div class="p-3 space-y-0.5 text-sm">';
     
     const maxLines = Math.max(originalLines.length, revisedLines.length);
     let changeCount = 0;
@@ -698,26 +757,23 @@ function renderDiffHighlight(original, revised) {
         
         if (origLine !== revLine) {
             changeCount++;
-            // 변경된 라인 - 연한 초록색 배경
             html += `
-                <div class="bg-green-50 border-l-4 border-green-400 pl-3 py-1 rounded-r">
-                    <span class="text-green-800">${escapeHtml(revisedLines[i] || '') || '<span class="italic text-green-600">(삭제됨)</span>'}</span>
+                <div class="bg-green-50 dark:bg-green-900/30 border-l-4 border-green-400 pl-3 py-1 rounded-r">
+                    <span class="text-green-800 dark:text-green-300">${escapeHtml(revisedLines[i] || '') || '<span class="italic text-green-600">(삭제됨)</span>'}</span>
                 </div>`;
         } else {
-            // 동일한 라인
             html += `
-                <div class="pl-4 py-1">
-                    <span class="text-gray-700">${escapeHtml(revisedLines[i] || '')}</span>
+                <div class="pl-4 py-0.5">
+                    <span class="text-gray-700 dark:text-gray-300">${escapeHtml(revisedLines[i] || '')}</span>
                 </div>`;
         }
     }
     
     html += '</div>';
     
-    // 변경 요약 추가
     const summary = `
-        <div class="bg-blue-50 border-b border-blue-200 px-4 py-2">
-            <span class="text-blue-700 text-sm font-medium">
+        <div class="bg-blue-50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-700 px-3 py-2">
+            <span class="text-blue-700 dark:text-blue-300 text-sm font-medium">
                 <i class="fas fa-edit mr-2"></i>총 ${changeCount}개 라인 수정됨
             </span>
         </div>`;
@@ -727,18 +783,11 @@ function renderDiffHighlight(original, revised) {
 
 // ========== 다운로드 ==========
 function initDownloadButtons() {
-    const downloadBtn = document.getElementById('download-final');
-    const downloadVrewBtn = document.getElementById('download-vrew');
+    const downloadBtn = document.getElementById('download-revised-btn');
     
     if (downloadBtn) {
         downloadBtn.addEventListener('click', function() {
             downloadScript('txt');
-        });
-    }
-    
-    if (downloadVrewBtn) {
-        downloadVrewBtn.addEventListener('click', function() {
-            downloadScript('vrew');
         });
     }
 }
@@ -752,17 +801,9 @@ function downloadScript(format) {
     }
     
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    let filename, content;
+    const filename = `${currentFileName}_reviewed_${date}.txt`;
     
-    if (format === 'vrew') {
-        filename = `${currentFileName}_vrew_${date}.txt`;
-        content = formatForVrew(script);
-    } else {
-        filename = `${currentFileName}_reviewed_${date}.txt`;
-        content = script;
-    }
-    
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -771,15 +812,6 @@ function downloadScript(format) {
     URL.revokeObjectURL(url);
     
     console.log('📥 다운로드 완료:', filename);
-}
-
-function formatForVrew(script) {
-    // Vrew 형식: 각 문장을 개별 라인으로
-    return script
-        .split(/(?<=[.!?])\s+/)
-        .map(line => line.trim())
-        .filter(line => line)
-        .join('\n');
 }
 
 // ========== 유틸리티 ==========
@@ -791,7 +823,8 @@ function escapeHtml(text) {
 }
 
 // ========== 전역 노출 ==========
+window.__MAIN_JS_LOADED__ = true;
 window.MAIN_JS_LOADED = true;
 window.tabStates = tabStates;
 
-console.log('✅ main.js v3.2 초기화 준비 완료');
+console.log('✅ main.js v3.3 초기화 준비 완료');
