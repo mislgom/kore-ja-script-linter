@@ -1,10 +1,9 @@
 /**
  * KORE-JA SCRIPT LINTER - MAIN.JS
- * 4-Panel Horizontal Layout System v3.7
- * 1차분석 → 1차수정 → 2차분석 → 최종수정
+ * 4-Panel + Score System v3.8
  */
 
-console.log('🚀 main.js v3.7 (4-Panel Horizontal) 로드됨');
+console.log('🚀 main.js v3.8 (4-Panel + Score) 로드됨');
 
 // ========== 전역 상태 ==========
 var tabStates = {
@@ -19,6 +18,7 @@ var tabStates = {
         originalScript: '',
         revisedScript: '',
         analysisResult: '',
+        scores: null,
         isAnalyzing: false,
         isComplete: false
     }
@@ -44,7 +44,7 @@ function initializeApp() {
     initDownloadButtons();
     initCharCounter();
     
-    console.log('✅ main.js v3.7 초기화 완료');
+    console.log('✅ main.js v3.8 초기화 완료');
 }
 
 // ========== 다크모드 ==========
@@ -324,7 +324,6 @@ async function startAnalysis(stage) {
         }
         tabStates.stage1.originalScript = inputScript;
     } else {
-        // 2차 분석은 1차 수정본을 입력으로 사용
         if (!tabStates.stage1.revisedScript) {
             alert('1차 분석을 먼저 완료해주세요.');
             return;
@@ -333,28 +332,23 @@ async function startAnalysis(stage) {
         tabStates.stage2.originalScript = inputScript;
     }
     
-    // UI 요소
     var btn = document.getElementById('btn-' + stage);
     var statusBadge = document.getElementById('status-' + stage);
     var progressContainer = document.getElementById('progress-container');
     var progressBar = document.getElementById('progress-bar');
     var progressText = document.getElementById('progress-text');
-    var resultContainer = document.getElementById('result-container');
     
-    // 버튼 비활성화
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> 분석 중...';
         btn.className = 'btn-analyze px-4 py-2 bg-gray-400 text-white text-sm rounded-lg cursor-not-allowed';
     }
     
-    // 상태 배지 업데이트
     if (statusBadge) {
         statusBadge.textContent = '분석 중';
         statusBadge.className = 'status-badge bg-yellow-200 text-yellow-700 text-xs px-2 py-1 rounded-full';
     }
     
-    // 진행률 표시
     if (progressContainer) progressContainer.classList.remove('hidden');
     
     var progress = 0;
@@ -378,21 +372,15 @@ async function startAnalysis(stage) {
         if (progressBar) progressBar.style.width = '100%';
         if (progressText) progressText.textContent = '100%';
         
-        // 결과 컨테이너 표시
-        if (resultContainer) resultContainer.classList.remove('hidden');
-        
-        // 결과 렌더링
         renderResults(stage, result);
         
         tabStates[stage].isComplete = true;
         
-        // 상태 배지 완료
         if (statusBadge) {
             statusBadge.textContent = '완료';
             statusBadge.className = 'status-badge bg-green-200 text-green-700 text-xs px-2 py-1 rounded-full';
         }
         
-        // 1차 완료 시 2차 버튼 활성화
         if (stage === 'stage1') {
             var btn2 = document.getElementById('btn-stage2');
             if (btn2) {
@@ -401,7 +389,6 @@ async function startAnalysis(stage) {
             }
         }
         
-        // 2차 완료 시 다운로드 버튼 활성화
         if (stage === 'stage2') {
             var downloadBtn = document.getElementById('download-revised-btn');
             if (downloadBtn) downloadBtn.disabled = false;
@@ -420,7 +407,6 @@ async function startAnalysis(stage) {
         
         alert('분석 중 오류가 발생했습니다:\n' + error.message);
     } finally {
-        // 버튼 복원
         if (btn) {
             btn.disabled = false;
             if (stage === 'stage1') {
@@ -432,7 +418,6 @@ async function startAnalysis(stage) {
             }
         }
         
-        // 진행률 숨기기
         setTimeout(function() {
             if (progressContainer) progressContainer.classList.add('hidden');
         }, 1000);
@@ -446,7 +431,7 @@ function generatePrompt(stage, script) {
     if (stage === 'stage1') {
         return '당신은 한국 시니어 낭독용 대본의 **설정 일관성 검수** 전문가입니다.\n\n' +
             '## 분석 대상 대본:\n' + script + '\n\n' +
-            '## 🔍 1차 분석 항목 (반드시 순서대로 검수)\n\n' +
+            '## 🔍 1차 분석 항목\n\n' +
             '### 1. 국가 배경 확인\n' +
             '- 도시명, 지명, 화폐 단위, 문화적 요소가 해당 국가에 맞는지\n\n' +
             '### 2. 시대 배경 분석\n' +
@@ -463,13 +448,12 @@ function generatePrompt(stage, script) {
             '}\n' +
             '```\n\n' +
             '## 중요 규칙:\n' +
-            '1. 위 4가지 항목을 반드시 모두 검수\n' +
-            '2. 오류가 없으면 analysis에 "오류 없음" 기재\n' +
-            '3. revised에는 수정된 완전한 대본 작성\n' +
-            '4. 반드시 완전한 JSON으로 응답\n' +
-            '5. JSON 외 다른 텍스트 금지';
+            '1. 오류가 없으면 analysis에 "오류 없음" 기재\n' +
+            '2. revised에는 수정된 완전한 대본 작성\n' +
+            '3. 반드시 완전한 JSON으로 응답\n' +
+            '4. JSON 외 다른 텍스트 금지';
     } else {
-        return '당신은 한국 시니어 낭독용 대본의 **스토리 흐름 검수** 전문가입니다.\n\n' +
+        return '당신은 한국 시니어 낭독용 대본의 **스토리 흐름 및 품질 검수** 전문가입니다.\n\n' +
             '## 1차 검수 완료된 대본:\n' + script + '\n\n' +
             '## 🔍 2차 분석 항목\n\n' +
             '### 1. 시간 흐름 왜곡\n' +
@@ -484,11 +468,22 @@ function generatePrompt(stage, script) {
             '```json\n' +
             '{\n' +
             '  "analysis": "번호\\t오류 유형\\t오류 대본\\t변경 대본\\t검수 포인트\\n1\\t시간 왜곡\\t오류 문장\\t수정 문장\\t설명",\n' +
-            '  "revised": "최종 수정된 완전한 대본"\n' +
+            '  "revised": "최종 수정된 완전한 대본",\n' +
+            '  "scores": {\n' +
+            '    "fun": 85,\n' +
+            '    "flow": 90,\n' +
+            '    "senior": 88,\n' +
+            '    "retention": 82\n' +
+            '  }\n' +
             '}\n' +
             '```\n\n' +
+            '## 점수 평가 기준 (0-100점):\n' +
+            '- **fun (재미요소)**: 이야기의 흥미도, 몰입감, 감동 요소\n' +
+            '- **flow (대본 흐름)**: 시간/장소/상황 전개의 자연스러움\n' +
+            '- **senior (시니어 적합성)**: 50-70대 청취자 타겟 적합도\n' +
+            '- **retention (시청 이탈율 방지)**: 끝까지 듣고 싶은 정도 (높을수록 좋음)\n\n' +
             '## 중요 규칙:\n' +
-            '1. 위 4가지 항목을 반드시 모두 검수\n' +
+            '1. scores는 반드시 0-100 사이의 정수로 평가\n' +
             '2. revised에는 최종 완성된 대본 작성\n' +
             '3. 반드시 완전한 JSON으로 응답\n' +
             '4. JSON 외 다른 텍스트 금지';
@@ -532,15 +527,12 @@ function parseAnalysisResult(rawText) {
     console.log('📝 파싱 시작, 원본 길이:', rawText ? rawText.length : 0);
     
     if (!rawText || typeof rawText !== 'string') {
-        return { analysis: '', revised: '', parseError: true };
+        return { analysis: '', revised: '', scores: null, parseError: true };
     }
     
     var jsonStr = rawText.trim();
-    
-    // 코드 블록 제거
     jsonStr = jsonStr.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
     
-    // JSON 블록 추출
     var braceMatch = jsonStr.match(/\{[\s\S]*\}/);
     if (braceMatch) {
         jsonStr = braceMatch[0];
@@ -553,32 +545,30 @@ function parseAnalysisResult(rawText) {
         return {
             analysis: parsed.analysis || '',
             revised: parsed.revised || '',
+            scores: parsed.scores || null,
             parseError: false
         };
     } catch (e) {
         console.error('❌ JSON 파싱 실패:', e.message);
         
-        // 수동 추출 시도
         var analysis = '';
         var revised = '';
         
         var analysisMatch = rawText.match(/"analysis"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"revised"|"\s*})/);
         if (analysisMatch) {
             analysis = analysisMatch[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
-            console.log('🔧 analysis 수동 추출 성공');
         }
         
-        var revisedMatch = rawText.match(/"revised"\s*:\s*"([\s\S]*?)"\s*}/);
+        var revisedMatch = rawText.match(/"revised"\s*:\s*"([\s\S]*?)"\s*[,}]/);
         if (revisedMatch) {
             revised = revisedMatch[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
-            console.log('🔧 revised 수동 추출 성공');
         }
         
         if (analysis || revised) {
-            return { analysis: analysis, revised: revised, parseError: false };
+            return { analysis: analysis, revised: revised, scores: null, parseError: false };
         }
         
-        return { analysis: rawText, revised: '', parseError: true };
+        return { analysis: rawText, revised: '', scores: null, parseError: true };
     }
 }
 
@@ -588,18 +578,17 @@ function renderResults(stage, result) {
     
     var parsed = parseAnalysisResult(result);
     
-    // 상태 저장
     tabStates[stage].analysisResult = parsed.analysis;
     tabStates[stage].revisedScript = parsed.revised;
-    console.log('=== ' + stage + ' 저장 완료 ===');
+    if (parsed.scores) {
+        tabStates[stage].scores = parsed.scores;
+    }
     
-    // 분석 결과 표 렌더링
     var tableContainer = document.getElementById('result-table-' + stage);
     if (tableContainer) {
         tableContainer.innerHTML = renderAnalysisTable(parsed.analysis, parsed.parseError);
     }
     
-    // 수정 반영 렌더링
     var revisedContainer = document.getElementById('revised-' + stage);
     if (revisedContainer) {
         var original = stage === 'stage1' ? tabStates.stage1.originalScript : tabStates.stage1.revisedScript;
@@ -607,9 +596,60 @@ function renderResults(stage, result) {
         
         if (revised) {
             revisedContainer.innerHTML = renderFullScriptWithHighlight(original, revised);
-            console.log('✅ 전체 대본 + 하이라이트 적용됨');
         } else {
             revisedContainer.innerHTML = '<div class="p-4 text-gray-500 text-center"><i class="fas fa-info-circle mr-2"></i>수정본이 생성되지 않았습니다.</div>';
+        }
+    }
+    
+    // 2차 분석일 때 점수 표시
+    if (stage === 'stage2' && parsed.scores) {
+        renderScores(parsed.scores);
+    }
+}
+
+// ========== 점수 렌더링 ==========
+function renderScores(scores) {
+    console.log('📊 점수 렌더링:', scores);
+    
+    var funEl = document.getElementById('score-fun');
+    var flowEl = document.getElementById('score-flow');
+    var seniorEl = document.getElementById('score-senior');
+    var retentionEl = document.getElementById('score-retention');
+    var totalEl = document.getElementById('score-total');
+    var verdictEl = document.getElementById('score-verdict');
+    var badgeEl = document.getElementById('score-result-badge');
+    
+    var fun = parseInt(scores.fun) || 0;
+    var flow = parseInt(scores.flow) || 0;
+    var senior = parseInt(scores.senior) || 0;
+    var retention = parseInt(scores.retention) || 0;
+    var total = Math.round((fun + flow + senior + retention) / 4);
+    
+    if (funEl) funEl.textContent = fun + '점';
+    if (flowEl) flowEl.textContent = flow + '점';
+    if (seniorEl) seniorEl.textContent = senior + '점';
+    if (retentionEl) retentionEl.textContent = retention + '점';
+    if (totalEl) totalEl.textContent = total + '점';
+    
+    var isPass = total >= 98;
+    
+    if (verdictEl) {
+        if (isPass) {
+            verdictEl.innerHTML = '<div class="text-center"><i class="fas fa-check-circle text-green-400 text-xl mb-1"></i><p class="text-green-400 font-bold text-sm">통과</p></div>';
+            verdictEl.className = 'bg-green-500/20 border border-green-500/50 rounded-lg p-2 text-center flex items-center justify-center';
+        } else {
+            verdictEl.innerHTML = '<div class="text-center"><i class="fas fa-times-circle text-red-400 text-xl mb-1"></i><p class="text-red-400 font-bold text-sm">재검토 필요</p></div>';
+            verdictEl.className = 'bg-red-500/20 border border-red-500/50 rounded-lg p-2 text-center flex items-center justify-center';
+        }
+    }
+    
+    if (badgeEl) {
+        if (isPass) {
+            badgeEl.textContent = '통과 (' + total + '점)';
+            badgeEl.className = 'px-3 py-1 rounded-full text-xs font-bold bg-green-500 text-white';
+        } else {
+            badgeEl.textContent = '재검토 (' + total + '점)';
+            badgeEl.className = 'px-3 py-1 rounded-full text-xs font-bold bg-red-500 text-white';
         }
     }
 }
@@ -682,7 +722,6 @@ function renderFullScriptWithHighlight(original, revised) {
     var originalLines = original.split('\n');
     var revisedLines = revised.split('\n');
     
-    // 원본 라인을 Set으로
     var originalSet = {};
     for (var i = 0; i < originalLines.length; i++) {
         var trimmed = originalLines[i].trim();
@@ -764,4 +803,4 @@ window.__MAIN_JS_LOADED__ = true;
 window.MAIN_JS_LOADED = true;
 window.tabStates = tabStates;
 
-console.log('✅ main.js v3.7 초기화 준비 완료');
+console.log('✅ main.js v3.8 초기화 준비 완료');
