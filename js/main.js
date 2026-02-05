@@ -1,10 +1,10 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.4 - Vertex AI + Gemini 3 Pro
+ * main.js v4.5 - Vertex AI + Gemini 3 Pro
  * 25가지 오류 유형 검수, 4-패널 레이아웃, 새 점수 체계
  */
 
-console.log('🚀 main.js v4.4 (25 Error Types) 로드됨');
+console.log('🚀 main.js v4.5 (25 Error Types) 로드됨');
 
 // ===================== 전역 상태 =====================
 const state = {
@@ -38,9 +38,11 @@ function initApp() {
     initApiKeyPanel();
     initTextArea();
     initFileUpload();
+    initDragAndDrop();
+    initClearButton();
     initAnalysisButtons();
     initDownloadButton();
-    console.log('✅ main.js v4.4 초기화 완료');
+    console.log('✅ main.js v4.5 초기화 완료');
 }
 
 // ===================== 다크모드 =====================
@@ -102,6 +104,23 @@ function initTextArea() {
     });
 }
 
+// ===================== 지우기 버튼 =====================
+function initClearButton() {
+    const clearBtn = document.getElementById('btn-clear-script');
+    const textarea = document.getElementById('original-script');
+    const charCount = document.getElementById('char-count');
+    const fileNameDisplay = document.getElementById('file-name-display');
+
+    clearBtn.addEventListener('click', () => {
+        textarea.value = '';
+        charCount.textContent = '0';
+        fileNameDisplay.textContent = '';
+        console.log('🗑️ 대본 내용 삭제됨');
+    });
+
+    console.log('✅ 지우기 버튼 초기화됨');
+}
+
 // ===================== 파일 업로드 =====================
 function initFileUpload() {
     const fileInput = document.getElementById('file-input');
@@ -120,6 +139,57 @@ function initFileUpload() {
     });
 
     console.log('✅ 파일 업로드 초기화됨');
+}
+
+// ===================== 드래그 앤 드롭 =====================
+function initDragAndDrop() {
+    const dropZone = document.getElementById('drop-zone');
+    const fileNameDisplay = document.getElementById('file-name-display');
+
+    // 드래그 진입
+    dropZone.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add('drag-over');
+    });
+
+    // 드래그 오버
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add('drag-over');
+    });
+
+    // 드래그 떠남
+    dropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // 자식 요소로 이동할 때는 제거하지 않음
+        if (!dropZone.contains(e.relatedTarget)) {
+            dropZone.classList.remove('drag-over');
+        }
+    });
+
+    // 드롭
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('drag-over');
+
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            const file = files[0];
+            if (file.name.endsWith('.txt')) {
+                handleFile(file);
+                fileNameDisplay.textContent = `📎 ${file.name}`;
+                console.log('📄 드래그로 파일 업로드됨:', file.name);
+            } else {
+                alert('TXT 파일만 업로드 가능합니다.');
+            }
+        }
+    });
+
+    console.log('✅ 드래그 앤 드롭 초기화됨');
 }
 
 function handleFile(file) {
@@ -148,11 +218,17 @@ function initAnalysisButtons() {
             updateProgress(0, '분석이 중지되었습니다.');
             stopBtn.disabled = true;
             alert('분석이 중지되었습니다.');
+            
+            // 진행률 바 숨기기
+            setTimeout(() => {
+                document.getElementById('progress-container').style.display = 'none';
+            }, 1000);
         }
     });
 
     console.log('✅ 1차 분석 버튼 연결됨');
     console.log('✅ 2차 분석 버튼 연결됨');
+    console.log('✅ 중지 버튼 연결됨');
 }
 
 // ===================== 분석 실행 =====================
@@ -310,9 +386,9 @@ ${scriptText}
 }
 
 ## 점수 기준 (각 항목 0-100점)
-- entertainment: 재미요소 - 대본이 얼마나 재미있고 흥미로운지 (0-100)
-- seniorTarget: 시니어 타겟 - 시니어 시청자에게 얼마나 적합한지 (0-100)
-- storyFlow: 이야기 흐름 - 스토리 전개가 자연스럽고 논리적인지 (0-100)
+- entertainment: 재미요소 - 대본이 얼마나 재미있고 흥미로운지 (0-100, 높을수록 좋음)
+- seniorTarget: 시니어 타겟 - 시니어 시청자에게 얼마나 적합한지 (0-100, 높을수록 좋음)
+- storyFlow: 이야기 흐름 - 스토리 전개가 자연스럽고 논리적인지 (0-100, 높을수록 좋음)
 - bounceRate: 시청자 이탈율 - 시청자가 이탈할 가능성 (0-100, 낮을수록 좋음)
 
 반드시 위 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.`;
@@ -540,7 +616,7 @@ function highlightChangedParts(original, revised) {
     return result;
 }
 
-// ===================== 점수 렌더링 (새 점수 체계) =====================
+// ===================== 점수 렌더링 =====================
 function renderScores(scores) {
     const container = document.getElementById('score-display');
 
@@ -549,12 +625,14 @@ function renderScores(scores) {
         return;
     }
 
-    // 점수 추출 (이탈율은 역산: 100 - bounceRate)
+    // 점수 추출
     const entertainment = scores.entertainment || 0;
     const seniorTarget = scores.seniorTarget || 0;
     const storyFlow = scores.storyFlow || 0;
     const bounceRate = scores.bounceRate || 0;
-    const bounceScore = 100 - bounceRate; // 이탈율을 점수로 변환
+    
+    // 이탈율을 점수로 변환 (이탈율이 낮을수록 점수가 높음)
+    const bounceScore = 100 - bounceRate;
 
     // 평균 계산 (4가지 항목)
     const average = Math.round((entertainment + seniorTarget + storyFlow + bounceScore) / 4);
@@ -586,7 +664,7 @@ function renderScores(scores) {
         <div class="score-label">이야기 흐름</div>
     </div>`;
 
-    // 4. 시청자 이탈율 (낮을수록 좋음)
+    // 4. 시청자 이탈율 (낮을수록 좋음 = bounceScore가 높을수록 좋음)
     html += `<div class="score-card ${getScoreClass(bounceScore)}">
         <div class="score-value">${bounceRate}%</div>
         <div class="score-label">시청자 이탈율</div>
