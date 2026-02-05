@@ -1,11 +1,11 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램 - MAIN.JS
- * 4-Panel + Score System v4.2
+ * 4-Panel + Score System v4.3
  * Vertex AI + Gemini 3 Pro
- * 클릭 이동 + 하이라이트 기능
+ * 클릭 이동 + 하이라이트 + 중지 버튼 + 수정 개수 표시
  */
 
-console.log('🚀 main.js v4.2 (Vertex AI + Gemini 3 Pro) 로드됨');
+console.log('🚀 main.js v4.3 (Vertex AI + Gemini 3 Pro) 로드됨');
 
 // ========== 전역 상태 ==========
 var tabStates = {
@@ -27,6 +27,7 @@ var tabStates = {
 };
 
 var currentFileName = 'script';
+var currentAbortController = null;
 
 // ========== 초기화 ==========
 document.addEventListener('DOMContentLoaded', function() {
@@ -47,7 +48,7 @@ function initializeApp() {
     initCharCounter();
     addHighlightStyles();
     
-    console.log('✅ main.js v4.2 초기화 완료');
+    console.log('✅ main.js v4.3 초기화 완료');
 }
 
 // ========== 하이라이트 스타일 추가 ==========
@@ -333,6 +334,7 @@ function initDragAndDrop() {
 function initAnalysisButtons() {
     var btn1 = document.getElementById('btn-stage1');
     var btn2 = document.getElementById('btn-stage2');
+    var stopBtn = document.getElementById('btn-stop-analysis');
     
     if (btn1) {
         btn1.addEventListener('click', function() {
@@ -346,6 +348,21 @@ function initAnalysisButtons() {
             startAnalysis('stage2');
         });
         console.log('✅ 2차 분석 버튼 연결됨');
+    }
+    
+    if (stopBtn) {
+        stopBtn.addEventListener('click', function() {
+            stopAnalysis();
+        });
+        console.log('✅ 분석 중지 버튼 연결됨');
+    }
+}
+
+// ========== 분석 중지 함수 ==========
+function stopAnalysis() {
+    if (currentAbortController) {
+        currentAbortController.abort();
+        console.log('⏹️ 분석 중지 요청됨');
     }
 }
 
@@ -376,16 +393,24 @@ async function startAnalysis(stage) {
         tabStates.stage2.originalScript = inputScript;
     }
     
+    currentAbortController = new AbortController();
+    
     var btn = document.getElementById('btn-' + stage);
     var statusBadge = document.getElementById('status-' + stage);
     var progressContainer = document.getElementById('progress-container');
     var progressBar = document.getElementById('progress-bar');
     var progressText = document.getElementById('progress-text');
+    var stopBtn = document.getElementById('btn-stop-analysis');
     
     if (btn) {
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> 분석 중...';
         btn.className = 'btn-analyze px-4 py-2 bg-gray-400 text-white text-sm rounded-lg cursor-not-allowed';
+    }
+    
+    if (stopBtn) {
+        stopBtn.classList.remove('hidden');
+        stopBtn.disabled = false;
     }
     
     if (statusBadge) {
@@ -409,7 +434,7 @@ async function startAnalysis(stage) {
         var prompt = generatePrompt(stage, inputScript);
         console.log('📤 프롬프트 생성 완료, 길이:', prompt.length);
         
-        var result = await callGeminiAPI(prompt);
+        var result = await callGeminiAPI(prompt, currentAbortController.signal);
         console.log('📥 API 응답 수신');
         console.log('📄 응답 길이:', result.length);
         
@@ -442,16 +467,30 @@ async function startAnalysis(stage) {
         console.log('✅ ' + stage + ' 분석 완료');
         
     } catch (error) {
-        console.error('❌ ' + stage + ' 분석 실패:', error);
         clearInterval(progressInterval);
         
-        if (statusBadge) {
-            statusBadge.textContent = '오류';
-            statusBadge.className = 'status-badge bg-red-200 text-red-700 text-xs px-2 py-1 rounded-full';
+        if (error.name === 'AbortError') {
+            console.log('⏹️ ' + stage + ' 분석이 사용자에 의해 중지됨');
+            if (statusBadge) {
+                statusBadge.textContent = '중지됨';
+                statusBadge.className = 'status-badge bg-orange-200 text-orange-700 text-xs px-2 py-1 rounded-full';
+            }
+            alert('분석이 중지되었습니다.');
+        } else {
+            console.error('❌ ' + stage + ' 분석 실패:', error);
+            if (statusBadge) {
+                statusBadge.textContent = '오류';
+                statusBadge.className = 'status-badge bg-red-200 text-red-700 text-xs px-2 py-1 rounded-full';
+            }
+            alert('분석 중 오류가 발생했습니다:\n' + error.message);
+        }
+    } finally {
+        currentAbortController = null;
+        
+        if (stopBtn) {
+            stopBtn.classList.add('hidden');
         }
         
-        alert('분석 중 오류가 발생했습니다:\n' + error.message);
-    } finally {
         if (btn) {
             btn.disabled = false;
             if (stage === 'stage1') {
@@ -542,7 +581,7 @@ function generatePrompt(stage, script) {
 }
 
 // ========== Gemini API 호출 (Vertex AI + Gemini 3 Pro) ==========
-async function callGeminiAPI(prompt) {
+async function callGeminiAPI(prompt, signal) {
     var apiKey = localStorage.getItem('GEMINI_API_KEY');
     if (!apiKey) throw new Error('API 키가 설정되지 않았습니다.');
     
@@ -550,7 +589,7 @@ async function callGeminiAPI(prompt) {
     
     console.log('🌐 Vertex AI 엔드포인트 호출: gemini-3-pro-preview');
     
-    var response = await fetch(endpoint, {
+    var fetchOptions = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -563,7 +602,13 @@ async function callGeminiAPI(prompt) {
                 maxOutputTokens: 65536
             }
         })
-    });
+    };
+    
+    if (signal) {
+        fetchOptions.signal = signal;
+    }
+    
+    var response = await fetch(endpoint, fetchOptions);
     
     if (!response.ok) {
         var errorData = await response.json().catch(function() { return {}; });
@@ -637,6 +682,40 @@ function parseAnalysisResult(rawText) {
     }
 }
 
+// ========== 수정 개수 계산 ==========
+function countChangedLines(original, revised) {
+    if (!original || !revised) return 0;
+    
+    var originalLines = original.split('\n');
+    var revisedLines = revised.split('\n');
+    var changedCount = 0;
+    
+    for (var i = 0; i < revisedLines.length; i++) {
+        var revisedLine = revisedLines[i];
+        var originalLine = originalLines[i] || '';
+        
+        if (revisedLine.trim() !== '' && originalLine.trim() !== revisedLine.trim()) {
+            changedCount++;
+        }
+    }
+    
+    return changedCount;
+}
+
+// ========== 수정 개수 표시 업데이트 ==========
+function updateRevisionCount(stage, count) {
+    var countEl = document.getElementById('revision-count-' + stage);
+    if (countEl) {
+        if (count > 0) {
+            countEl.textContent = count + '개 수정';
+            countEl.className = 'text-xs text-green-400 font-bold';
+        } else {
+            countEl.textContent = '수정 없음';
+            countEl.className = 'text-xs text-gray-400';
+        }
+    }
+}
+
 // ========== 결과 렌더링 ==========
 function renderResults(stage, result) {
     console.log('🎨 renderResults 호출: ' + stage);
@@ -661,8 +740,14 @@ function renderResults(stage, result) {
         
         if (revised && revised.length > 0) {
             revisedContainer.innerHTML = renderFullScriptWithHighlight(original, revised);
+            
+            // 수정 개수 계산 및 표시
+            var changedCount = countChangedLines(original, revised);
+            updateRevisionCount(stage, changedCount);
+            console.log('📊 ' + stage + ' 수정 개수:', changedCount);
         } else {
             revisedContainer.innerHTML = '<div class="p-4 text-red-400 text-center"><i class="fas fa-exclamation-triangle mr-2"></i>수정본이 생성되지 않았습니다.</div>';
+            updateRevisionCount(stage, 0);
         }
     }
     
@@ -813,13 +898,11 @@ function scrollToHighlight(row) {
     var container = document.getElementById(containerId);
     if (!container) return;
     
-    // 기존 클릭 하이라이트 제거
     var prevClicked = container.querySelectorAll('.clicked-highlight');
     for (var i = 0; i < prevClicked.length; i++) {
         prevClicked[i].classList.remove('clicked-highlight');
     }
     
-    // 해당 텍스트를 포함하는 하이라이트 요소 찾기
     var highlights = container.querySelectorAll('.highlight-changed');
     var targetElement = null;
     
@@ -831,7 +914,6 @@ function scrollToHighlight(row) {
         }
     }
     
-    // 하이라이트 요소가 없으면 텍스트로 검색
     if (!targetElement) {
         var allLines = container.querySelectorAll('div[data-line-index]');
         for (var k = 0; k < allLines.length; k++) {
@@ -846,7 +928,6 @@ function scrollToHighlight(row) {
         targetElement.classList.add('clicked-highlight');
         targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
         
-        // 3초 후 클릭 하이라이트 제거
         setTimeout(function() {
             targetElement.classList.remove('clicked-highlight');
         }, 3000);
@@ -976,4 +1057,4 @@ function downloadScript() {
 
 // ========== 부팅 확인 ==========
 window.__MAIN_JS_LOADED__ = true;
-console.log('[BOOT] main.js v4.2 로드 완료');
+console.log('[BOOT] main.js v4.3 로드 완료');
