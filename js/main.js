@@ -1,10 +1,9 @@
 /** ======================================================
  * KORE-JA SCRIPT LINTER - MAIN.JS
- * 2-Stage Pipeline Analysis System v3.5
- * Features: New Table Columns + Full Script Diff
+ * 4-Panel Layout System v3.6
  * ====================================================== */
 
-console.log('🚀 main.js v3.5 로드됨');
+console.log('🚀 main.js v3.6 (4-Panel) 로드됨');
 
 // ========== 전역 상태 ==========
 var tabStates = {
@@ -175,11 +174,7 @@ function loadSampleScript() {
         '"고마워요, 젊은이."\n' +
         '할머니의 미소가 참 따뜻했습니다.\n\n' +
         '우리는 그렇게 처음 만낫습니다.\n' +
-        '서로의 이야기를 나누며, 시간 가는 줄 몰랐어요.\n\n' +
-        '할머니께서는 옛날 이야기를 들려주셨습니다.\n' +
-        '전쟁 때 헤어진 가족을 찾아 평생을 헤맸다고 하셨어요.\n\n' +
-        '저는 그 이야기에 깊이 감동받았습니다.\n' +
-        '인생이란 참으로 기구하기도 하고, 아름답기도 하다는 걸 깨달았어요.';
+        '서로의 이야기를 나누며, 시간 가는 줄 몰랐어요.';
 
     textarea.value = sample;
     updateCharCounter();
@@ -334,11 +329,12 @@ async function startAnalysis(stage) {
         }
         tabStates.stage1.originalScript = inputScript;
     } else {
-        if (!tabStates.stage1.revisedScript && !tabStates.stage1.originalScript) {
+        // 2차 분석은 1차 수정본을 사용
+        if (!tabStates.stage1.revisedScript) {
             alert('1차 분석을 먼저 완료해주세요.');
             return;
         }
-        inputScript = tabStates.stage1.revisedScript || tabStates.stage1.originalScript;
+        inputScript = tabStates.stage1.revisedScript;
         tabStates.stage2.originalScript = inputScript;
     }
     
@@ -347,7 +343,7 @@ async function startAnalysis(stage) {
     var progressContainer = document.getElementById('progress-container-' + stage);
     var progressBar = document.getElementById('progress-bar-' + stage);
     var progressText = document.getElementById('progress-text-' + stage);
-    var resultContainer = document.getElementById('result-' + stage);
+    var resultContainer = document.getElementById('result-container');
     
     if (btn) {
         btn.disabled = true;
@@ -357,7 +353,7 @@ async function startAnalysis(stage) {
     
     if (statusBadge) {
         statusBadge.textContent = '분석 중';
-        statusBadge.className = 'ml-2 status-badge bg-yellow-200 text-yellow-700 text-xs px-2 py-1 rounded-full';
+        statusBadge.className = 'status-badge bg-yellow-200 text-yellow-700 text-xs px-2 py-1 rounded-full';
     }
     
     if (progressContainer) {
@@ -385,6 +381,7 @@ async function startAnalysis(stage) {
         if (progressBar) progressBar.style.width = '100%';
         if (progressText) progressText.textContent = '100%';
         
+        // 결과 컨테이너 표시
         if (resultContainer) {
             resultContainer.classList.remove('hidden');
         }
@@ -395,9 +392,10 @@ async function startAnalysis(stage) {
         
         if (statusBadge) {
             statusBadge.textContent = '완료';
-            statusBadge.className = 'ml-2 status-badge bg-green-200 text-green-700 text-xs px-2 py-1 rounded-full';
+            statusBadge.className = 'status-badge bg-green-200 text-green-700 text-xs px-2 py-1 rounded-full';
         }
         
+        // 1차 완료 시 2차 버튼 활성화
         if (stage === 'stage1') {
             var btn2 = document.getElementById('btn-stage2');
             if (btn2) {
@@ -406,6 +404,7 @@ async function startAnalysis(stage) {
             }
         }
         
+        // 2차 완료 시 다운로드 버튼 활성화
         if (stage === 'stage2') {
             var downloadBtn = document.getElementById('download-revised-btn');
             if (downloadBtn) {
@@ -421,7 +420,7 @@ async function startAnalysis(stage) {
         
         if (statusBadge) {
             statusBadge.textContent = '오류';
-            statusBadge.className = 'ml-2 status-badge bg-red-200 text-red-700 text-xs px-2 py-1 rounded-full';
+            statusBadge.className = 'status-badge bg-red-200 text-red-700 text-xs px-2 py-1 rounded-full';
         }
         
         alert('분석 중 오류가 발생했습니다:\n' + error.message);
@@ -448,7 +447,6 @@ async function startAnalysis(stage) {
 }
 
 // ========== 프롬프트 생성 ==========
-// ========== 프롬프트 생성 ==========
 function generatePrompt(stage, script) {
     if (stage === 'stage1') {
         return '당신은 한국 시니어 낭독용 대본의 **설정 일관성 검수** 전문가입니다.\n\n' +
@@ -457,43 +455,30 @@ function generatePrompt(stage, script) {
             '### 1. 국가 배경 확인\n' +
             '- 대본의 국가 배경이 일관되게 유지되는지 확인\n' +
             '- 도시명, 지명, 화폐 단위, 문화적 요소가 해당 국가에 맞는지 분석\n' +
-            '- 예: 한국 배경인데 갑자기 일본/중국 지명이 나오면 오류\n' +
-            '- 예: 조선시대인데 "원화", "달러" 등 현대 화폐 언급 시 오류\n\n' +
+            '- 예: 한국 배경인데 갑자기 일본/중국 지명이 나오면 오류\n\n' +
             '### 2. 시대 배경 분석\n' +
             '- 대본의 시대 배경을 파악 (조선시대/일제시대/현대/70-90년대 등)\n' +
             '- 해당 시대에 맞지 않는 사물, 기술, 문화, 언어 사용 시 오류\n' +
-            '- 예: 조선시대에 스마트폰, 와이파이, 배달앱, 경찰 제복 등장 → 시대착오\n' +
-            '- 예: 70년대 배경에 카카오톡, 인스타그램 언급 → 시대착오\n' +
-            '- 예: 일제시대에 "조선 후기"라는 표현 → 시대 혼동\n\n' +
+            '- 예: 조선시대에 스마트폰, 와이파이, 배달앱, 경찰 제복 등장 → 시대착오\n\n' +
             '### 3. 등장인물 설정 분석\n' +
             '- 등장인물이 처음부터 끝까지 동일한 설정으로 유지되는지 확인\n' +
             '- 검수 항목: 이름, 나이, 외형, 성격, 직업, 신분\n' +
-            '- 예: "과부"라 했는데 → "남편이 어제 다녀감" → 설정 모순\n' +
-            '- 예: "상주(제단지기)"라 했는데 → "관아 서리" → 직업 변경\n' +
-            '- 예: "서른 즈음 사내"라 했는데 → "노인" → 나이 변경\n' +
-            '- 예: "윤해린"이라 했는데 → "윤혜린" → 이름 오타/변경\n\n' +
+            '- 예: "과부"라 했는데 → "남편이 어제 다녀감" → 설정 모순\n\n' +
             '### 4. 등장인물 관계 분석\n' +
             '- 등장인물 간의 관계가 처음부터 끝까지 일관되게 유지되는지 확인\n' +
-            '- 검수 항목: 가족, 친척, 이웃, 적대관계, 상하관계 등\n' +
-            '- 예: "원수"라 했는데 → "친아버지라 절을 올림" → 관계 모순\n' +
-            '- 예: "처음 만난 사이"라 했는데 → "오랜 친구처럼 대화" → 관계 오류\n' +
-            '- 예: "백도식이 악인"이라 했는데 → "윤해린의 친아버지" → 관계 변경\n\n' +
+            '- 예: "원수"라 했는데 → "친아버지라 절을 올림" → 관계 모순\n\n' +
             '## 출력 형식 (반드시 JSON으로만 응답):\n' +
             '{\n' +
-            '  "analysis": "번호\\t오류 유형\\t오류 대본\\t변경 대본\\t검수 포인트\\n' +
-            '1\\t시대착오\\t윤해린의 품에서 진동이 울렸습니다. 유리판 같은 물건이 불빛을 내며...\\t(해당 문장 삭제)\\t조선시대에 스마트폰 등장 - 시대 배경 불일치\\n' +
-            '2\\t인물 설정 모순\\t윤해린은 남편을 잃은 과부라 했지만, 남편은 어제 다녀감\\t(해당 문장 삭제)\\t과부 설정인데 남편 생존 언급 - 인물 설정 불일치",\n' +
-            '  "revised": "모든 오류를 수정/삭제한 전체 대본"\n' +
+            '  "analysis": "번호\\t오류 유형\\t오류 대본\\t변경 대본\\t검수 포인트\\n1\\t시대착오\\t오류 문장\\t수정 문장\\t설명",\n' +
+            '  "revised": "모든 오류를 수정한 전체 대본"\n' +
             '}\n\n' +
             '## 중요 규칙:\n' +
-            '1. 위 4가지 항목을 **반드시 모두 검수**하세요\n' +
+            '1. 위 4가지 항목을 반드시 모두 검수하세요\n' +
             '2. 오류 대본: 문제가 있는 문장 전체를 그대로 기입\n' +
             '3. 변경 대본: 수정된 문장 또는 "(해당 문장 삭제)"로 표기\n' +
-            '4. 검수 포인트: 어떤 오류인지 + 왜 오류인지 구체적 설명\n' +
-            '5. 발견된 모든 오류를 빠짐없이 기록 (최소 5개 이상)\n' +
-            '6. revised에는 오류를 모두 수정/삭제한 완전한 대본 작성\n' +
-            '7. 반드시 완전한 JSON으로 응답 마무리\n' +
-            '8. JSON 외 다른 텍스트 절대 금지';
+            '4. revised에는 오류를 모두 수정/삭제한 완전한 대본 작성\n' +
+            '5. 반드시 완전한 JSON으로 응답 마무리\n' +
+            '6. JSON 외 다른 텍스트 절대 금지';
     } else {
         return '당신은 한국 시니어 낭독용 대본의 **스토리 흐름 및 품질 검수** 전문가입니다.\n\n' +
             '## 1차 검수 완료된 대본:\n' + script + '\n\n' +
@@ -501,44 +486,25 @@ function generatePrompt(stage, script) {
             '### 1. 시간 흐름 왜곡 분석\n' +
             '- 이야기 진행 중 시간 흐름이 논리적으로 맞는지 확인\n' +
             '- 검수 항목: 아침/점심/저녁, 오전/오후, 4계절, 구체적 시간\n' +
-            '- 예: "자정에 만나자" → 갑자기 "다음 해 봄 아침" → 시간 점프\n' +
-            '- 예: "겨울 폭설" → "장마철 후덥지근" → 계절 왜곡\n' +
-            '- 예: "점심 직후" → "새벽닭이 울기 전" → 시간 모순\n\n' +
+            '- 예: "자정에 만나자" → 갑자기 "다음 해 봄 아침" → 시간 점프\n\n' +
             '### 2. 장소 흐름 왜곡 분석\n' +
             '- 이야기 진행 중 장소 이동이 논리적으로 맞는지 확인\n' +
-            '- 예: "산골 마을" → 갑자기 "항구/모래사장" → 장소 점프\n' +
-            '- 예: "대문을 열었는데" → "관창 안쪽 방에 서 있음" → 공간 왜곡\n' +
-            '- 예: "눈밭 위에서" → "벚꽃잎이 흩날림" → 배경 충돌\n\n' +
+            '- 예: "산골 마을" → 갑자기 "항구/모래사장" → 장소 점프\n\n' +
             '### 3. 시니어 채널 적합성 분석\n' +
             '- 시니어(50-70대) 청취자에게 적합한 콘텐츠인지 확인\n' +
-            '- 검수 항목:\n' +
-            '  * 이야기 전개 속도가 너무 빠르지 않은지\n' +
-            '  * 등장인물이 너무 많아 혼란스럽지 않은지\n' +
-            '  * 감정선이 자연스럽게 연결되는지\n' +
-            '  * 몰입을 방해하는 요소가 없는지\n' +
-            '  * 청취자 이탈을 유발하는 지루한 구간이 없는지\n' +
-            '- 예: 갑작스러운 장면 전환 → 시니어 청취자 혼란 유발\n' +
-            '- 예: 복잡한 관계도 → 이해하기 어려움\n\n' +
+            '- 이야기 전개 속도, 등장인물 수, 감정선 연결, 몰입 방해 요소\n\n' +
             '### 4. 1차 검수 재확인\n' +
-            '- 1차에서 놓친 오류가 없는지 다시 한번 확인\n' +
-            '- 국가 배경, 시대 배경, 인물 설정, 인물 관계 재검수\n' +
-            '- 1차 수정본에 새로운 오류가 생기지 않았는지 확인\n\n' +
+            '- 1차에서 놓친 오류가 없는지 다시 한번 확인\n\n' +
             '## 출력 형식 (반드시 JSON으로만 응답):\n' +
             '{\n' +
-            '  "analysis": "번호\\t오류 유형\\t오류 대본\\t변경 대본\\t검수 포인트\\n' +
-            '1\\t시간 왜곡\\t자정쯤이라던 약속은 어제 일처럼 멀어졌고, 다음 해 봄 아침이 되어 있었습니다\\t(해당 문장 삭제)\\t자정에서 갑자기 다음 해 봄으로 시간 점프 - 흐름 왜곡\\n' +
-            '2\\t장소 왜곡\\t고개를 들자 눈 대신 모래사장이 펼쳐져 있었고, 파도가 관창 담을 두드리고 있었지요\\t(해당 문장 삭제)\\t산골 마을에서 갑자기 해변으로 장소 점프",\n' +
+            '  "analysis": "번호\\t오류 유형\\t오류 대본\\t변경 대본\\t검수 포인트\\n1\\t시간 왜곡\\t오류 문장\\t수정 문장\\t설명",\n' +
             '  "revised": "최종 수정된 완전한 대본"\n' +
             '}\n\n' +
             '## 중요 규칙:\n' +
-            '1. 위 4가지 항목을 **반드시 모두 검수**하세요\n' +
-            '2. 시간/장소 왜곡을 최우선으로 검출\n' +
-            '3. 시니어 청취자 관점에서 몰입 방해 요소 검출\n' +
-            '4. 1차에서 놓친 오류 재검수\n' +
-            '5. 발견된 모든 오류를 빠짐없이 기록\n' +
-            '6. revised에는 최종 완성된 대본 작성\n' +
-            '7. 반드시 완전한 JSON으로 응답 마무리\n' +
-            '8. JSON 외 다른 텍스트 절대 금지';
+            '1. 위 4가지 항목을 반드시 모두 검수하세요\n' +
+            '2. revised에는 최종 완성된 대본 작성\n' +
+            '3. 반드시 완전한 JSON으로 응답 마무리\n' +
+            '4. JSON 외 다른 텍스트 절대 금지';
     }
 }
 
@@ -648,23 +614,20 @@ function renderResults(stage, result) {
     if (stage === 'stage1') {
         tabStates.stage1.analysisResult = parsed.analysis;
         tabStates.stage1.revisedScript = parsed.revised;
-        console.log('=== Stage1 원본 ===');
-        console.log(tabStates.stage1.originalScript ? tabStates.stage1.originalScript.substring(0, 200) + '...' : '');
-        console.log('=== Stage1 수정본 ===');
-        console.log(tabStates.stage1.revisedScript ? tabStates.stage1.revisedScript.substring(0, 200) + '...' : '');
-        console.log('=== 동일 여부 ===', tabStates.stage1.originalScript === tabStates.stage1.revisedScript);
+        console.log('=== Stage1 저장 완료 ===');
     } else {
         tabStates.stage2.analysisResult = parsed.analysis;
         tabStates.stage2.revisedScript = parsed.revised;
+        console.log('=== Stage2 저장 완료 ===');
     }
     
-    // 좌측: 분석 결과 표
+    // 분석 결과 표 렌더링
     var tableContainer = document.getElementById('result-table-' + stage);
     if (tableContainer) {
         tableContainer.innerHTML = renderAnalysisTable(parsed.analysis, parsed.parseError);
     }
     
-    // 우측: 전체 대본 + 수정된 부분만 하이라이트
+    // 수정 반영 렌더링
     var revisedContainer = document.getElementById('revised-' + stage);
     if (revisedContainer) {
         var original = stage === 'stage1' ? tabStates.stage1.originalScript : tabStates.stage1.revisedScript;
@@ -679,7 +642,7 @@ function renderResults(stage, result) {
     }
 }
 
-// ========== 분석 결과 테이블 렌더링 (새 컬럼) ==========
+// ========== 분석 결과 테이블 렌더링 ==========
 function renderAnalysisTable(analysisText, isParseError) {
     if (!analysisText || typeof analysisText !== 'string') {
         return '<div class="p-4 text-gray-400 text-center"><i class="fas fa-info-circle mr-2"></i>분석 결과가 없습니다.</div>';
@@ -687,62 +650,47 @@ function renderAnalysisTable(analysisText, isParseError) {
     
     if (isParseError) {
         return '<div class="p-3"><div class="bg-orange-900/30 border border-orange-700 rounded-lg p-3 mb-3">' +
-            '<p class="text-orange-300 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>JSON 파싱 실패 - 원본 응답 표시</p></div>' +
-            '<pre class="whitespace-pre-wrap text-sm text-gray-300 bg-gray-800 p-3 rounded">' + escapeHtml(analysisText) + '</pre></div>';
+            '<p class="text-orange-300 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>JSON 파싱 실패</p></div>' +
+            '<pre class="whitespace-pre-wrap text-xs text-gray-300 bg-gray-800 p-3 rounded">' + escapeHtml(analysisText) + '</pre></div>';
     }
     
     var text = analysisText.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
     var lines = text.trim().split('\n').filter(function(line) { return line.trim(); });
     
     if (lines.length === 0) {
-        return '<div class="p-4 text-gray-400 text-center"><i class="fas fa-check-circle mr-2 text-green-400"></i>수정이 필요한 항목이 없습니다.</div>';
+        return '<div class="p-4 text-gray-400 text-center"><i class="fas fa-check-circle mr-2 text-green-400"></i>오류 없음</div>';
     }
     
     var hasTabs = lines.some(function(line) { return line.indexOf('\t') !== -1; });
     
     if (!hasTabs) {
-        return '<div class="p-3"><pre class="whitespace-pre-wrap text-sm text-gray-300">' + escapeHtml(text) + '</pre></div>';
+        return '<div class="p-3"><pre class="whitespace-pre-wrap text-xs text-gray-300">' + escapeHtml(text) + '</pre></div>';
     }
     
-    // 새 컬럼: 번호 | 유형 | 오류 대본 | 변경 대본 | 검수 포인트
-    var html = '<div class="overflow-x-auto p-2"><table class="w-full text-xs border-collapse">' +
+    var html = '<div class="overflow-x-auto"><table class="w-full text-xs border-collapse">' +
         '<thead><tr class="bg-gray-700">' +
-        '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200 w-12">번호</th>' +
-        '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200 w-16">유형</th>' +
-        '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">오류 대본</th>' +
-        '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">변경 대본</th>' +
-        '<th class="border border-gray-600 px-2 py-1.5 text-left font-medium text-gray-200">검수 포인트</th>' +
+        '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200 w-8">No</th>' +
+        '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200 w-16">유형</th>' +
+        '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200">오류 대본</th>' +
+        '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200">변경 대본</th>' +
+        '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200">검수 포인트</th>' +
         '</tr></thead><tbody>';
     
     var firstCols = lines[0].split('\t');
     var isHeader = firstCols[0] === '번호' || firstCols[0].indexOf('번호') !== -1;
     var startIdx = isHeader ? 1 : 0;
     
-    var rowCount = 0;
     for (var i = startIdx; i < lines.length; i++) {
         var cols = lines[i].split('\t');
         if (cols.length < 2) continue;
         
-        rowCount++;
         html += '<tr class="hover:bg-gray-700/50">';
-        
-        // 번호
-        html += '<td class="border border-gray-600 px-2 py-1.5 text-gray-300 text-center">' + escapeHtml(cols[0] || '') + '</td>';
-        // 유형
-        html += '<td class="border border-gray-600 px-2 py-1.5 text-gray-300">' + escapeHtml(cols[1] || '') + '</td>';
-        // 오류 대본 (빨간색 배경)
-        html += '<td class="border border-gray-600 px-2 py-1.5 bg-red-900/30 text-red-300">' + escapeHtml(cols[2] || '') + '</td>';
-        // 변경 대본 (초록색 배경)
-        html += '<td class="border border-gray-600 px-2 py-1.5 bg-green-900/30 text-green-300">' + escapeHtml(cols[3] || '') + '</td>';
-        // 검수 포인트
-        html += '<td class="border border-gray-600 px-2 py-1.5 text-gray-300">' + escapeHtml(cols[4] || '') + '</td>';
-        
+        html += '<td class="border border-gray-600 px-1 py-1 text-gray-300 text-center">' + escapeHtml(cols[0] || '') + '</td>';
+        html += '<td class="border border-gray-600 px-1 py-1 text-gray-300">' + escapeHtml(cols[1] || '') + '</td>';
+        html += '<td class="border border-gray-600 px-1 py-1 bg-red-900/30 text-red-300">' + escapeHtml(cols[2] || '') + '</td>';
+        html += '<td class="border border-gray-600 px-1 py-1 bg-green-900/30 text-green-300">' + escapeHtml(cols[3] || '') + '</td>';
+        html += '<td class="border border-gray-600 px-1 py-1 text-gray-300">' + escapeHtml(cols[4] || '') + '</td>';
         html += '</tr>';
-    }
-    
-    if (rowCount === 0) {
-        return '<div class="p-4 text-center"><i class="fas fa-check-circle text-green-400 text-2xl mb-2"></i>' +
-            '<p class="text-gray-400">검수 결과 수정이 필요한 항목이 없습니다.</p></div>';
     }
     
     html += '</tbody></table></div>';
@@ -755,16 +703,14 @@ function renderFullScriptWithHighlight(original, revised) {
         return '<div class="p-4 text-gray-500">수정본이 없습니다.</div>';
     }
     
-    // 원본이 없으면 전체 수정본만 표시 (하이라이트 없이)
     if (!original) {
         return '<div class="p-3 text-sm"><pre class="whitespace-pre-wrap text-gray-700 dark:text-gray-300">' + escapeHtml(revised) + '</pre></div>';
     }
     
-    // 원본과 수정본을 라인 단위로 분리
     var originalLines = original.split('\n');
     var revisedLines = revised.split('\n');
     
-    // 원본 라인을 Set으로 만들어 빠른 검색 가능하게
+    // 원본 라인을 Set으로 만들어 빠른 검색
     var originalSet = {};
     for (var i = 0; i < originalLines.length; i++) {
         var trimmed = originalLines[i].trim();
@@ -774,39 +720,34 @@ function renderFullScriptWithHighlight(original, revised) {
     }
     
     var changeCount = 0;
-    var html = '<div class="p-3 space-y-0.5 text-sm">';
+    var html = '<div class="p-2 space-y-0.5 text-xs">';
     
     for (var j = 0; j < revisedLines.length; j++) {
         var revLine = revisedLines[j];
         var revTrimmed = revLine.trim();
         
-        // 빈 줄은 그대로 표시
         if (!revTrimmed) {
-            html += '<div class="py-0.5"><span class="text-gray-700 dark:text-gray-300">&nbsp;</span></div>';
+            html += '<div class="py-0.5"><span class="text-gray-500">&nbsp;</span></div>';
             continue;
         }
         
-        // 원본에 해당 라인이 존재하는지 확인
         var isOriginalLine = originalSet[revTrimmed] === true;
         
         if (!isOriginalLine) {
-            // 원본에 없는 라인 = 새로 추가되거나 수정된 라인 → 초록색 하이라이트
             changeCount++;
-            html += '<div class="bg-green-100 dark:bg-green-900/40 border-l-4 border-green-500 pl-3 py-1 rounded-r">' +
+            html += '<div class="bg-green-100 dark:bg-green-900/40 border-l-2 border-green-500 pl-2 py-0.5">' +
                 '<span class="text-green-800 dark:text-green-200">' + escapeHtml(revLine) + '</span></div>';
         } else {
-            // 원본에 있는 라인 = 변경 없음 → 일반 표시
-            html += '<div class="pl-4 py-0.5">' +
+            html += '<div class="pl-2 py-0.5">' +
                 '<span class="text-gray-700 dark:text-gray-300">' + escapeHtml(revLine) + '</span></div>';
         }
     }
     
     html += '</div>';
     
-    // 상단 요약
-    var summary = '<div class="bg-blue-50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-700 px-3 py-2 sticky top-0">' +
-        '<span class="text-blue-700 dark:text-blue-300 text-sm font-medium">' +
-        '<i class="fas fa-edit mr-2"></i>총 ' + changeCount + '개 라인 수정됨 (연한 초록색 = 수정/추가된 부분)</span></div>';
+    var summary = '<div class="bg-blue-50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-700 px-2 py-1 sticky top-0">' +
+        '<span class="text-blue-700 dark:text-blue-300 text-xs font-medium">' +
+        '<i class="fas fa-edit mr-1"></i>' + changeCount + '개 라인 수정됨</span></div>';
     
     return summary + html;
 }
@@ -817,12 +758,12 @@ function initDownloadButtons() {
     
     if (downloadBtn) {
         downloadBtn.addEventListener('click', function() {
-            downloadScript('txt');
+            downloadScript();
         });
     }
 }
 
-function downloadScript(format) {
+function downloadScript() {
     var script = tabStates.stage2.revisedScript || tabStates.stage1.revisedScript;
     
     if (!script) {
@@ -857,4 +798,4 @@ window.__MAIN_JS_LOADED__ = true;
 window.MAIN_JS_LOADED = true;
 window.tabStates = tabStates;
 
-console.log('✅ main.js v3.5 초기화 준비 완료');
+console.log('✅ main.js v3.6 초기화 준비 완료');
