@@ -1,10 +1,10 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.3 - Vertex AI + Gemini 3 Pro
- * 25가지 오류 유형 검수, 4-패널 레이아웃, 중지 버튼, 수정 개수 표시
+ * main.js v4.4 - Vertex AI + Gemini 3 Pro
+ * 25가지 오류 유형 검수, 4-패널 레이아웃, 새 점수 체계
  */
 
-console.log('🚀 main.js v4.3 (25 Error Types) 로드됨');
+console.log('🚀 main.js v4.4 (25 Error Types) 로드됨');
 
 // ===================== 전역 상태 =====================
 const state = {
@@ -38,10 +38,9 @@ function initApp() {
     initApiKeyPanel();
     initTextArea();
     initFileUpload();
-    initDragAndDrop();
     initAnalysisButtons();
     initDownloadButton();
-    console.log('✅ main.js v4.3 초기화 완료');
+    console.log('✅ main.js v4.4 초기화 완료');
 }
 
 // ===================== 다크모드 =====================
@@ -105,47 +104,22 @@ function initTextArea() {
 
 // ===================== 파일 업로드 =====================
 function initFileUpload() {
-    const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
     const fileNameDisplay = document.getElementById('file-name-display');
-
-    dropZone.addEventListener('click', () => fileInput.click());
 
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
-            handleFile(file);
-            fileNameDisplay.textContent = `📎 ${file.name}`;
-        }
-    });
-}
-
-function initDragAndDrop() {
-    const dropZone = document.getElementById('drop-zone');
-    const fileNameDisplay = document.getElementById('file-name-display');
-
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropZone.classList.add('drag-over');
-    });
-
-    dropZone.addEventListener('dragleave', () => {
-        dropZone.classList.remove('drag-over');
-    });
-
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('drag-over');
-        const file = e.dataTransfer.files[0];
-        if (file && file.name.endsWith('.txt')) {
-            handleFile(file);
-            fileNameDisplay.textContent = `📎 ${file.name}`;
-        } else {
-            alert('TXT 파일만 업로드 가능합니다.');
+            if (file.name.endsWith('.txt')) {
+                handleFile(file);
+                fileNameDisplay.textContent = `📎 ${file.name}`;
+            } else {
+                alert('TXT 파일만 업로드 가능합니다.');
+            }
         }
     });
 
-    console.log('✅ 드래그 앤 드롭 초기화됨');
+    console.log('✅ 파일 업로드 초기화됨');
 }
 
 function handleFile(file) {
@@ -328,20 +302,18 @@ ${scriptText}
   ],
   "revisedScript": "전체 수정된 대본 텍스트",
   "scores": {
-    "overall": 85,
-    "grammar": 90,
-    "readability": 80,
-    "seniorFriendly": 75,
-    "bounceRisk": 20
+    "entertainment": 85,
+    "seniorTarget": 90,
+    "storyFlow": 80,
+    "bounceRate": 15
   }
 }
 
-## 점수 기준
-- overall: 전체 품질 점수 (0-100)
-- grammar: 문법 정확도 (0-100)
-- readability: 가독성 (0-100)
-- seniorFriendly: 시니어 적합도 (0-100)
-- bounceRisk: 이탈 위험도 (0-100, 낮을수록 좋음)
+## 점수 기준 (각 항목 0-100점)
+- entertainment: 재미요소 - 대본이 얼마나 재미있고 흥미로운지 (0-100)
+- seniorTarget: 시니어 타겟 - 시니어 시청자에게 얼마나 적합한지 (0-100)
+- storyFlow: 이야기 흐름 - 스토리 전개가 자연스럽고 논리적인지 (0-100)
+- bounceRate: 시청자 이탈율 - 시청자가 이탈할 가능성 (0-100, 낮을수록 좋음)
 
 반드시 위 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.`;
 }
@@ -487,30 +459,25 @@ function scrollToHighlight(row) {
 
     if (!container) return;
 
-    // 수정된 텍스트가 있는 span 찾기
     const highlights = container.querySelectorAll('.changed-text');
     let targetElement = null;
 
-    // 검색 텍스트와 매칭되는 요소 찾기
     highlights.forEach(el => {
         if (el.textContent.includes(searchText) || searchText.includes(el.textContent)) {
             targetElement = el;
         }
     });
 
-    // 매칭되는 요소가 없으면 첫 번째 하이라이트로
     if (!targetElement && highlights.length > 0) {
         const lineIndex = parseInt(row.getAttribute('data-line')) - 1;
         targetElement = highlights[Math.min(lineIndex, highlights.length - 1)] || highlights[0];
     }
 
     if (targetElement) {
-        // 기존 플래시 효과 제거
         container.querySelectorAll('.highlight-flash').forEach(el => {
             el.classList.remove('highlight-flash');
         });
 
-        // 스크롤 및 플래시 효과
         targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
         targetElement.classList.add('highlight-flash');
 
@@ -518,12 +485,11 @@ function scrollToHighlight(row) {
             targetElement.classList.remove('highlight-flash');
         }, 1500);
     } else {
-        // 컨테이너 상단으로 스크롤
         container.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 }
 
-// ===================== 수정본 렌더링 (변경 부분 하이라이트) =====================
+// ===================== 수정본 렌더링 =====================
 function renderFullScriptWithHighlight(originalScript, revisedScript, container) {
     if (!revisedScript) {
         container.innerHTML = '<p class="placeholder">수정된 내용이 없습니다.</p>';
@@ -538,11 +504,9 @@ function renderFullScriptWithHighlight(originalScript, revisedScript, container)
         const originalLine = originalLines[index] || '';
 
         if (revisedLine !== originalLine && originalLine.trim() !== '') {
-            // 변경된 라인 - 변경 부분 하이라이트
             const highlightedLine = highlightChangedParts(originalLine, revisedLine);
             html += `<p class="line-revised" data-line="${index + 1}">${highlightedLine}</p>`;
         } else {
-            // 변경되지 않은 라인
             html += `<p class="line-unchanged">${escapeHtml(revisedLine)}</p>`;
         }
     });
@@ -557,7 +521,6 @@ function highlightChangedParts(original, revised) {
         return escapeHtml(revised);
     }
 
-    // 단어 단위로 비교
     const originalWords = original.split(/(\s+)/);
     const revisedWords = revised.split(/(\s+)/);
 
@@ -577,7 +540,7 @@ function highlightChangedParts(original, revised) {
     return result;
 }
 
-// ===================== 점수 렌더링 =====================
+// ===================== 점수 렌더링 (새 점수 체계) =====================
 function renderScores(scores) {
     const container = document.getElementById('score-display');
 
@@ -586,42 +549,54 @@ function renderScores(scores) {
         return;
     }
 
-    const getScoreClass = (score, isRisk = false) => {
-        if (isRisk) {
-            if (score <= 30) return 'score-good';
-            if (score <= 60) return 'score-warning';
-            return 'score-danger';
-        }
-        if (score >= 80) return 'score-good';
-        if (score >= 60) return 'score-warning';
+    // 점수 추출 (이탈율은 역산: 100 - bounceRate)
+    const entertainment = scores.entertainment || 0;
+    const seniorTarget = scores.seniorTarget || 0;
+    const storyFlow = scores.storyFlow || 0;
+    const bounceRate = scores.bounceRate || 0;
+    const bounceScore = 100 - bounceRate; // 이탈율을 점수로 변환
+
+    // 평균 계산 (4가지 항목)
+    const average = Math.round((entertainment + seniorTarget + storyFlow + bounceScore) / 4);
+    const isPass = average >= 95;
+
+    const getScoreClass = (score) => {
+        if (score >= 95) return 'score-good';
+        if (score >= 80) return 'score-warning';
         return 'score-danger';
     };
 
     let html = '<div class="score-grid">';
 
-    html += `<div class="score-card ${getScoreClass(scores.overall || 0)}">
-        <div class="score-value">${scores.overall || 0}</div>
-        <div class="score-label">전체 품질</div>
+    // 1. 재미요소
+    html += `<div class="score-card ${getScoreClass(entertainment)}">
+        <div class="score-value">${entertainment}</div>
+        <div class="score-label">재미요소</div>
     </div>`;
 
-    html += `<div class="score-card ${getScoreClass(scores.grammar || 0)}">
-        <div class="score-value">${scores.grammar || 0}</div>
-        <div class="score-label">문법 정확도</div>
+    // 2. 시니어 타겟
+    html += `<div class="score-card ${getScoreClass(seniorTarget)}">
+        <div class="score-value">${seniorTarget}</div>
+        <div class="score-label">시니어 타겟</div>
     </div>`;
 
-    html += `<div class="score-card ${getScoreClass(scores.readability || 0)}">
-        <div class="score-value">${scores.readability || 0}</div>
-        <div class="score-label">가독성</div>
+    // 3. 이야기 흐름
+    html += `<div class="score-card ${getScoreClass(storyFlow)}">
+        <div class="score-value">${storyFlow}</div>
+        <div class="score-label">이야기 흐름</div>
     </div>`;
 
-    html += `<div class="score-card ${getScoreClass(scores.seniorFriendly || 0)}">
-        <div class="score-value">${scores.seniorFriendly || 0}</div>
-        <div class="score-label">시니어 적합도</div>
+    // 4. 시청자 이탈율 (낮을수록 좋음)
+    html += `<div class="score-card ${getScoreClass(bounceScore)}">
+        <div class="score-value">${bounceRate}%</div>
+        <div class="score-label">시청자 이탈율</div>
     </div>`;
 
-    html += `<div class="score-card ${getScoreClass(scores.bounceRisk || 0, true)}">
-        <div class="score-value">${scores.bounceRisk || 0}</div>
-        <div class="score-label">이탈 위험도</div>
+    // 5. 최종 점수 (평균)
+    html += `<div class="score-card final-score ${isPass ? '' : 'fail'}">
+        <div class="score-value">${average}</div>
+        <div class="score-label">최종 점수</div>
+        <div class="pass-badge ${isPass ? 'pass' : 'fail'}">${isPass ? '✅ 합격' : '❌ 불합격'}</div>
     </div>`;
 
     html += '</div>';
@@ -658,5 +633,4 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// 전역 함수로 노출 (onclick에서 사용)
 window.scrollToHighlight = scrollToHighlight;
