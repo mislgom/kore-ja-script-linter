@@ -1,10 +1,10 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.5 - Vertex AI + Gemini 3 Pro
+ * main.js v4.5 - Vertex AI Express Mode + Gemini 3 Pro
  * 25가지 오류 유형 검수, 4-패널 레이아웃, 새 점수 체계
  */
 
-console.log('🚀 main.js v4.5 (25 Error Types) 로드됨');
+console.log('🚀 main.js v4.5 (Vertex AI + Gemini 3 Pro) 로드됨');
 
 // ===================== 전역 상태 =====================
 const state = {
@@ -146,31 +146,26 @@ function initDragAndDrop() {
     const dropZone = document.getElementById('drop-zone');
     const fileNameDisplay = document.getElementById('file-name-display');
 
-    // 드래그 진입
     dropZone.addEventListener('dragenter', (e) => {
         e.preventDefault();
         e.stopPropagation();
         dropZone.classList.add('drag-over');
     });
 
-    // 드래그 오버
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
         e.stopPropagation();
         dropZone.classList.add('drag-over');
     });
 
-    // 드래그 떠남
     dropZone.addEventListener('dragleave', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        // 자식 요소로 이동할 때는 제거하지 않음
         if (!dropZone.contains(e.relatedTarget)) {
             dropZone.classList.remove('drag-over');
         }
     });
 
-    // 드롭
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -219,7 +214,6 @@ function initAnalysisButtons() {
             stopBtn.disabled = true;
             alert('분석이 중지되었습니다.');
             
-            // 진행률 바 숨기기
             setTimeout(() => {
                 document.getElementById('progress-container').style.display = 'none';
             }, 1000);
@@ -258,14 +252,12 @@ async function startAnalysis(stage) {
         state.stage2.originalScript = scriptText;
     }
 
-    // UI 준비
     const progressContainer = document.getElementById('progress-container');
     const stopBtn = document.getElementById('btn-stop-analysis');
     progressContainer.style.display = 'block';
     stopBtn.disabled = false;
     updateProgress(10, 'AI 분석 준비 중...');
 
-    // AbortController 설정
     currentAbortController = new AbortController();
     const signal = currentAbortController.signal;
 
@@ -285,7 +277,6 @@ async function startAnalysis(stage) {
         updateProgress(90, '결과 렌더링 중...');
         renderResults(parsed, stage);
 
-        // 상태 저장
         if (stage === 'stage1') {
             state.stage1.analysis = parsed.analysis;
             state.stage1.revisedScript = parsed.revisedScript;
@@ -394,10 +385,12 @@ ${scriptText}
 반드시 위 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.`;
 }
 
-// ===================== Gemini API 호출 =====================
+// ===================== Gemini API 호출 (Vertex AI Express Mode) =====================
 async function callGeminiAPI(prompt, signal) {
     const apiKey = localStorage.getItem('GEMINI_API_KEY');
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${apiKey}`;
+    
+    // Vertex AI Express Mode 엔드포인트 - Gemini 3 Pro
+    const endpoint = `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-3-pro-preview:generateContent?key=${apiKey}`;
 
     const response = await fetch(endpoint, {
         method: 'POST',
@@ -442,7 +435,6 @@ function parseAnalysisResult(responseText) {
 
     let jsonStr = responseText;
 
-    // JSON 블록 추출
     const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
     if (jsonMatch) {
         jsonStr = jsonMatch[1];
@@ -480,14 +472,11 @@ function renderResults(parsed, stage) {
     const revisedContainer = document.getElementById(`revised-${stage}`);
     const countSpan = document.getElementById(`revision-count-${stage}`);
 
-    // 분석 결과 테이블 렌더링
     renderAnalysisTable(parsed.analysis, parsed.parseError, stage, analysisContainer);
 
-    // 수정본 렌더링
     const originalScript = stage === 'stage1' ? state.stage1.originalScript : state.stage2.originalScript;
     renderFullScriptWithHighlight(originalScript, parsed.revisedScript, revisedContainer);
 
-    // 수정 개수 표시
     const revisionCount = parsed.analysis ? parsed.analysis.length : 0;
     countSpan.textContent = revisionCount > 0 ? `(${revisionCount}건 수정)` : '';
 }
@@ -625,16 +614,13 @@ function renderScores(scores) {
         return;
     }
 
-    // 점수 추출
     const entertainment = scores.entertainment || 0;
     const seniorTarget = scores.seniorTarget || 0;
     const storyFlow = scores.storyFlow || 0;
     const bounceRate = scores.bounceRate || 0;
     
-    // 이탈율을 점수로 변환 (이탈율이 낮을수록 점수가 높음)
     const bounceScore = 100 - bounceRate;
 
-    // 평균 계산 (4가지 항목)
     const average = Math.round((entertainment + seniorTarget + storyFlow + bounceScore) / 4);
     const isPass = average >= 95;
 
@@ -646,31 +632,26 @@ function renderScores(scores) {
 
     let html = '<div class="score-grid">';
 
-    // 1. 재미요소
     html += `<div class="score-card ${getScoreClass(entertainment)}">
         <div class="score-value">${entertainment}</div>
         <div class="score-label">재미요소</div>
     </div>`;
 
-    // 2. 시니어 타겟
     html += `<div class="score-card ${getScoreClass(seniorTarget)}">
         <div class="score-value">${seniorTarget}</div>
         <div class="score-label">시니어 타겟</div>
     </div>`;
 
-    // 3. 이야기 흐름
     html += `<div class="score-card ${getScoreClass(storyFlow)}">
         <div class="score-value">${storyFlow}</div>
         <div class="score-label">이야기 흐름</div>
     </div>`;
 
-    // 4. 시청자 이탈율 (낮을수록 좋음 = bounceScore가 높을수록 좋음)
     html += `<div class="score-card ${getScoreClass(bounceScore)}">
         <div class="score-value">${bounceRate}%</div>
         <div class="score-label">시청자 이탈율</div>
     </div>`;
 
-    // 5. 최종 점수 (평균)
     html += `<div class="score-card final-score ${isPass ? '' : 'fail'}">
         <div class="score-value">${average}</div>
         <div class="score-label">최종 점수</div>
