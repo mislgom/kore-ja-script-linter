@@ -1,10 +1,11 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램 - MAIN.JS
- * 4-Panel + Score System v4.0
+ * 4-Panel + Score System v4.1
+ * Vertex AI + Gemini 3 Pro
  * 25가지 오류 유형 검수
  */
 
-console.log('🚀 main.js v4.0 (25 Error Types) 로드됨');
+console.log('🚀 main.js v4.1 (Vertex AI + Gemini 3 Pro) 로드됨');
 
 // ========== 전역 상태 ==========
 var tabStates = {
@@ -45,7 +46,7 @@ function initializeApp() {
     initDownloadButtons();
     initCharCounter();
     
-    console.log('✅ main.js v4.0 초기화 완료');
+    console.log('✅ main.js v4.1 초기화 완료');
 }
 
 // ========== 다크모드 ==========
@@ -485,52 +486,38 @@ function generatePrompt(stage, script) {
             '- 관계/연령/상황에 맞지 않는 반말·존댓말·호칭 혼선\n' +
             '- 예: "사장님" → "오빠" (호칭 급변)\n\n' +
             '(7) 화자/대사 주체 혼선\n' +
-            '- 누가 말했는지 대사 귀속이 뒤바뀌는 오류\n' +
-            '- 예: (지은) 대사 다음에 표기 없이 다른 말투\n\n' +
+            '- 누가 말했는지 대사 귀속이 뒤바뀌는 오류\n\n' +
             '(8) 지시어/대상 불명확\n' +
-            '- "이것/그것/저기/그 사람"이 무엇인지 추적 불가\n' +
-            '- 예: "그걸 가져와" (그게 뭔지 없음)\n\n' +
+            '- "이것/그것/저기/그 사람"이 무엇인지 추적 불가\n\n' +
             '(9) 물리/현실 불가능 동작\n' +
-            '- 현실적으로 불가능한 동작, 동선, 거리\n' +
-            '- 예: "한 손으로 냉장고를 들었다"\n\n' +
+            '- 현실적으로 불가능한 동작, 동선, 거리\n\n' +
             '(10) 소지품/의상/상태 연속성 오류\n' +
             '- 물건/옷/부상 상태가 설명 없이 변화\n' +
-            '- 예: "우산을 들었다" → "비를 맞았다" (우산 소실)\n\n' +
+            '- 예: "우산을 들었다" → "비를 맞았다"\n\n' +
             '(11) 금액/수치/횟수/인원 불일치\n' +
-            '- 나이·돈·거리·시간·인원 등이 앞뒤 상충\n' +
-            '- 예: "삼만 원" → "오만 원 받았다"\n\n' +
+            '- 나이·돈·거리·시간·인원 등이 앞뒤 상충\n\n' +
             '(12) 지명/기관/브랜드 혼입\n' +
-            '- 한국 배경에 해외 행정/통화/기관 섞임\n' +
-            '- 예: "주민등록등본" → "DMV 면허 갱신"\n\n' +
+            '- 한국 배경에 해외 행정/통화/기관 섞임\n\n' +
             '(13) 시대물 금지 요소\n' +
-            '- 시대에 없는 기기/앱/유행어/제도\n' +
-            '- 예(조선): "카톡으로 보냈다"\n\n' +
+            '- 시대에 없는 기기/앱/유행어/제도\n\n' +
             '(14) 감각/환경 설정 충돌\n' +
-            '- 같은 장면에서 온도/날씨/조명/소음 비논리적 변화\n' +
-            '- 예: "눈보라 밤" → "햇살이 눈부셨다"\n\n' +
+            '- 같은 장면에서 온도/날씨/조명/소음 비논리적 변화\n\n' +
             '(15) 사건 원인-결과 단절\n' +
-            '- 원인 없이 결과, 또는 결과가 원인과 무관\n' +
-            '- 예: "문 잠갔다" → "남자가 문 열고 들어왔다"\n\n' +
+            '- 원인 없이 결과, 또는 결과가 원인과 무관\n\n' +
             '(16) 정보 중복/되풀이\n' +
-            '- 같은 설명을 반복해 템포/몰입 저하\n' +
-            '- 예: "추웠다… 너무 추웠다… 아주 추웠다…"\n\n' +
+            '- 같은 설명을 반복해 템포/몰입 저하\n\n' +
             '(17) 과도한 전문용어/외래어/약어\n' +
-            '- 시니어에게 어려운 용어\n' +
-            '- 예: "A/S는 CRM 티켓으로" → "수리는 접수표로"\n\n' +
+            '- 시니어에게 어려운 용어\n\n' +
             '(18) 지나친 폭력/자극/공포 묘사\n' +
-            '- 시니어 낭독 부적합한 과도한 표현\n' +
-            '- 예: "피가 분수처럼" → "피가 많이 흘러"\n\n' +
+            '- 시니어 낭독 부적합한 과도한 표현\n\n' +
             '(19) 시점/서술 관점 혼선\n' +
-            '- 같은 문단에서 1인칭/3인칭 뒤섞임\n' +
-            '- 예: "나는 걸었다. 그는 두려웠다." (동일 인물?)\n\n' +
+            '- 같은 문단에서 1인칭/3인칭 뒤섞임\n\n' +
             '(20) 이름 표기 불일치\n' +
-            '- 동일 인물 다른 이름/별명 난립\n' +
-            '- 예: "김순자" → "박순자" (설명 없이)\n\n' +
+            '- 동일 인물 다른 이름/별명 난립\n\n' +
             '## ⚠️ 필수 규칙:\n' +
             '1. 발견한 오류는 **모두** analysis에 기록\n' +
-            '2. "문제가 있을 가능성" 같은 추정 금지 - 원문 근거 있을 때만 기록\n' +
-            '3. revised에는 **오류를 수정한 전체 대본** 작성\n' +
-            '4. 오류가 없어도 revised에 원본 전체를 그대로 작성\n\n' +
+            '2. revised에는 **오류를 수정한 전체 대본** 작성\n' +
+            '3. 오류가 없어도 revised에 원본 전체를 그대로 작성\n\n' +
             '## 📤 출력 형식 (정확히 이 JSON 형식으로만 응답):\n' +
             '```json\n' +
             '{\n' +
@@ -540,51 +527,28 @@ function generatePrompt(stage, script) {
             '```\n\n' +
             '## 🚨 주의:\n' +
             '- JSON 형식 외 다른 텍스트 금지\n' +
-            '- revised는 절대 비워두지 마세요\n' +
-            '- 반드시 완전한 JSON으로 응답 마무리';
+            '- revised는 절대 비워두지 마세요';
     } else {
         return '당신은 한국 시니어 낭독용 대본의 **품질 평가 전문가**입니다.\n\n' +
             '## 📋 1차 검수 완료된 대본:\n"""\n' + script + '\n"""\n\n' +
-            '## 🔍 2차 분석: 아래 항목들을 모두 검수하세요\n\n' +
-            '### [스토리 흐름 검수]\n\n' +
+            '## 🔍 2차 분석 항목\n\n' +
             '(1) 스토리 흐름 자연스러움\n' +
-            '- 이야기 전개가 자연스러운지\n' +
-            '- 갑작스러운 장면 전환이 없는지\n\n' +
             '(2) 시간 순서 논리성\n' +
-            '- 아침/점심/저녁 순서가 맞는지\n' +
-            '- 계절 변화가 논리적인지\n\n' +
             '(3) 감정선 연결\n' +
-            '- 등장인물의 감정 변화가 자연스러운지\n\n' +
             '(4) 시니어 청취자 적합성\n' +
-            '- 50-70대가 듣기 편한 내용인지\n\n' +
-            '### [추가 검수 항목]\n\n' +
             '(5) 대화의 목적 상실\n' +
-            '- 대사가 정보/감정/행동으로 이어지지 않고 공회전\n' +
-            '- 예: 질문 → 상관없는 답 → 또 다른 주제\n' +
-            '- 조치: 질문에 1문장이라도 직접 답하게 수정\n\n' +
             '(6) 장소/시간 표식 누락\n' +
-            '- 이동/시간 경과 표식 없이 갑자기 바뀐 것처럼 보임\n' +
-            '- 예: "집 거실" → "병원 복도" (이동 설명 없음)\n' +
-            '- 조치: "다음 날/잠시 후/병원에 도착해" 연결 문장 삽입\n\n' +
             '(7) 관계/가족 호칭 충돌\n' +
-            '- 동일 인물 호칭이 바뀌어 관계가 바뀐 것처럼 보임\n' +
-            '- 예: "이모" → "엄마" (동일 대상)\n\n' +
             '(8) 감정선 급변\n' +
-            '- 평온→격분, 불안→안심 등이 설명 없이 점프\n' +
-            '- 예: "괜찮다" → "왜 나를 배신했어!" (계기 없음)\n' +
-            '- 조치: 1~2줄로 계기 보강\n\n' +
-            '(9) VREW 규칙 확인\n' +
-            '- 1줄=1클립, 빈 줄 금지\n' +
-            '- 한 줄이 너무 길면 의미 단위로 분할\n\n' +
+            '(9) VREW 규칙 확인 (1줄=1클립)\n\n' +
             '## ⚠️ 필수 규칙:\n' +
             '1. 발견한 오류는 **모두** analysis에 기록\n' +
-            '2. "문제가 있을 가능성" 같은 추정 금지 - 원문 근거 있을 때만 기록\n' +
-            '3. revised에는 **최종 수정된 전체 대본** 작성\n' +
-            '4. scores는 **revised(최종 대본) 기준**으로 평가\n\n' +
-            '## 📤 출력 형식 (정확히 이 JSON 형식으로만 응답):\n' +
+            '2. revised에는 **최종 수정된 전체 대본** 작성\n' +
+            '3. scores는 **revised(최종 대본) 기준**으로 평가\n\n' +
+            '## 📤 출력 형식:\n' +
             '```json\n' +
             '{\n' +
-            '  "analysis": "번호\\t오류유형\\t오류내용\\t수정내용\\t설명\\n1\\t흐름\\t문제부분\\t수정내용\\t설명",\n' +
+            '  "analysis": "번호\\t오류유형\\t오류내용\\t수정내용\\t설명",\n' +
             '  "revised": "최종 수정된 전체 대본",\n' +
             '  "scores": {\n' +
             '    "fun": 85,\n' +
@@ -594,31 +558,34 @@ function generatePrompt(stage, script) {
             '  }\n' +
             '}\n' +
             '```\n\n' +
-            '## 📊 점수 평가 기준 (revised 최종 대본 기준, 0-100점):\n' +
-            '- **fun**: 이야기의 흥미도, 몰입감, 감동 요소\n' +
-            '- **flow**: 시간/장소/상황 전개의 자연스러움\n' +
-            '- **senior**: 50-70대 청취 적합도\n' +
+            '## 📊 점수 기준 (0-100점):\n' +
+            '- **fun**: 흥미도, 몰입감\n' +
+            '- **flow**: 전개의 자연스러움\n' +
+            '- **senior**: 50-70대 적합도\n' +
             '- **retention**: 끝까지 듣고 싶은 정도\n\n' +
             '## 🚨 주의:\n' +
-            '- scores는 반드시 포함\n' +
-            '- revised에 최종 대본 전체 작성\n' +
-            '- JSON 형식 외 다른 텍스트 금지\n' +
-            '- 반드시 완전한 JSON으로 응답 마무리';
+            '- scores 반드시 포함\n' +
+            '- JSON 형식 외 텍스트 금지';
     }
 }
 
-// ========== Gemini API 호출 ==========
+// ========== Gemini API 호출 (Vertex AI + Gemini 3 Pro) ==========
 async function callGeminiAPI(prompt) {
     var apiKey = localStorage.getItem('GEMINI_API_KEY');
     if (!apiKey) throw new Error('API 키가 설정되지 않았습니다.');
     
     var endpoint = 'https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-3-pro-preview:generateContent?key=' + apiKey;
     
+    console.log('🌐 Vertex AI 엔드포인트 호출: gemini-3-pro-preview');
+    
     var response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
+            contents: [{
+                role: 'user',
+                parts: [{ text: prompt }]
+            }],
             generationConfig: {
                 temperature: 0.2,
                 maxOutputTokens: 65536
@@ -648,7 +615,6 @@ function parseAnalysisResult(rawText) {
     }
     
     var jsonStr = rawText.trim();
-    
     jsonStr = jsonStr.replace(/^```json\s*/i, '');
     jsonStr = jsonStr.replace(/^```\s*/i, '');
     jsonStr = jsonStr.replace(/\s*```$/i, '');
@@ -658,16 +624,11 @@ function parseAnalysisResult(rawText) {
     var braceEnd = jsonStr.lastIndexOf('}');
     if (braceStart !== -1 && braceEnd !== -1 && braceEnd > braceStart) {
         jsonStr = jsonStr.substring(braceStart, braceEnd + 1);
-        console.log('📦 JSON 블록 추출됨');
     }
     
     try {
         var parsed = JSON.parse(jsonStr);
         console.log('✅ JSON 파싱 성공');
-        console.log('📊 analysis 길이:', parsed.analysis ? parsed.analysis.length : 0);
-        console.log('📝 revised 길이:', parsed.revised ? parsed.revised.length : 0);
-        console.log('🎯 scores:', parsed.scores);
-        
         return {
             analysis: parsed.analysis || '',
             revised: parsed.revised || '',
@@ -676,7 +637,6 @@ function parseAnalysisResult(rawText) {
         };
     } catch (e) {
         console.error('❌ JSON 파싱 실패:', e.message);
-        console.log('🔍 파싱 시도한 문자열 앞부분:', jsonStr.substring(0, 500));
         
         var analysis = '';
         var revised = '';
@@ -685,23 +645,16 @@ function parseAnalysisResult(rawText) {
         var analysisMatch = rawText.match(/"analysis"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"revised"|"\s*,\s*"scores"|"\s*})/);
         if (analysisMatch) {
             analysis = analysisMatch[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
-            console.log('🔧 analysis 수동 추출 성공, 길이:', analysis.length);
         }
         
         var revisedMatch = rawText.match(/"revised"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"scores"|"\s*})/);
         if (revisedMatch) {
             revised = revisedMatch[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
-            console.log('🔧 revised 수동 추출 성공, 길이:', revised.length);
         }
         
         var scoresMatch = rawText.match(/"scores"\s*:\s*(\{[\s\S]*?\})/);
         if (scoresMatch) {
-            try {
-                scores = JSON.parse(scoresMatch[1]);
-                console.log('🔧 scores 수동 추출 성공:', scores);
-            } catch (se) {
-                console.log('⚠️ scores 파싱 실패');
-            }
+            try { scores = JSON.parse(scoresMatch[1]); } catch (se) {}
         }
         
         if (analysis || revised) {
@@ -724,8 +677,6 @@ function renderResults(stage, result) {
         tabStates[stage].scores = parsed.scores;
     }
     
-    console.log('💾 저장된 revisedScript 길이:', parsed.revised ? parsed.revised.length : 0);
-    
     var tableContainer = document.getElementById('result-table-' + stage);
     if (tableContainer) {
         tableContainer.innerHTML = renderAnalysisTable(parsed.analysis, parsed.parseError);
@@ -738,19 +689,15 @@ function renderResults(stage, result) {
         
         if (revised && revised.length > 0) {
             revisedContainer.innerHTML = renderFullScriptWithHighlight(original, revised);
-            console.log('✅ 수정 반영 렌더링 완료');
         } else {
-            revisedContainer.innerHTML = '<div class="p-4 text-red-400 text-center"><i class="fas fa-exclamation-triangle mr-2"></i>수정본이 생성되지 않았습니다.<br><small class="text-gray-500">API 응답에서 revised 필드가 비어있습니다.</small></div>';
-            console.log('⚠️ revised가 비어있음');
+            revisedContainer.innerHTML = '<div class="p-4 text-red-400 text-center"><i class="fas fa-exclamation-triangle mr-2"></i>수정본이 생성되지 않았습니다.</div>';
         }
     }
     
     if (stage === 'stage2') {
         if (parsed.scores) {
             renderScores(parsed.scores);
-            console.log('✅ 점수 렌더링 완료');
         } else {
-            console.log('⚠️ scores가 없음, 기본값 표시');
             renderScores({ fun: 0, flow: 0, senior: 0, retention: 0 });
         }
     }
@@ -758,8 +705,6 @@ function renderResults(stage, result) {
 
 // ========== 점수 렌더링 ==========
 function renderScores(scores) {
-    console.log('📊 점수 렌더링:', scores);
-    
     var funEl = document.getElementById('score-fun');
     var flowEl = document.getElementById('score-flow');
     var seniorEl = document.getElementById('score-senior');
@@ -825,125 +770,78 @@ function renderAnalysisTable(analysisText, isParseError) {
     var lines = text.trim().split('\n').filter(function(line) { return line.trim(); });
     
     if (lines.length === 0 || text.indexOf('오류 없음') !== -1 || text.indexOf('오류없음') !== -1) {
-        return '<div class="p-4 text-center"><i class="fas fa-check-circle text-green-400 text-2xl mb-2 block"></i><p class="text-green-400 font-medium">오류 없음</p><p class="text-gray-500 text-xs mt-1">검수 결과 문제가 발견되지 않았습니다.</p></div>';
+        return '<div class="p-4 text-center"><div class="inline-flex items-center justify-center w-12 h-12 bg-green-500/20 rounded-full mb-2">' +
+            '<i class="fas fa-check text-green-400 text-xl"></i></div>' +
+            '<p class="text-green-400 font-medium">오류가 발견되지 않았습니다</p></div>';
     }
     
-    var hasTabs = lines.some(function(line) { return line.indexOf('\t') !== -1; });
-    
-    if (!hasTabs) {
-        return '<div class="p-3"><pre class="whitespace-pre-wrap text-xs text-gray-300">' + escapeHtml(text) + '</pre></div>';
-    }
-    
-    var html = '<div class="overflow-x-auto"><table class="w-full text-xs border-collapse">' +
-        '<thead><tr class="bg-gray-700">' +
-        '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200 w-6">No</th>' +
-        '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200 w-16">유형</th>' +
-        '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200">오류내용</th>' +
-        '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200">수정내용</th>' +
-        '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200">설명</th>' +
+    var html = '<div class="overflow-x-auto"><table class="w-full text-xs">' +
+        '<thead><tr class="bg-gray-700/50">' +
+        '<th class="px-2 py-1 text-left text-gray-300 font-medium">번호</th>' +
+        '<th class="px-2 py-1 text-left text-gray-300 font-medium">오류유형</th>' +
+        '<th class="px-2 py-1 text-left text-gray-300 font-medium">오류내용</th>' +
+        '<th class="px-2 py-1 text-left text-gray-300 font-medium">수정내용</th>' +
+        '<th class="px-2 py-1 text-left text-gray-300 font-medium">설명</th>' +
         '</tr></thead><tbody>';
     
-    var firstCols = lines[0].split('\t');
-    var isHeader = firstCols[0] === '번호' || firstCols[0].indexOf('번호') !== -1 || firstCols[0].toLowerCase() === 'no';
-    var startIdx = isHeader ? 1 : 0;
-    
-    for (var i = startIdx; i < lines.length; i++) {
-        var cols = lines[i].split('\t');
-        if (cols.length < 2) continue;
+    var rowCount = 0;
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (!line) continue;
         
-        html += '<tr class="hover:bg-gray-700/50">';
-        html += '<td class="border border-gray-600 px-1 py-1 text-gray-300 text-center">' + escapeHtml(cols[0] || '') + '</td>';
-        html += '<td class="border border-gray-600 px-1 py-1 text-blue-300 font-medium">' + escapeHtml(cols[1] || '') + '</td>';
-        html += '<td class="border border-gray-600 px-1 py-1 bg-red-900/30 text-red-300">' + escapeHtml(cols[2] || '') + '</td>';
-        html += '<td class="border border-gray-600 px-1 py-1 bg-green-900/30 text-green-300">' + escapeHtml(cols[3] || '') + '</td>';
-        html += '<td class="border border-gray-600 px-1 py-1 text-gray-400">' + escapeHtml(cols[4] || '') + '</td>';
-        html += '</tr>';
+        var cols = line.split('\t');
+        if (cols.length >= 2) {
+            rowCount++;
+            var rowClass = rowCount % 2 === 0 ? 'bg-gray-800/30' : 'bg-gray-800/10';
+            html += '<tr class="' + rowClass + ' hover:bg-gray-700/30 transition-colors">';
+            
+            for (var j = 0; j < 5; j++) {
+                var content = cols[j] ? escapeHtml(cols[j]) : '-';
+                if (j === 2) {
+                    html += '<td class="px-2 py-1 text-red-300">' + content + '</td>';
+                } else if (j === 3) {
+                    html += '<td class="px-2 py-1 text-green-300">' + content + '</td>';
+                } else {
+                    html += '<td class="px-2 py-1 text-gray-300">' + content + '</td>';
+                }
+            }
+            html += '</tr>';
+        }
     }
     
     html += '</tbody></table></div>';
+    
+    if (rowCount === 0) {
+        return '<div class="p-4 text-center"><div class="inline-flex items-center justify-center w-12 h-12 bg-green-500/20 rounded-full mb-2">' +
+            '<i class="fas fa-check text-green-400 text-xl"></i></div>' +
+            '<p class="text-green-400 font-medium">오류가 발견되지 않았습니다</p></div>';
+    }
+    
+    html = '<div class="p-2 bg-gray-700/30 border-b border-gray-600 flex items-center justify-between">' +
+        '<span class="text-xs text-gray-400">발견된 오류: <span class="text-red-400 font-bold">' + rowCount + '개</span></span></div>' + html;
+    
     return html;
 }
 
-// ========== 전체 대본 + 수정된 부분만 하이라이트 ==========
+// ========== 수정 대본 렌더링 ==========
 function renderFullScriptWithHighlight(original, revised) {
-    if (!revised) {
-        return '<div class="p-4 text-gray-500">수정본이 없습니다.</div>';
-    }
+    if (!revised) return '<div class="p-4 text-gray-400 text-center">수정된 대본이 없습니다.</div>';
     
-    if (!original) {
-        return '<div class="p-3 text-sm"><pre class="whitespace-pre-wrap text-gray-700 dark:text-gray-300">' + escapeHtml(revised) + '</pre></div>';
-    }
+    var escapedRevised = escapeHtml(revised);
+    var lines = escapedRevised.split('\n');
+    var html = '<div class="p-3 space-y-1 text-sm leading-relaxed">';
     
-    var originalLines = original.split('\n');
-    var revisedLines = revised.split('\n');
-    
-    var originalSet = {};
-    for (var i = 0; i < originalLines.length; i++) {
-        var trimmed = originalLines[i].trim();
-        if (trimmed) originalSet[trimmed] = true;
-    }
-    
-    var changeCount = 0;
-    var html = '<div class="space-y-0.5 text-xs">';
-    
-    for (var j = 0; j < revisedLines.length; j++) {
-        var revLine = revisedLines[j];
-        var revTrimmed = revLine.trim();
-        
-        if (!revTrimmed) {
-            html += '<div class="py-0.5 text-gray-400">&nbsp;</div>';
-            continue;
-        }
-        
-        var isOriginal = originalSet[revTrimmed] === true;
-        
-        if (!isOriginal) {
-            changeCount++;
-            html += '<div class="bg-green-100 dark:bg-green-900/40 border-l-2 border-green-500 pl-2 py-0.5">' +
-                '<span class="text-green-800 dark:text-green-200">' + escapeHtml(revLine) + '</span></div>';
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+        if (line.trim() === '') {
+            html += '<div class="h-2"></div>';
         } else {
-            html += '<div class="pl-2 py-0.5"><span class="text-gray-700 dark:text-gray-300">' + escapeHtml(revLine) + '</span></div>';
+            html += '<div class="text-gray-200">' + line + '</div>';
         }
     }
     
     html += '</div>';
-    
-    var summaryClass = changeCount > 0 ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700' : 'bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-600';
-    var summary = '<div class="' + summaryClass + ' border-b px-2 py-1 mb-2 sticky top-0">' +
-        '<span class="text-blue-700 dark:text-blue-300 text-xs font-medium">' +
-        '<i class="fas fa-edit mr-1"></i>' + changeCount + '개 라인 수정됨</span></div>';
-    
-    return summary + html;
-}
-
-// ========== 다운로드 ==========
-function initDownloadButtons() {
-    var downloadBtn = document.getElementById('download-revised-btn');
-    if (downloadBtn) {
-        downloadBtn.addEventListener('click', downloadScript);
-    }
-}
-
-function downloadScript() {
-    var script = tabStates.stage2.revisedScript || tabStates.stage1.revisedScript;
-    
-    if (!script) {
-        alert('다운로드할 수정본이 없습니다.');
-        return;
-    }
-    
-    var date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    var filename = currentFileName + '_reviewed_' + date + '.txt';
-    
-    var blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-    
-    console.log('📥 다운로드 완료:', filename);
+    return html;
 }
 
 // ========== 유틸리티 ==========
@@ -954,9 +852,36 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// ========== 전역 노출 ==========
-window.__MAIN_JS_LOADED__ = true;
-window.MAIN_JS_LOADED = true;
-window.tabStates = tabStates;
+// ========== 다운로드 버튼 ==========
+function initDownloadButtons() {
+    var downloadBtn = document.getElementById('download-revised-btn');
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', function() {
+            downloadScript();
+        });
+    }
+}
 
-console.log('✅ main.js v4.0 초기화 준비 완료');
+function downloadScript() {
+    var script = tabStates.stage2.revisedScript || tabStates.stage1.revisedScript;
+    if (!script) {
+        alert('다운로드할 수정 대본이 없습니다.');
+        return;
+    }
+    
+    var blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = currentFileName + '_수정완료.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    console.log('📥 다운로드 완료:', currentFileName + '_수정완료.txt');
+}
+
+// ========== 부팅 확인 ==========
+window.__MAIN_JS_LOADED__ = true;
+console.log('[BOOT] main.js v4.1 로드 완료');
