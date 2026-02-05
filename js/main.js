@@ -1,10 +1,10 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.5 - Vertex AI Express Mode + Gemini 3 Pro
+ * main.js v4.6 - Vertex AI Express Mode + Gemini 3 Pro
  * 25가지 오류 유형 검수, 4-패널 레이아웃, 새 점수 체계
  */
 
-console.log('🚀 main.js v4.5 (Vertex AI + Gemini 3 Pro) 로드됨');
+console.log('🚀 main.js v4.6 (Vertex AI + Gemini 3 Pro) 로드됨');
 
 // ===================== 전역 상태 =====================
 const state = {
@@ -42,7 +42,7 @@ function initApp() {
     initClearButton();
     initAnalysisButtons();
     initDownloadButton();
-    console.log('✅ main.js v4.5 초기화 완료');
+    console.log('✅ main.js v4.6 초기화 완료');
 }
 
 // ===================== 다크모드 =====================
@@ -389,7 +389,6 @@ ${scriptText}
 async function callGeminiAPI(prompt, signal) {
     const apiKey = localStorage.getItem('GEMINI_API_KEY');
     
-    // Vertex AI Express Mode 엔드포인트 - Gemini 3 Pro
     const endpoint = `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-3-pro-preview:generateContent?key=${apiKey}`;
 
     const response = await fetch(endpoint, {
@@ -475,13 +474,13 @@ function renderResults(parsed, stage) {
     renderAnalysisTable(parsed.analysis, parsed.parseError, stage, analysisContainer);
 
     const originalScript = stage === 'stage1' ? state.stage1.originalScript : state.stage2.originalScript;
-    renderFullScriptWithHighlight(originalScript, parsed.revisedScript, revisedContainer);
+    renderFullScriptWithHighlight(originalScript, parsed.revisedScript, parsed.analysis, revisedContainer);
 
     const revisionCount = parsed.analysis ? parsed.analysis.length : 0;
     countSpan.textContent = revisionCount > 0 ? `(${revisionCount}건 수정)` : '';
 }
 
-// ===================== 분석 테이블 렌더링 =====================
+// ===================== 분석 테이블 렌더링 (제목 고정, 내용만 스크롤) =====================
 function renderAnalysisTable(analysis, parseError, stage, container) {
     if (parseError) {
         container.innerHTML = `<p class="error">파싱 오류: ${parseError}</p>`;
@@ -496,7 +495,7 @@ function renderAnalysisTable(analysis, parseError, stage, container) {
     const targetContainerId = stage === 'stage1' ? 'revised-stage1' : 'revised-stage2';
 
     let html = '<p class="click-hint">💡 각 행을 클릭하면 수정된 부분으로 이동합니다</p>';
-    html += '<table class="analysis-table"><thead><tr><th>줄</th><th>유형</th><th>원본</th><th>수정</th><th>이유</th></tr></thead><tbody>';
+    html += '<div class="table-wrapper"><table class="analysis-table"><thead><tr><th>줄</th><th>유형</th><th>원본</th><th>수정</th><th>이유</th></tr></thead><tbody>';
 
     analysis.forEach((item, index) => {
         html += `<tr class="clickable-row" 
@@ -512,7 +511,7 @@ function renderAnalysisTable(analysis, parseError, stage, container) {
         </tr>`;
     });
 
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     container.innerHTML = html;
 }
 
@@ -554,25 +553,52 @@ function scrollToHighlight(row) {
     }
 }
 
-// ===================== 수정본 렌더링 =====================
-function renderFullScriptWithHighlight(originalScript, revisedScript, container) {
+// ===================== 수정본 렌더링 (오류 부분만 하이라이트) =====================
+function renderFullScriptWithHighlight(originalScript, revisedScript, analysis, container) {
     if (!revisedScript) {
         container.innerHTML = '<p class="placeholder">수정된 내용이 없습니다.</p>';
         return;
     }
 
-    const originalLines = originalScript.split('\n');
+    // 분석 결과에서 수정된 원본 텍스트 목록 추출
+    const errorOriginals = new Set();
+    const errorSuggestions = new Map();
+    
+    if (analysis && analysis.length > 0) {
+        analysis.forEach(item => {
+            if (item.original) {
+                errorOriginals.add(item.original.trim());
+                if (item.suggestion) {
+                    errorSuggestions.set(item.original.trim(), item.suggestion.trim());
+                }
+            }
+        });
+    }
+
     const revisedLines = revisedScript.split('\n');
     let html = '<div class="revised-script">';
 
-    revisedLines.forEach((revisedLine, index) => {
-        const originalLine = originalLines[index] || '';
+    revisedLines.forEach((line, index) => {
+        let highlightedLine = escapeHtml(line);
+        let hasChange = false;
 
-        if (revisedLine !== originalLine && originalLine.trim() !== '') {
-            const highlightedLine = highlightChangedParts(originalLine, revisedLine);
+        // 각 오류 수정 부분을 찾아서 하이라이트
+        errorSuggestions.forEach((suggestion, original) => {
+            if (line.includes(suggestion)) {
+                // 수정된 문장 전체를 하나의 span으로 감싸기
+                const escapedSuggestion = escapeHtml(suggestion);
+                const regex = new RegExp(escapeRegExp(escapedSuggestion), 'g');
+                if (highlightedLine.includes(escapedSuggestion)) {
+                    highlightedLine = highlightedLine.replace(regex, `<span class="changed-text">${escapedSuggestion}</span>`);
+                    hasChange = true;
+                }
+            }
+        });
+
+        if (hasChange) {
             html += `<p class="line-revised" data-line="${index + 1}">${highlightedLine}</p>`;
         } else {
-            html += `<p class="line-unchanged">${escapeHtml(revisedLine)}</p>`;
+            html += `<p class="line-unchanged">${highlightedLine}</p>`;
         }
     });
 
@@ -580,29 +606,9 @@ function renderFullScriptWithHighlight(originalScript, revisedScript, container)
     container.innerHTML = html;
 }
 
-// ===================== 변경된 부분 하이라이트 =====================
-function highlightChangedParts(original, revised) {
-    if (original === revised) {
-        return escapeHtml(revised);
-    }
-
-    const originalWords = original.split(/(\s+)/);
-    const revisedWords = revised.split(/(\s+)/);
-
-    let result = '';
-
-    for (let i = 0; i < revisedWords.length; i++) {
-        const origWord = originalWords[i] || '';
-        const revWord = revisedWords[i] || '';
-
-        if (origWord !== revWord && revWord.trim() !== '') {
-            result += `<span class="changed-text">${escapeHtml(revWord)}</span>`;
-        } else {
-            result += escapeHtml(revWord);
-        }
-    }
-
-    return result;
+// 정규식 특수문자 이스케이프
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ===================== 점수 렌더링 =====================
@@ -619,8 +625,10 @@ function renderScores(scores) {
     const storyFlow = scores.storyFlow || 0;
     const bounceRate = scores.bounceRate || 0;
     
+    // 이탈율을 점수로 변환 (이탈율이 낮을수록 점수가 높음)
     const bounceScore = 100 - bounceRate;
 
+    // 평균 계산
     const average = Math.round((entertainment + seniorTarget + storyFlow + bounceScore) / 4);
     const isPass = average >= 95;
 
@@ -647,9 +655,10 @@ function renderScores(scores) {
         <div class="score-label">이야기 흐름</div>
     </div>`;
 
+    // 시청자 이탈 (점수로 표시)
     html += `<div class="score-card ${getScoreClass(bounceScore)}">
-        <div class="score-value">${bounceRate}%</div>
-        <div class="score-label">시청자 이탈율</div>
+        <div class="score-value">${bounceScore}</div>
+        <div class="score-label">시청자 이탈</div>
     </div>`;
 
     html += `<div class="score-card final-score ${isPass ? '' : 'fail'}">
