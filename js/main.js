@@ -1,10 +1,10 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.7 - Vertex AI Express Mode + Gemini 3 Pro
+ * main.js v4.8 - Gemini 3 Flash
  * 25가지 오류 유형 검수, 4-패널 레이아웃, 새 점수 체계
  */
 
-console.log('🚀 main.js v4.7 (Vertex AI + Gemini 3 Pro) 로드됨');
+console.log('🚀 main.js v4.8 (Gemini 3 Flash) 로드됨');
 
 // ===================== 전역 상태 =====================
 const state = {
@@ -42,7 +42,7 @@ function initApp() {
     initClearButton();
     initAnalysisButtons();
     initDownloadButton();
-    console.log('✅ main.js v4.7 초기화 완료');
+    console.log('✅ main.js v4.8 초기화 완료');
 }
 
 // ===================== 다크모드 =====================
@@ -396,11 +396,12 @@ ${scriptText}
 반드시 위 JSON 형식으로만 응답하세요.`;
 }
 
-// ===================== Gemini API 호출 (Vertex AI Express Mode) =====================
+// ===================== Gemini API 호출 (Gemini 3 Flash) =====================
 async function callGeminiAPI(prompt, signal) {
     const apiKey = localStorage.getItem('GEMINI_API_KEY');
     
-    const endpoint = `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-3-pro-preview:generateContent?key=${apiKey}`;
+    // Gemini 3 Flash 엔드포인트 (AI Studio API 키 사용)
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
     const response = await fetch(endpoint, {
         method: 'POST',
