@@ -1,11 +1,11 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램 - MAIN.JS
- * 4-Panel + Score System v4.1
+ * 4-Panel + Score System v4.2
  * Vertex AI + Gemini 3 Pro
- * 25가지 오류 유형 검수
+ * 클릭 이동 + 하이라이트 기능
  */
 
-console.log('🚀 main.js v4.1 (Vertex AI + Gemini 3 Pro) 로드됨');
+console.log('🚀 main.js v4.2 (Vertex AI + Gemini 3 Pro) 로드됨');
 
 // ========== 전역 상태 ==========
 var tabStates = {
@@ -45,8 +45,20 @@ function initializeApp() {
     initAnalysisButtons();
     initDownloadButtons();
     initCharCounter();
+    addHighlightStyles();
     
-    console.log('✅ main.js v4.1 초기화 완료');
+    console.log('✅ main.js v4.2 초기화 완료');
+}
+
+// ========== 하이라이트 스타일 추가 ==========
+function addHighlightStyles() {
+    var style = document.createElement('style');
+    style.textContent = 
+        '.highlight-changed { background-color: #22c55e40; color: #4ade80; padding: 1px 3px; border-radius: 3px; }' +
+        '.clicked-highlight { background-color: #facc15 !important; color: #000 !important; animation: pulse-highlight 0.5s ease-in-out 3; }' +
+        '@keyframes pulse-highlight { 0%, 100% { background-color: #facc15; } 50% { background-color: #fef08a; } }' +
+        '.analysis-row:hover { background-color: rgba(59, 130, 246, 0.2) !important; }';
+    document.head.appendChild(style);
 }
 
 // ========== 다크모드 ==========
@@ -459,61 +471,24 @@ async function startAnalysis(stage) {
     }
 }
 
-// ========== 프롬프트 생성 (25가지 오류 유형) ==========
+// ========== 프롬프트 생성 ==========
 function generatePrompt(stage, script) {
     if (stage === 'stage1') {
         return '당신은 한국 시니어 낭독용 대본의 **정밀 검수 전문가**입니다.\n\n' +
             '## 📋 분석 대상 대본:\n"""\n' + script + '\n"""\n\n' +
-            '## 🔍 1차 분석: 아래 25가지 오류 유형을 모두 꼼꼼히 검수하세요\n\n' +
-            '### [기본 검수 항목]\n\n' +
+            '## 🔍 1차 분석: 아래 오류 유형을 모두 꼼꼼히 검수하세요\n\n' +
             '(1) 맞춤법/문법/오타\n' +
-            '- 모든 오타, 띄어쓰기, 문법 오류\n' +
-            '- 예: "만낫습니다" → "만났습니다"\n\n' +
-            '(2) 인물 설정 일관성\n' +
-            '- 나이, 이름, 외모, 직업이 중간에 바뀌는지\n' +
-            '- 예: 75세 → 60세 (나이 불일치)\n\n' +
+            '(2) 인물 설정 일관성 (나이, 이름 등)\n' +
             '(3) 시간/계절 일관성\n' +
-            '- 계절이나 시간대가 갑자기 바뀌는지\n' +
-            '- 예: 겨울 → 여름 (계절 불일치)\n\n' +
             '(4) 장소 일관성\n' +
-            '- 장소 설정이 갑자기 바뀌는지\n' +
-            '- 예: 부산 → 서울 (장소 점프)\n\n' +
             '(5) 시대/문화 일관성\n' +
-            '- 시대에 맞지 않는 물건이나 표현\n' +
-            '- 예: 조선시대에 스마트폰\n\n' +
-            '### [추가 검수 항목]\n\n' +
             '(6) 인물 호칭/존댓말 불일치\n' +
-            '- 관계/연령/상황에 맞지 않는 반말·존댓말·호칭 혼선\n' +
-            '- 예: "사장님" → "오빠" (호칭 급변)\n\n' +
             '(7) 화자/대사 주체 혼선\n' +
-            '- 누가 말했는지 대사 귀속이 뒤바뀌는 오류\n\n' +
             '(8) 지시어/대상 불명확\n' +
-            '- "이것/그것/저기/그 사람"이 무엇인지 추적 불가\n\n' +
             '(9) 물리/현실 불가능 동작\n' +
-            '- 현실적으로 불가능한 동작, 동선, 거리\n\n' +
             '(10) 소지품/의상/상태 연속성 오류\n' +
-            '- 물건/옷/부상 상태가 설명 없이 변화\n' +
-            '- 예: "우산을 들었다" → "비를 맞았다"\n\n' +
             '(11) 금액/수치/횟수/인원 불일치\n' +
-            '- 나이·돈·거리·시간·인원 등이 앞뒤 상충\n\n' +
-            '(12) 지명/기관/브랜드 혼입\n' +
-            '- 한국 배경에 해외 행정/통화/기관 섞임\n\n' +
-            '(13) 시대물 금지 요소\n' +
-            '- 시대에 없는 기기/앱/유행어/제도\n\n' +
-            '(14) 감각/환경 설정 충돌\n' +
-            '- 같은 장면에서 온도/날씨/조명/소음 비논리적 변화\n\n' +
-            '(15) 사건 원인-결과 단절\n' +
-            '- 원인 없이 결과, 또는 결과가 원인과 무관\n\n' +
-            '(16) 정보 중복/되풀이\n' +
-            '- 같은 설명을 반복해 템포/몰입 저하\n\n' +
-            '(17) 과도한 전문용어/외래어/약어\n' +
-            '- 시니어에게 어려운 용어\n\n' +
-            '(18) 지나친 폭력/자극/공포 묘사\n' +
-            '- 시니어 낭독 부적합한 과도한 표현\n\n' +
-            '(19) 시점/서술 관점 혼선\n' +
-            '- 같은 문단에서 1인칭/3인칭 뒤섞임\n\n' +
-            '(20) 이름 표기 불일치\n' +
-            '- 동일 인물 다른 이름/별명 난립\n\n' +
+            '(12) 시점/서술 관점 혼선\n\n' +
             '## ⚠️ 필수 규칙:\n' +
             '1. 발견한 오류는 **모두** analysis에 기록\n' +
             '2. revised에는 **오류를 수정한 전체 대본** 작성\n' +
@@ -536,11 +511,8 @@ function generatePrompt(stage, script) {
             '(2) 시간 순서 논리성\n' +
             '(3) 감정선 연결\n' +
             '(4) 시니어 청취자 적합성\n' +
-            '(5) 대화의 목적 상실\n' +
-            '(6) 장소/시간 표식 누락\n' +
-            '(7) 관계/가족 호칭 충돌\n' +
-            '(8) 감정선 급변\n' +
-            '(9) VREW 규칙 확인 (1줄=1클립)\n\n' +
+            '(5) 장소/시간 표식 누락\n' +
+            '(6) 감정선 급변\n\n' +
             '## ⚠️ 필수 규칙:\n' +
             '1. 발견한 오류는 **모두** analysis에 기록\n' +
             '2. revised에는 **최종 수정된 전체 대본** 작성\n' +
@@ -679,7 +651,7 @@ function renderResults(stage, result) {
     
     var tableContainer = document.getElementById('result-table-' + stage);
     if (tableContainer) {
-        tableContainer.innerHTML = renderAnalysisTable(parsed.analysis, parsed.parseError);
+        tableContainer.innerHTML = renderAnalysisTable(parsed.analysis, parsed.parseError, stage);
     }
     
     var revisedContainer = document.getElementById('revised-' + stage);
@@ -754,8 +726,8 @@ function renderScores(scores) {
     }
 }
 
-// ========== 분석 결과 테이블 렌더링 ==========
-function renderAnalysisTable(analysisText, isParseError) {
+// ========== 분석 결과 테이블 렌더링 (클릭 이동 기능 포함) ==========
+function renderAnalysisTable(analysisText, isParseError, stage) {
     if (!analysisText || typeof analysisText !== 'string') {
         return '<div class="p-4 text-gray-400 text-center"><i class="fas fa-info-circle mr-2"></i>분석 결과가 없습니다.</div>';
     }
@@ -775,6 +747,8 @@ function renderAnalysisTable(analysisText, isParseError) {
             '<p class="text-green-400 font-medium">오류가 발견되지 않았습니다</p></div>';
     }
     
+    var targetContainerId = stage === 'stage1' ? 'revised-stage1' : 'revised-stage2';
+    
     var html = '<div class="overflow-x-auto"><table class="w-full text-xs">' +
         '<thead><tr class="bg-gray-700/50">' +
         '<th class="px-2 py-1 text-left text-gray-300 font-medium">번호</th>' +
@@ -793,7 +767,12 @@ function renderAnalysisTable(analysisText, isParseError) {
         if (cols.length >= 2) {
             rowCount++;
             var rowClass = rowCount % 2 === 0 ? 'bg-gray-800/30' : 'bg-gray-800/10';
-            html += '<tr class="' + rowClass + ' hover:bg-gray-700/30 transition-colors">';
+            var correctedText = cols[3] ? escapeHtml(cols[3]) : '';
+            
+            html += '<tr class="' + rowClass + ' analysis-row cursor-pointer" ' +
+                'data-target-container="' + targetContainerId + '" ' +
+                'data-search-text="' + correctedText + '" ' +
+                'onclick="scrollToHighlight(this)">';
             
             for (var j = 0; j < 5; j++) {
                 var content = cols[j] ? escapeHtml(cols[j]) : '-';
@@ -818,30 +797,143 @@ function renderAnalysisTable(analysisText, isParseError) {
     }
     
     html = '<div class="p-2 bg-gray-700/30 border-b border-gray-600 flex items-center justify-between">' +
-        '<span class="text-xs text-gray-400">발견된 오류: <span class="text-red-400 font-bold">' + rowCount + '개</span></span></div>' + html;
+        '<span class="text-xs text-gray-400">발견된 오류: <span class="text-red-400 font-bold">' + rowCount + '개</span></span>' +
+        '<span class="text-xs text-blue-400"><i class="fas fa-mouse-pointer mr-1"></i>클릭 → 해당 위치 이동</span></div>' + html;
     
     return html;
 }
 
-// ========== 수정 대본 렌더링 ==========
+// ========== 클릭 시 해당 라인으로 스크롤 ==========
+function scrollToHighlight(row) {
+    var containerId = row.getAttribute('data-target-container');
+    var searchText = row.getAttribute('data-search-text');
+    
+    if (!containerId || !searchText) return;
+    
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    
+    // 기존 클릭 하이라이트 제거
+    var prevClicked = container.querySelectorAll('.clicked-highlight');
+    for (var i = 0; i < prevClicked.length; i++) {
+        prevClicked[i].classList.remove('clicked-highlight');
+    }
+    
+    // 해당 텍스트를 포함하는 하이라이트 요소 찾기
+    var highlights = container.querySelectorAll('.highlight-changed');
+    var targetElement = null;
+    
+    for (var j = 0; j < highlights.length; j++) {
+        var hlText = highlights[j].textContent;
+        if (hlText.indexOf(searchText) !== -1 || searchText.indexOf(hlText) !== -1) {
+            targetElement = highlights[j];
+            break;
+        }
+    }
+    
+    // 하이라이트 요소가 없으면 텍스트로 검색
+    if (!targetElement) {
+        var allLines = container.querySelectorAll('div[data-line-index]');
+        for (var k = 0; k < allLines.length; k++) {
+            if (allLines[k].textContent.indexOf(searchText) !== -1) {
+                targetElement = allLines[k];
+                break;
+            }
+        }
+    }
+    
+    if (targetElement) {
+        targetElement.classList.add('clicked-highlight');
+        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // 3초 후 클릭 하이라이트 제거
+        setTimeout(function() {
+            targetElement.classList.remove('clicked-highlight');
+        }, 3000);
+    } else {
+        container.scrollTop = 0;
+    }
+}
+
+// ========== 수정 대본 렌더링 (변경 부분 하이라이트) ==========
 function renderFullScriptWithHighlight(original, revised) {
     if (!revised) return '<div class="p-4 text-gray-400 text-center">수정된 대본이 없습니다.</div>';
     
-    var escapedRevised = escapeHtml(revised);
-    var lines = escapedRevised.split('\n');
+    var originalLines = original ? original.split('\n') : [];
+    var revisedLines = revised.split('\n');
+    
     var html = '<div class="p-3 space-y-1 text-sm leading-relaxed">';
     
-    for (var i = 0; i < lines.length; i++) {
-        var line = lines[i];
-        if (line.trim() === '') {
-            html += '<div class="h-2"></div>';
+    for (var i = 0; i < revisedLines.length; i++) {
+        var revisedLine = revisedLines[i];
+        var originalLine = originalLines[i] || '';
+        
+        if (revisedLine.trim() === '') {
+            html += '<div class="h-2" data-line-index="' + i + '"></div>';
+        } else if (originalLine.trim() !== revisedLine.trim()) {
+            html += '<div class="text-gray-200" data-line-index="' + i + '">' + 
+                highlightChangedParts(originalLine, revisedLine) + '</div>';
         } else {
-            html += '<div class="text-gray-200">' + line + '</div>';
+            html += '<div class="text-gray-200" data-line-index="' + i + '">' + escapeHtml(revisedLine) + '</div>';
         }
     }
     
     html += '</div>';
     return html;
+}
+
+// ========== 변경된 부분만 하이라이트 ==========
+function highlightChangedParts(original, revised) {
+    if (!original || original.trim() === '') {
+        return '<span class="highlight-changed">' + escapeHtml(revised) + '</span>';
+    }
+    
+    var result = '';
+    var i = 0, j = 0;
+    var originalChars = original.split('');
+    var revisedChars = revised.split('');
+    var changedBuffer = '';
+    var unchangedBuffer = '';
+    
+    while (j < revisedChars.length) {
+        if (i < originalChars.length && originalChars[i] === revisedChars[j]) {
+            if (changedBuffer) {
+                result += '<span class="highlight-changed">' + escapeHtml(changedBuffer) + '</span>';
+                changedBuffer = '';
+            }
+            unchangedBuffer += revisedChars[j];
+            i++;
+            j++;
+        } else {
+            if (unchangedBuffer) {
+                result += escapeHtml(unchangedBuffer);
+                unchangedBuffer = '';
+            }
+            
+            var foundInOriginal = false;
+            for (var k = i; k < Math.min(i + 10, originalChars.length); k++) {
+                if (originalChars[k] === revisedChars[j]) {
+                    i = k;
+                    foundInOriginal = true;
+                    break;
+                }
+            }
+            
+            if (!foundInOriginal) {
+                changedBuffer += revisedChars[j];
+                j++;
+            }
+        }
+    }
+    
+    if (unchangedBuffer) {
+        result += escapeHtml(unchangedBuffer);
+    }
+    if (changedBuffer) {
+        result += '<span class="highlight-changed">' + escapeHtml(changedBuffer) + '</span>';
+    }
+    
+    return result || escapeHtml(revised);
 }
 
 // ========== 유틸리티 ==========
@@ -884,4 +976,4 @@ function downloadScript() {
 
 // ========== 부팅 확인 ==========
 window.__MAIN_JS_LOADED__ = true;
-console.log('[BOOT] main.js v4.1 로드 완료');
+console.log('[BOOT] main.js v4.2 로드 완료');
