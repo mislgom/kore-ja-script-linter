@@ -1,10 +1,10 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.6 - Vertex AI Express Mode + Gemini 3 Pro
+ * main.js v4.7 - Vertex AI Express Mode + Gemini 3 Pro
  * 25가지 오류 유형 검수, 4-패널 레이아웃, 새 점수 체계
  */
 
-console.log('🚀 main.js v4.6 (Vertex AI + Gemini 3 Pro) 로드됨');
+console.log('🚀 main.js v4.7 (Vertex AI + Gemini 3 Pro) 로드됨');
 
 // ===================== 전역 상태 =====================
 const state = {
@@ -42,7 +42,7 @@ function initApp() {
     initClearButton();
     initAnalysisButtons();
     initDownloadButton();
-    console.log('✅ main.js v4.6 초기화 완료');
+    console.log('✅ main.js v4.7 초기화 완료');
 }
 
 // ===================== 다크모드 =====================
@@ -321,12 +321,19 @@ function updateProgress(percent, text) {
     textEl.textContent = text;
 }
 
-// ===================== 프롬프트 생성 =====================
+// ===================== 프롬프트 생성 (더 명확한 지시) =====================
 function generatePrompt(scriptText) {
     return `당신은 전문 대본 검수 AI입니다. 아래 대본을 분석하고 JSON 형식으로 결과를 반환하세요.
 
-## 검수 항목 (25가지 오류 유형)
+## 중요 규칙
+1. revisedScript에는 반드시 전체 대본을 포함해야 합니다. 절대로 "(중략)", "(생략)", "..." 등으로 생략하지 마세요.
+2. 수정이 필요한 부분만 수정하고, 나머지는 원본 그대로 유지하세요.
+3. analysis 배열의 original과 suggestion은 반드시 정확히 일치해야 합니다.
+   - original: 원본 대본에서 수정이 필요한 정확한 텍스트
+   - suggestion: revisedScript에 실제로 반영된 수정된 텍스트
+4. 수정된 부분은 반드시 revisedScript에 동일하게 반영되어야 합니다.
 
+## 검수 항목 (25가지 오류 유형)
 1. 맞춤법 오류
 2. 띄어쓰기 오류
 3. 문법 오류
@@ -362,12 +369,12 @@ ${scriptText}
     {
       "line": 1,
       "errorType": "오류 유형",
-      "original": "원본 텍스트",
-      "suggestion": "수정 제안",
+      "original": "원본에서 수정이 필요한 정확한 텍스트",
+      "suggestion": "수정된 텍스트 (revisedScript에 반영된 것과 동일)",
       "reason": "수정 이유"
     }
   ],
-  "revisedScript": "전체 수정된 대본 텍스트",
+  "revisedScript": "전체 수정된 대본 (생략 없이 전체 텍스트)",
   "scores": {
     "entertainment": 85,
     "seniorTarget": 90,
@@ -377,12 +384,16 @@ ${scriptText}
 }
 
 ## 점수 기준 (각 항목 0-100점)
-- entertainment: 재미요소 - 대본이 얼마나 재미있고 흥미로운지 (0-100, 높을수록 좋음)
-- seniorTarget: 시니어 타겟 - 시니어 시청자에게 얼마나 적합한지 (0-100, 높을수록 좋음)
-- storyFlow: 이야기 흐름 - 스토리 전개가 자연스럽고 논리적인지 (0-100, 높을수록 좋음)
-- bounceRate: 시청자 이탈율 - 시청자가 이탈할 가능성 (0-100, 낮을수록 좋음)
+- entertainment: 재미요소 (0-100, 높을수록 좋음)
+- seniorTarget: 시니어 타겟 (0-100, 높을수록 좋음)
+- storyFlow: 이야기 흐름 (0-100, 높을수록 좋음)
+- bounceRate: 시청자 이탈율 (0-100, 낮을수록 좋음)
 
-반드시 위 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.`;
+## 다시 한번 강조
+- revisedScript는 절대 생략하지 말고 전체 대본을 포함하세요.
+- analysis의 suggestion과 revisedScript의 수정 내용이 정확히 일치해야 합니다.
+
+반드시 위 JSON 형식으로만 응답하세요.`;
 }
 
 // ===================== Gemini API 호출 (Vertex AI Express Mode) =====================
@@ -472,15 +483,13 @@ function renderResults(parsed, stage) {
     const countSpan = document.getElementById(`revision-count-${stage}`);
 
     renderAnalysisTable(parsed.analysis, parsed.parseError, stage, analysisContainer);
-
-    const originalScript = stage === 'stage1' ? state.stage1.originalScript : state.stage2.originalScript;
-    renderFullScriptWithHighlight(originalScript, parsed.revisedScript, parsed.analysis, revisedContainer);
+    renderFullScriptWithHighlight(parsed.revisedScript, parsed.analysis, revisedContainer);
 
     const revisionCount = parsed.analysis ? parsed.analysis.length : 0;
     countSpan.textContent = revisionCount > 0 ? `(${revisionCount}건 수정)` : '';
 }
 
-// ===================== 분석 테이블 렌더링 (제목 고정, 내용만 스크롤) =====================
+// ===================== 분석 테이블 렌더링 =====================
 function renderAnalysisTable(analysis, parseError, stage, container) {
     if (parseError) {
         container.innerHTML = `<p class="error">파싱 오류: ${parseError}</p>`;
@@ -495,7 +504,7 @@ function renderAnalysisTable(analysis, parseError, stage, container) {
     const targetContainerId = stage === 'stage1' ? 'revised-stage1' : 'revised-stage2';
 
     let html = '<p class="click-hint">💡 각 행을 클릭하면 수정된 부분으로 이동합니다</p>';
-    html += '<div class="table-wrapper"><table class="analysis-table"><thead><tr><th>줄</th><th>유형</th><th>원본</th><th>수정</th><th>이유</th></tr></thead><tbody>';
+    html += '<div class="table-scroll-wrapper"><table class="analysis-table"><thead><tr><th>줄</th><th>유형</th><th>원본</th><th>수정</th><th>이유</th></tr></thead><tbody>';
 
     analysis.forEach((item, index) => {
         html += `<tr class="clickable-row" 
@@ -523,6 +532,7 @@ function scrollToHighlight(row) {
 
     if (!container) return;
 
+    const scrollWrapper = container.querySelector('.script-scroll-wrapper');
     const highlights = container.querySelectorAll('.changed-text');
     let targetElement = null;
 
@@ -548,67 +558,57 @@ function scrollToHighlight(row) {
         setTimeout(() => {
             targetElement.classList.remove('highlight-flash');
         }, 1500);
-    } else {
-        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else if (scrollWrapper) {
+        scrollWrapper.scrollTop = 0;
     }
 }
 
-// ===================== 수정본 렌더링 (오류 부분만 하이라이트) =====================
-function renderFullScriptWithHighlight(originalScript, revisedScript, analysis, container) {
+// ===================== 수정본 렌더링 (전체 대본, 오류 부분만 하이라이트) =====================
+function renderFullScriptWithHighlight(revisedScript, analysis, container) {
     if (!revisedScript) {
         container.innerHTML = '<p class="placeholder">수정된 내용이 없습니다.</p>';
         return;
     }
 
-    // 분석 결과에서 수정된 원본 텍스트 목록 추출
-    const errorOriginals = new Set();
-    const errorSuggestions = new Map();
-    
+    // 분석 결과에서 수정된 텍스트 목록 추출
+    const suggestions = new Set();
     if (analysis && analysis.length > 0) {
         analysis.forEach(item => {
-            if (item.original) {
-                errorOriginals.add(item.original.trim());
-                if (item.suggestion) {
-                    errorSuggestions.set(item.original.trim(), item.suggestion.trim());
-                }
+            if (item.suggestion && item.suggestion.trim()) {
+                suggestions.add(item.suggestion.trim());
             }
         });
     }
 
-    const revisedLines = revisedScript.split('\n');
-    let html = '<div class="revised-script">';
+    // 전체 대본을 줄 단위로 처리
+    const lines = revisedScript.split('\n');
+    let html = '<div class="script-scroll-wrapper"><div class="revised-script">';
 
-    revisedLines.forEach((line, index) => {
-        let highlightedLine = escapeHtml(line);
-        let hasChange = false;
+    lines.forEach((line, index) => {
+        let processedLine = escapeHtml(line);
+        let hasHighlight = false;
 
-        // 각 오류 수정 부분을 찾아서 하이라이트
-        errorSuggestions.forEach((suggestion, original) => {
-            if (line.includes(suggestion)) {
-                // 수정된 문장 전체를 하나의 span으로 감싸기
-                const escapedSuggestion = escapeHtml(suggestion);
-                const regex = new RegExp(escapeRegExp(escapedSuggestion), 'g');
-                if (highlightedLine.includes(escapedSuggestion)) {
-                    highlightedLine = highlightedLine.replace(regex, `<span class="changed-text">${escapedSuggestion}</span>`);
-                    hasChange = true;
-                }
+        // 각 수정 제안과 비교하여 하이라이트
+        suggestions.forEach(suggestion => {
+            const escapedSuggestion = escapeHtml(suggestion);
+            if (processedLine.includes(escapedSuggestion)) {
+                processedLine = processedLine.replace(
+                    escapedSuggestion,
+                    `<span class="changed-text">${escapedSuggestion}</span>`
+                );
+                hasHighlight = true;
             }
         });
 
-        if (hasChange) {
-            html += `<p class="line-revised" data-line="${index + 1}">${highlightedLine}</p>`;
+        if (hasHighlight) {
+            html += `<p class="line-revised" data-line="${index + 1}">${processedLine}</p>`;
         } else {
-            html += `<p class="line-unchanged">${highlightedLine}</p>`;
+            html += `<p class="line-unchanged">${processedLine || '&nbsp;'}</p>`;
         }
     });
 
-    html += '</div>';
+    html += '</div></div>';
     container.innerHTML = html;
-}
-
-// 정규식 특수문자 이스케이프
-function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ===================== 점수 렌더링 =====================
@@ -625,7 +625,7 @@ function renderScores(scores) {
     const storyFlow = scores.storyFlow || 0;
     const bounceRate = scores.bounceRate || 0;
     
-    // 이탈율을 점수로 변환 (이탈율이 낮을수록 점수가 높음)
+    // 이탈율을 점수로 변환
     const bounceScore = 100 - bounceRate;
 
     // 평균 계산
@@ -655,7 +655,6 @@ function renderScores(scores) {
         <div class="score-label">이야기 흐름</div>
     </div>`;
 
-    // 시청자 이탈 (점수로 표시)
     html += `<div class="score-card ${getScoreClass(bounceScore)}">
         <div class="score-value">${bounceScore}</div>
         <div class="score-label">시청자 이탈</div>
