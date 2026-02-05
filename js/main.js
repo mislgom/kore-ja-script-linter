@@ -1,9 +1,9 @@
 /**
- * KORE-JA SCRIPT LINTER - MAIN.JS
- * 4-Panel + Score System v3.8
+ * MISLGOM 대본 검수 자동 프로그램 - MAIN.JS
+ * 4-Panel + Score System v3.9
  */
 
-console.log('🚀 main.js v3.8 (4-Panel + Score) 로드됨');
+console.log('🚀 main.js v3.9 (Enhanced Analysis) 로드됨');
 
 // ========== 전역 상태 ==========
 var tabStates = {
@@ -44,7 +44,7 @@ function initializeApp() {
     initDownloadButtons();
     initCharCounter();
     
-    console.log('✅ main.js v3.8 초기화 완료');
+    console.log('✅ main.js v3.9 초기화 완료');
 }
 
 // ========== 다크모드 ==========
@@ -151,6 +151,7 @@ function initTextarea() {
         clearBtn.addEventListener('click', function() {
             textarea.value = '';
             updateCharCounter();
+            hideLoadedFilename();
         });
     }
 }
@@ -165,17 +166,20 @@ function loadSampleScript() {
         '오늘은 제가 겪었던 특별한 겨울 이야기를 들려드릴게요.\n\n' +
         '그해 겨울은 유난히 추웠습니다.\n' +
         '눈이 펑펑 내리는 어느 날, 저는 작은 카페에서 따뜻한 코코아를 마시고 있었어요.\n\n' +
-        '[※ 테스트용 의도적 오류]\n' +
         '그때 문이 열리며 한 할머니께서 들어오셨습니다.\n' +
         '할머니는 추위에 떨고 계셨고, 저는 자리를 양보해 드렸습니다.\n\n' +
         '"고마워요, 젊은이."\n' +
         '할머니의 미소가 참 따뜻했습니다.\n\n' +
         '우리는 그렇게 처음 만낫습니다.\n' +
-        '서로의 이야기를 나누며, 시간 가는 줄 몰랐어요.';
+        '서로의 이야기를 나누며, 시간 가는 줄 몰랐어요.\n\n' +
+        '할머니는 올해 일흔다섯이라고 하셨어요.\n' +
+        '그런데 이야기 중간에 갑자기 "나는 예순살인데..." 라고 말씀하셨습니다.\n\n' +
+        '밖은 한겨울 눈보라가 치는데, 할머니는 "이 여름 더위는 정말 힘들구나" 라고 하셨어요.';
 
     textarea.value = sample;
     updateCharCounter();
-    console.log('📝 샘플 대본 로드됨');
+    hideLoadedFilename();
+    console.log('📝 샘플 대본 로드됨 (오류 포함 버전)');
 }
 
 // ========== 파일 업로드 ==========
@@ -197,11 +201,29 @@ function initFileUpload() {
                 reader.onload = function(event) {
                     textarea.value = event.target.result;
                     updateCharCounter();
+                    showLoadedFilename(file.name);
                     console.log('📂 파일 로드됨:', file.name);
                 };
                 reader.readAsText(file, 'UTF-8');
             }
         });
+    }
+}
+
+// ========== 파일명 표시 ==========
+function showLoadedFilename(filename) {
+    var container = document.getElementById('loaded-filename');
+    var text = document.getElementById('filename-text');
+    if (container && text) {
+        text.textContent = filename;
+        container.classList.remove('hidden');
+    }
+}
+
+function hideLoadedFilename() {
+    var container = document.getElementById('loaded-filename');
+    if (container) {
+        container.classList.add('hidden');
     }
 }
 
@@ -247,6 +269,7 @@ function initDragAndDrop() {
             reader.onload = function(event) {
                 textarea.value = event.target.result;
                 updateCharCounter();
+                showLoadedFilename(file.name);
                 console.log('📂 드래그 파일 로드 완료:', file.name);
             };
             reader.readAsText(file, 'UTF-8');
@@ -367,6 +390,7 @@ async function startAnalysis(stage) {
         
         var result = await callGeminiAPI(prompt);
         console.log('📥 API 응답 수신');
+        console.log('📄 응답 길이:', result.length);
         
         clearInterval(progressInterval);
         if (progressBar) progressBar.style.width = '100%';
@@ -426,49 +450,61 @@ async function startAnalysis(stage) {
     }
 }
 
-// ========== 프롬프트 생성 ==========
+// ========== 프롬프트 생성 (강화된 버전) ==========
 function generatePrompt(stage, script) {
     if (stage === 'stage1') {
-        return '당신은 한국 시니어 낭독용 대본의 **설정 일관성 검수** 전문가입니다.\n\n' +
-            '## 분석 대상 대본:\n' + script + '\n\n' +
-            '## 🔍 1차 분석 항목\n\n' +
-            '### 1. 국가 배경 확인\n' +
-            '- 도시명, 지명, 화폐 단위, 문화적 요소가 해당 국가에 맞는지\n\n' +
-            '### 2. 시대 배경 분석\n' +
-            '- 해당 시대에 맞지 않는 사물, 기술, 문화, 언어 사용 시 오류\n\n' +
-            '### 3. 등장인물 설정 분석\n' +
-            '- 이름, 나이, 외형, 성격, 직업이 처음부터 끝까지 동일한지\n\n' +
-            '### 4. 등장인물 관계 분석\n' +
-            '- 인물 간 관계가 처음부터 끝까지 일관되게 유지되는지\n\n' +
-            '## 출력 형식 (반드시 JSON으로만 응답):\n' +
+        return '당신은 한국 시니어 낭독용 대본의 **정밀 검수 전문가**입니다.\n\n' +
+            '## 📋 분석 대상 대본:\n"""\n' + script + '\n"""\n\n' +
+            '## 🔍 1차 분석: 아래 5가지 항목을 꼼꼼히 검수하세요\n\n' +
+            '### 1. 맞춤법/문법/오타\n' +
+            '- 모든 오타를 찾으세요 (예: "만낫습니다" → "만났습니다")\n' +
+            '- 띄어쓰기 오류\n' +
+            '- 문법적 오류\n\n' +
+            '### 2. 인물 설정 일관성\n' +
+            '- 나이가 중간에 바뀌지 않는지 (예: 75세 → 60세)\n' +
+            '- 이름, 외모, 직업 등이 일관되는지\n\n' +
+            '### 3. 시간/계절 일관성\n' +
+            '- 계절이 갑자기 바뀌지 않는지 (예: 겨울 → 여름)\n' +
+            '- 시간대가 논리적인지\n\n' +
+            '### 4. 장소 일관성\n' +
+            '- 장소 설정이 갑자기 바뀌지 않는지\n\n' +
+            '### 5. 시대/문화 일관성\n' +
+            '- 시대에 맞지 않는 물건이나 표현이 없는지\n\n' +
+            '## ⚠️ 매우 중요한 규칙:\n' +
+            '1. 발견한 오류는 **모두** analysis에 기록하세요\n' +
+            '2. revised에는 **오류를 수정한 전체 대본**을 작성하세요\n' +
+            '3. 오류가 없어도 revised에 원본 대본 전체를 그대로 작성하세요\n\n' +
+            '## 📤 출력 형식 (정확히 이 JSON 형식으로만 응답):\n' +
             '```json\n' +
             '{\n' +
-            '  "analysis": "번호\\t오류 유형\\t오류 대본\\t변경 대본\\t검수 포인트\\n1\\t시대착오\\t오류 문장\\t수정 문장\\t설명",\n' +
-            '  "revised": "모든 오류를 수정한 전체 대본"\n' +
+            '  "analysis": "번호\\t오류유형\\t오류내용\\t수정내용\\t설명\\n1\\t맞춤법\\t만낫습니다\\t만났습니다\\t오타 수정\\n2\\t인물설정\\t일흔다섯 → 예순살\\t일흔다섯으로 통일\\t나이 불일치",\n' +
+            '  "revised": "여기에 모든 오류를 수정한 전체 대본 작성"\n' +
             '}\n' +
             '```\n\n' +
-            '## 중요 규칙:\n' +
-            '1. 오류가 없으면 analysis에 "오류 없음" 기재\n' +
-            '2. revised에는 수정된 완전한 대본 작성\n' +
-            '3. 반드시 완전한 JSON으로 응답\n' +
-            '4. JSON 외 다른 텍스트 금지';
+            '## 🚨 필수:\n' +
+            '- JSON 형식 외 다른 텍스트 금지\n' +
+            '- revised는 절대 비워두지 마세요\n' +
+            '- 반드시 완전한 JSON으로 응답을 마무리하세요';
     } else {
-        return '당신은 한국 시니어 낭독용 대본의 **스토리 흐름 및 품질 검수** 전문가입니다.\n\n' +
-            '## 1차 검수 완료된 대본:\n' + script + '\n\n' +
-            '## 🔍 2차 분석 항목\n\n' +
-            '### 1. 시간 흐름 왜곡\n' +
-            '- 아침/점심/저녁, 계절, 시간 순서가 논리적인지\n\n' +
-            '### 2. 장소 흐름 왜곡\n' +
-            '- 장소 이동이 논리적인지\n\n' +
-            '### 3. 시니어 적합성\n' +
-            '- 50-70대 청취자에게 적합한 콘텐츠인지\n\n' +
-            '### 4. 1차 검수 재확인\n' +
-            '- 놓친 오류가 없는지 확인\n\n' +
-            '## 출력 형식 (반드시 JSON으로만 응답):\n' +
+        return '당신은 한국 시니어 낭독용 대본의 **품질 평가 전문가**입니다.\n\n' +
+            '## 📋 1차 검수 완료된 대본:\n"""\n' + script + '\n"""\n\n' +
+            '## 🔍 2차 분석: 아래 4가지 항목을 검수하세요\n\n' +
+            '### 1. 스토리 흐름\n' +
+            '- 이야기 전개가 자연스러운지\n' +
+            '- 갑작스러운 장면 전환이 없는지\n\n' +
+            '### 2. 시간 순서\n' +
+            '- 아침/점심/저녁 순서가 맞는지\n' +
+            '- 계절 변화가 논리적인지\n\n' +
+            '### 3. 감정선 연결\n' +
+            '- 등장인물의 감정 변화가 자연스러운지\n\n' +
+            '### 4. 시니어 청취자 적합성\n' +
+            '- 50-70대가 듣기 편한 내용인지\n' +
+            '- 어려운 용어나 빠른 전개가 없는지\n\n' +
+            '## 📤 출력 형식 (정확히 이 JSON 형식으로만 응답):\n' +
             '```json\n' +
             '{\n' +
-            '  "analysis": "번호\\t오류 유형\\t오류 대본\\t변경 대본\\t검수 포인트\\n1\\t시간 왜곡\\t오류 문장\\t수정 문장\\t설명",\n' +
-            '  "revised": "최종 수정된 완전한 대본",\n' +
+            '  "analysis": "번호\\t오류유형\\t오류내용\\t수정내용\\t설명\\n1\\t흐름\\t문제부분\\t수정내용\\t설명",\n' +
+            '  "revised": "최종 수정된 전체 대본을 여기에 작성",\n' +
             '  "scores": {\n' +
             '    "fun": 85,\n' +
             '    "flow": 90,\n' +
@@ -477,17 +513,17 @@ function generatePrompt(stage, script) {
             '  }\n' +
             '}\n' +
             '```\n\n' +
-            '## ⚠️ 점수 평가 기준 (0-100점) - 중요!\n' +
-            '**반드시 "revised"에 작성된 최종 수정 완료된 대본을 기준으로 점수를 평가하세요.**\n\n' +
-            '- **fun (재미요소)**: 최종 대본의 흥미도, 몰입감, 감동 요소\n' +
-            '- **flow (대본 흐름)**: 최종 대본의 시간/장소/상황 전개의 자연스러움\n' +
-            '- **senior (시니어 적합성)**: 최종 대본이 50-70대 청취자에게 적합한 정도\n' +
-            '- **retention (시청 이탈율 방지)**: 최종 대본을 끝까지 듣고 싶은 정도 (높을수록 좋음)\n\n' +
-            '## 중요 규칙:\n' +
-            '1. scores는 반드시 **revised(최종 수정 대본)를 기준**으로 0-100 사이의 정수로 평가\n' +
-            '2. revised에는 최종 완성된 대본 작성\n' +
-            '3. 반드시 완전한 JSON으로 응답\n' +
-            '4. JSON 외 다른 텍스트 금지';
+            '## 📊 점수 평가 기준 (revised 최종 대본 기준으로 평가):\n' +
+            '- **fun** (재미요소): 이야기의 흥미도, 몰입감 (0-100)\n' +
+            '- **flow** (대본흐름): 전개의 자연스러움 (0-100)\n' +
+            '- **senior** (시니어적합성): 50-70대 청취 적합도 (0-100)\n' +
+            '- **retention** (이탈방지): 끝까지 듣고 싶은 정도 (0-100)\n\n' +
+            '## 🚨 필수 규칙:\n' +
+            '- scores는 반드시 포함하세요\n' +
+            '- revised에 최종 대본 전체를 작성하세요\n' +
+            '- 오류가 없으면 analysis에 "오류 없음" 기재\n' +
+            '- JSON 형식 외 다른 텍스트 금지\n' +
+            '- 반드시 완전한 JSON으로 응답을 마무리하세요';
     }
 }
 
@@ -504,7 +540,7 @@ async function callGeminiAPI(prompt) {
         body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
-                temperature: 0.3,
+                temperature: 0.2,
                 maxOutputTokens: 65536
             }
         })
@@ -523,7 +559,7 @@ async function callGeminiAPI(prompt) {
     return text;
 }
 
-// ========== 결과 파싱 ==========
+// ========== 결과 파싱 (강화된 버전) ==========
 function parseAnalysisResult(rawText) {
     console.log('📝 파싱 시작, 원본 길이:', rawText ? rawText.length : 0);
     
@@ -532,17 +568,28 @@ function parseAnalysisResult(rawText) {
     }
     
     var jsonStr = rawText.trim();
-    jsonStr = jsonStr.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
     
-    var braceMatch = jsonStr.match(/\{[\s\S]*\}/);
-    if (braceMatch) {
-        jsonStr = braceMatch[0];
+    // 코드 블록 제거
+    jsonStr = jsonStr.replace(/^```json\s*/i, '');
+    jsonStr = jsonStr.replace(/^```\s*/i, '');
+    jsonStr = jsonStr.replace(/\s*```$/i, '');
+    jsonStr = jsonStr.trim();
+    
+    // JSON 블록 추출
+    var braceStart = jsonStr.indexOf('{');
+    var braceEnd = jsonStr.lastIndexOf('}');
+    if (braceStart !== -1 && braceEnd !== -1 && braceEnd > braceStart) {
+        jsonStr = jsonStr.substring(braceStart, braceEnd + 1);
         console.log('📦 JSON 블록 추출됨');
     }
     
     try {
         var parsed = JSON.parse(jsonStr);
         console.log('✅ JSON 파싱 성공');
+        console.log('📊 analysis 길이:', parsed.analysis ? parsed.analysis.length : 0);
+        console.log('📝 revised 길이:', parsed.revised ? parsed.revised.length : 0);
+        console.log('🎯 scores:', parsed.scores);
+        
         return {
             analysis: parsed.analysis || '',
             revised: parsed.revised || '',
@@ -551,22 +598,40 @@ function parseAnalysisResult(rawText) {
         };
     } catch (e) {
         console.error('❌ JSON 파싱 실패:', e.message);
+        console.log('🔍 파싱 시도한 문자열 앞부분:', jsonStr.substring(0, 500));
         
+        // 수동 추출 시도
         var analysis = '';
         var revised = '';
+        var scores = null;
         
-        var analysisMatch = rawText.match(/"analysis"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"revised"|"\s*})/);
+        // analysis 추출
+        var analysisMatch = rawText.match(/"analysis"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"revised"|"\s*,\s*"scores"|"\s*})/);
         if (analysisMatch) {
             analysis = analysisMatch[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
+            console.log('🔧 analysis 수동 추출 성공, 길이:', analysis.length);
         }
         
-        var revisedMatch = rawText.match(/"revised"\s*:\s*"([\s\S]*?)"\s*[,}]/);
+        // revised 추출
+        var revisedMatch = rawText.match(/"revised"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"scores"|"\s*})/);
         if (revisedMatch) {
             revised = revisedMatch[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
+            console.log('🔧 revised 수동 추출 성공, 길이:', revised.length);
+        }
+        
+        // scores 추출
+        var scoresMatch = rawText.match(/"scores"\s*:\s*(\{[\s\S]*?\})/);
+        if (scoresMatch) {
+            try {
+                scores = JSON.parse(scoresMatch[1]);
+                console.log('🔧 scores 수동 추출 성공:', scores);
+            } catch (se) {
+                console.log('⚠️ scores 파싱 실패');
+            }
         }
         
         if (analysis || revised) {
-            return { analysis: analysis, revised: revised, scores: null, parseError: false };
+            return { analysis: analysis, revised: revised, scores: scores, parseError: false };
         }
         
         return { analysis: rawText, revised: '', scores: null, parseError: true };
@@ -579,31 +644,45 @@ function renderResults(stage, result) {
     
     var parsed = parseAnalysisResult(result);
     
+    // 상태 저장
     tabStates[stage].analysisResult = parsed.analysis;
     tabStates[stage].revisedScript = parsed.revised;
     if (parsed.scores) {
         tabStates[stage].scores = parsed.scores;
     }
     
+    console.log('💾 저장된 revisedScript 길이:', parsed.revised ? parsed.revised.length : 0);
+    
+    // 분석 결과 표 렌더링
     var tableContainer = document.getElementById('result-table-' + stage);
     if (tableContainer) {
         tableContainer.innerHTML = renderAnalysisTable(parsed.analysis, parsed.parseError);
     }
     
+    // 수정 반영 렌더링
     var revisedContainer = document.getElementById('revised-' + stage);
     if (revisedContainer) {
         var original = stage === 'stage1' ? tabStates.stage1.originalScript : tabStates.stage1.revisedScript;
         var revised = parsed.revised;
         
-        if (revised) {
+        if (revised && revised.length > 0) {
             revisedContainer.innerHTML = renderFullScriptWithHighlight(original, revised);
+            console.log('✅ 수정 반영 렌더링 완료');
         } else {
-            revisedContainer.innerHTML = '<div class="p-4 text-gray-500 text-center"><i class="fas fa-info-circle mr-2"></i>수정본이 생성되지 않았습니다.</div>';
+            revisedContainer.innerHTML = '<div class="p-4 text-red-400 text-center"><i class="fas fa-exclamation-triangle mr-2"></i>수정본이 생성되지 않았습니다.<br><small class="text-gray-500">API 응답에서 revised 필드가 비어있습니다.</small></div>';
+            console.log('⚠️ revised가 비어있음');
         }
     }
     
-    if (stage === 'stage2' && parsed.scores) {
-        renderScores(parsed.scores);
+    // 2차 분석일 때 점수 표시
+    if (stage === 'stage2') {
+        if (parsed.scores) {
+            renderScores(parsed.scores);
+            console.log('✅ 점수 렌더링 완료');
+        } else {
+            console.log('⚠️ scores가 없음, 기본값 표시');
+            renderScores({ fun: 0, flow: 0, senior: 0, retention: 0 });
+        }
     }
 }
 
@@ -634,7 +713,10 @@ function renderScores(scores) {
     var isPass = total >= 98;
     
     if (verdictEl) {
-        if (isPass) {
+        if (total === 0) {
+            verdictEl.innerHTML = '<div class="text-center"><i class="fas fa-question-circle text-gray-400 text-xl mb-1"></i><p class="text-gray-400 font-bold text-sm">평가 실패</p></div>';
+            verdictEl.className = 'bg-gray-500/20 border border-gray-500/50 rounded-lg p-2 text-center flex items-center justify-center';
+        } else if (isPass) {
             verdictEl.innerHTML = '<div class="text-center"><i class="fas fa-check-circle text-green-400 text-xl mb-1"></i><p class="text-green-400 font-bold text-sm">통과</p></div>';
             verdictEl.className = 'bg-green-500/20 border border-green-500/50 rounded-lg p-2 text-center flex items-center justify-center';
         } else {
@@ -644,7 +726,10 @@ function renderScores(scores) {
     }
     
     if (badgeEl) {
-        if (isPass) {
+        if (total === 0) {
+            badgeEl.textContent = '평가 실패';
+            badgeEl.className = 'px-3 py-1 rounded-full text-xs font-bold bg-gray-500 text-white';
+        } else if (isPass) {
             badgeEl.textContent = '통과 (' + total + '점)';
             badgeEl.className = 'px-3 py-1 rounded-full text-xs font-bold bg-green-500 text-white';
         } else {
@@ -662,15 +747,15 @@ function renderAnalysisTable(analysisText, isParseError) {
     
     if (isParseError) {
         return '<div class="p-3"><div class="bg-orange-900/30 border border-orange-700 rounded-lg p-3 mb-3">' +
-            '<p class="text-orange-300 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>JSON 파싱 실패</p></div>' +
-            '<pre class="whitespace-pre-wrap text-xs text-gray-300 bg-gray-800 p-3 rounded">' + escapeHtml(analysisText) + '</pre></div>';
+            '<p class="text-orange-300 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>JSON 파싱 실패 - 원본 응답:</p></div>' +
+            '<pre class="whitespace-pre-wrap text-xs text-gray-300 bg-gray-800 p-3 rounded max-h-60 overflow-y-auto">' + escapeHtml(analysisText) + '</pre></div>';
     }
     
     var text = analysisText.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
     var lines = text.trim().split('\n').filter(function(line) { return line.trim(); });
     
-    if (lines.length === 0 || text.indexOf('오류 없음') !== -1) {
-        return '<div class="p-4 text-center"><i class="fas fa-check-circle text-green-400 text-2xl mb-2"></i><p class="text-green-400">오류 없음</p></div>';
+    if (lines.length === 0 || text.indexOf('오류 없음') !== -1 || text.indexOf('오류없음') !== -1) {
+        return '<div class="p-4 text-center"><i class="fas fa-check-circle text-green-400 text-2xl mb-2 block"></i><p class="text-green-400 font-medium">오류 없음</p><p class="text-gray-500 text-xs mt-1">검수 결과 문제가 발견되지 않았습니다.</p></div>';
     }
     
     var hasTabs = lines.some(function(line) { return line.indexOf('\t') !== -1; });
@@ -682,14 +767,14 @@ function renderAnalysisTable(analysisText, isParseError) {
     var html = '<div class="overflow-x-auto"><table class="w-full text-xs border-collapse">' +
         '<thead><tr class="bg-gray-700">' +
         '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200 w-6">No</th>' +
-        '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200 w-14">유형</th>' +
-        '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200">오류 대본</th>' +
-        '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200">변경 대본</th>' +
-        '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200">검수 포인트</th>' +
+        '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200 w-16">유형</th>' +
+        '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200">오류내용</th>' +
+        '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200">수정내용</th>' +
+        '<th class="border border-gray-600 px-1 py-1 text-left text-gray-200">설명</th>' +
         '</tr></thead><tbody>';
     
     var firstCols = lines[0].split('\t');
-    var isHeader = firstCols[0] === '번호' || firstCols[0].indexOf('번호') !== -1;
+    var isHeader = firstCols[0] === '번호' || firstCols[0].indexOf('번호') !== -1 || firstCols[0].toLowerCase() === 'no';
     var startIdx = isHeader ? 1 : 0;
     
     for (var i = startIdx; i < lines.length; i++) {
@@ -698,10 +783,10 @@ function renderAnalysisTable(analysisText, isParseError) {
         
         html += '<tr class="hover:bg-gray-700/50">';
         html += '<td class="border border-gray-600 px-1 py-1 text-gray-300 text-center">' + escapeHtml(cols[0] || '') + '</td>';
-        html += '<td class="border border-gray-600 px-1 py-1 text-gray-300">' + escapeHtml(cols[1] || '') + '</td>';
+        html += '<td class="border border-gray-600 px-1 py-1 text-blue-300 font-medium">' + escapeHtml(cols[1] || '') + '</td>';
         html += '<td class="border border-gray-600 px-1 py-1 bg-red-900/30 text-red-300">' + escapeHtml(cols[2] || '') + '</td>';
         html += '<td class="border border-gray-600 px-1 py-1 bg-green-900/30 text-green-300">' + escapeHtml(cols[3] || '') + '</td>';
-        html += '<td class="border border-gray-600 px-1 py-1 text-gray-300">' + escapeHtml(cols[4] || '') + '</td>';
+        html += '<td class="border border-gray-600 px-1 py-1 text-gray-400">' + escapeHtml(cols[4] || '') + '</td>';
         html += '</tr>';
     }
     
@@ -722,6 +807,7 @@ function renderFullScriptWithHighlight(original, revised) {
     var originalLines = original.split('\n');
     var revisedLines = revised.split('\n');
     
+    // 원본 라인을 Set으로
     var originalSet = {};
     for (var i = 0; i < originalLines.length; i++) {
         var trimmed = originalLines[i].trim();
@@ -753,7 +839,8 @@ function renderFullScriptWithHighlight(original, revised) {
     
     html += '</div>';
     
-    var summary = '<div class="bg-blue-50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-700 px-2 py-1 mb-2">' +
+    var summaryClass = changeCount > 0 ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700' : 'bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-600';
+    var summary = '<div class="' + summaryClass + ' border-b px-2 py-1 mb-2 sticky top-0">' +
         '<span class="text-blue-700 dark:text-blue-300 text-xs font-medium">' +
         '<i class="fas fa-edit mr-1"></i>' + changeCount + '개 라인 수정됨</span></div>';
     
@@ -803,4 +890,4 @@ window.__MAIN_JS_LOADED__ = true;
 window.MAIN_JS_LOADED = true;
 window.tabStates = tabStates;
 
-console.log('✅ main.js v3.8 초기화 준비 완료');
+console.log('✅ main.js v3.9 초기화 준비 완료');
