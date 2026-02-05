@@ -573,3 +573,174 @@ textarea:focus-visible {
 header { position: relative; z-index: 60; }
 #api-key-container { position: relative; z-index: 61; }
 #api-key-toggle-btn { pointer-events: auto; }
+/* ===================== 4칸 가로 레이아웃 ===================== */
+.results-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+    margin: 20px 0;
+}
+
+.result-panel {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 15px;
+    min-height: 300px;
+    overflow-y: auto;
+    max-height: 500px;
+}
+
+.dark-mode .result-panel {
+    background: #2a2a2a;
+    border-color: #444;
+}
+
+.result-panel h3 {
+    margin: 0 0 15px 0;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #4CAF50;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.result-content {
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.placeholder {
+    color: #888;
+    text-align: center;
+    padding: 20px;
+}
+
+/* 분석 테이블 */
+.analysis-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+.analysis-table th,
+.analysis-table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+.analysis-table th {
+    background: #4CAF50;
+    color: white;
+}
+
+.dark-mode .analysis-table th {
+    background: #2e7d32;
+}
+
+.dark-mode .analysis-table td {
+    border-color: #444;
+}
+
+.analysis-table tr:nth-child(even) {
+    background: #f9f9f9;
+}
+
+.dark-mode .analysis-table tr:nth-child(even) {
+    background: #333;
+}
+
+/* 점수 영역 */
+.score-section {
+    margin: 20px 0;
+    padding: 20px;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+}
+
+.dark-mode .score-section {
+    background: #2a2a2a;
+    border-color: #444;
+}
+
+.score-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 15px;
+}
+
+.score-card {
+    text-align: center;
+    padding: 20px;
+    border-radius: 8px;
+    background: #f5f5f5;
+}
+
+.dark-mode .score-card {
+    background: #333;
+}
+
+.score-value {
+    font-size: 2rem;
+    font-weight: bold;
+}
+
+.score-label {
+    margin-top: 5px;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.dark-mode .score-label {
+    color: #aaa;
+}
+
+.score-good .score-value { color: #4CAF50; }
+.score-warning .score-value { color: #FF9800; }
+.score-danger .score-value { color: #f44336; }
+
+/* 수정본 스타일 */
+.revised-script {
+    white-space: pre-wrap;
+    font-family: inherit;
+}
+
+.revised-script p {
+    margin: 5px 0;
+    padding: 3px 5px;
+}
+
+.line-revised {
+    background: rgba(76, 175, 80, 0.1);
+    border-left: 3px solid #4CAF50;
+}
+
+.line-unchanged {
+    color: #666;
+}
+
+.dark-mode .line-unchanged {
+    color: #aaa;
+}
+
+/* 반응형: 작은 화면에서 2열로 */
+@media (max-width: 1200px) {
+    .results-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .score-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .results-grid {
+        grid-template-columns: 1fr;
+    }
+    .score-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
