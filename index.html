@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>대본 검수 시스템 | Script Review Pro</title>
+    <title>MISLGOM 대본 검수 자동 프로그램</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -12,8 +12,9 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- MISLGOM 로고용 세련된 폰트 -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" rel="stylesheet">
 
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
@@ -28,6 +29,7 @@
                 extend: {
                     fontFamily: {
                         'korean': ['Noto Sans KR', 'sans-serif'],
+                        'logo': ['Orbitron', 'sans-serif'],
                     },
                     colors: {
                         'primary': '#2563eb',
@@ -53,11 +55,14 @@
         <div class="w-full px-4 py-3">
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-3">
-                    <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                    <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
                         <i class="fas fa-film text-lg"></i>
                     </div>
                     <div>
-                        <h1 class="text-lg font-bold">대본 검수 시스템</h1>
+                        <h1 class="text-lg font-bold">
+                            <span class="font-logo bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500 bg-clip-text text-transparent">MISLGOM</span>
+                            <span class="text-white ml-1">대본 검수 자동 프로그램</span>
+                        </h1>
                     </div>
                 </div>
                 <div class="flex items-center space-x-3">
@@ -110,10 +115,17 @@
             <!-- 대본 입력 영역 -->
             <div class="mb-4">
                 <div class="flex items-center justify-between mb-2">
-                    <h2 class="text-base font-semibold text-gray-800 dark:text-white flex items-center">
-                        <i class="fas fa-file-alt text-primary mr-2"></i>
-                        대본 입력
-                    </h2>
+                    <div class="flex items-center">
+                        <h2 class="text-base font-semibold text-gray-800 dark:text-white flex items-center">
+                            <i class="fas fa-file-alt text-primary mr-2"></i>
+                            대본 입력
+                        </h2>
+                        <!-- 파일명 표시 영역 -->
+                        <span id="loaded-filename" class="ml-3 text-sm text-blue-500 dark:text-blue-400 hidden">
+                            <i class="fas fa-file-text mr-1"></i>
+                            <span id="filename-text"></span>
+                        </span>
+                    </div>
                     <div class="flex space-x-2">
                         <input type="file" id="file-upload-input" accept=".txt,text/plain" class="hidden" />
                         <button id="btn-upload-file"
@@ -284,7 +296,7 @@
     <footer class="bg-dark text-gray-400 mt-2">
         <div class="w-full px-4 py-3">
             <div class="flex flex-col md:flex-row justify-between items-center text-xs">
-                <p>© 2025 대본 검수 시스템. v3.8 (4-Panel + Score)</p>
+                <p>© 2025 <span class="font-logo text-cyan-400">MISLGOM</span> 대본 검수 자동 프로그램 v3.8</p>
                 <p class="mt-1 md:mt-0">
                     <i class="fas fa-code mr-1"></i> Built with passion
                 </p>
