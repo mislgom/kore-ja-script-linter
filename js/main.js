@@ -755,30 +755,47 @@ function renderFullScriptWithHighlight(original, revised) {
         return '<div class="p-4 text-gray-500">수정본이 없습니다.</div>';
     }
     
+    // 원본이 없으면 전체 수정본만 표시 (하이라이트 없이)
     if (!original) {
-        // 원본이 없으면 전체 수정본 표시
         return '<div class="p-3 text-sm"><pre class="whitespace-pre-wrap text-gray-700 dark:text-gray-300">' + escapeHtml(revised) + '</pre></div>';
     }
     
+    // 원본과 수정본을 라인 단위로 분리
     var originalLines = original.split('\n');
     var revisedLines = revised.split('\n');
+    
+    // 원본 라인을 Set으로 만들어 빠른 검색 가능하게
+    var originalSet = {};
+    for (var i = 0; i < originalLines.length; i++) {
+        var trimmed = originalLines[i].trim();
+        if (trimmed) {
+            originalSet[trimmed] = true;
+        }
+    }
     
     var changeCount = 0;
     var html = '<div class="p-3 space-y-0.5 text-sm">';
     
-    var maxLines = Math.max(originalLines.length, revisedLines.length);
-    
-    for (var i = 0; i < maxLines; i++) {
-        var origLine = originalLines[i] || '';
-        var revLine = revisedLines[i] || '';
+    for (var j = 0; j < revisedLines.length; j++) {
+        var revLine = revisedLines[j];
+        var revTrimmed = revLine.trim();
         
-        // 원본과 수정본이 다르면 하이라이트
-        if (origLine.trim() !== revLine.trim()) {
+        // 빈 줄은 그대로 표시
+        if (!revTrimmed) {
+            html += '<div class="py-0.5"><span class="text-gray-700 dark:text-gray-300">&nbsp;</span></div>';
+            continue;
+        }
+        
+        // 원본에 해당 라인이 존재하는지 확인
+        var isOriginalLine = originalSet[revTrimmed] === true;
+        
+        if (!isOriginalLine) {
+            // 원본에 없는 라인 = 새로 추가되거나 수정된 라인 → 초록색 하이라이트
             changeCount++;
             html += '<div class="bg-green-100 dark:bg-green-900/40 border-l-4 border-green-500 pl-3 py-1 rounded-r">' +
                 '<span class="text-green-800 dark:text-green-200">' + escapeHtml(revLine) + '</span></div>';
         } else {
-            // 동일한 라인은 일반 표시
+            // 원본에 있는 라인 = 변경 없음 → 일반 표시
             html += '<div class="pl-4 py-0.5">' +
                 '<span class="text-gray-700 dark:text-gray-300">' + escapeHtml(revLine) + '</span></div>';
         }
@@ -789,7 +806,7 @@ function renderFullScriptWithHighlight(original, revised) {
     // 상단 요약
     var summary = '<div class="bg-blue-50 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-700 px-3 py-2 sticky top-0">' +
         '<span class="text-blue-700 dark:text-blue-300 text-sm font-medium">' +
-        '<i class="fas fa-edit mr-2"></i>총 ' + changeCount + '개 라인 수정됨 (연한 초록색 = 수정된 부분)</span></div>';
+        '<i class="fas fa-edit mr-2"></i>총 ' + changeCount + '개 라인 수정됨 (연한 초록색 = 수정/추가된 부분)</span></div>';
     
     return summary + html;
 }
