@@ -1,597 +1,361 @@
 /**
- * MISLGOM 대본 검수 자동 프로그램 - MAIN.JS
- * 4-Panel + Score System v4.3
- * Vertex AI + Gemini 3 Pro
- * 클릭 이동 + 하이라이트 + 중지 버튼 + 수정 개수 표시
+ * MISLGOM 대본 검수 자동 프로그램
+ * main.js v4.3 - Vertex AI + Gemini 3 Pro
+ * 25가지 오류 유형 검수, 4-패널 레이아웃, 중지 버튼, 수정 개수 표시
  */
 
-console.log('🚀 main.js v4.3 (Vertex AI + Gemini 3 Pro) 로드됨');
+console.log('🚀 main.js v4.3 (25 Error Types) 로드됨');
 
-// ========== 전역 상태 ==========
-var tabStates = {
+// ===================== 전역 상태 =====================
+const state = {
     stage1: {
         originalScript: '',
+        analysis: null,
         revisedScript: '',
-        analysisResult: '',
-        isAnalyzing: false,
-        isComplete: false
+        scores: null,
+        revisionCount: 0
     },
     stage2: {
         originalScript: '',
+        analysis: null,
         revisedScript: '',
-        analysisResult: '',
         scores: null,
-        isAnalyzing: false,
-        isComplete: false
+        revisionCount: 0
     }
 };
 
-var currentFileName = 'script';
-var currentAbortController = null;
+let currentAbortController = null;
 
-// ========== 초기화 ==========
-document.addEventListener('DOMContentLoaded', function() {
+// ===================== DOM 로드 후 초기화 =====================
+document.addEventListener('DOMContentLoaded', () => {
     console.log('📄 DOMContentLoaded 발생');
-    initializeApp();
+    initApp();
 });
 
-function initializeApp() {
+function initApp() {
     console.log('🎬 앱 초기화 시작');
-    
     initDarkMode();
     initApiKeyPanel();
-    initTextarea();
+    initTextArea();
     initFileUpload();
     initDragAndDrop();
     initAnalysisButtons();
-    initDownloadButtons();
-    initCharCounter();
-    addHighlightStyles();
-    
+    initDownloadButton();
     console.log('✅ main.js v4.3 초기화 완료');
 }
 
-// ========== 하이라이트 스타일 추가 ==========
-function addHighlightStyles() {
-    var style = document.createElement('style');
-    style.textContent = 
-        '.highlight-changed { background-color: #22c55e40; color: #4ade80; padding: 1px 3px; border-radius: 3px; }' +
-        '.clicked-highlight { background-color: #facc15 !important; color: #000 !important; animation: pulse-highlight 0.5s ease-in-out 3; }' +
-        '@keyframes pulse-highlight { 0%, 100% { background-color: #facc15; } 50% { background-color: #fef08a; } }' +
-        '.analysis-row:hover { background-color: rgba(59, 130, 246, 0.2) !important; }';
-    document.head.appendChild(style);
-}
-
-// ========== 다크모드 ==========
+// ===================== 다크모드 =====================
 function initDarkMode() {
-    var toggle = document.getElementById('dark-mode-toggle');
-    if (!toggle) return;
-    
-    var isDark = localStorage.getItem('darkMode') === 'true';
-    if (isDark) {
-        document.documentElement.classList.add('dark');
+    const btn = document.getElementById('btn-dark-mode');
+    const saved = localStorage.getItem('darkMode');
+    if (saved === 'true') {
+        document.body.classList.add('dark-mode');
+        btn.textContent = '☀️ 라이트모드';
     }
-    updateDarkModeIcon(isDark);
-    
-    toggle.addEventListener('click', function() {
-        var nowDark = document.documentElement.classList.toggle('dark');
-        localStorage.setItem('darkMode', nowDark);
-        updateDarkModeIcon(nowDark);
+    btn.addEventListener('click', () => {
+        document.body.classList.toggle('dark-mode');
+        const isDark = document.body.classList.contains('dark-mode');
+        localStorage.setItem('darkMode', isDark);
+        btn.textContent = isDark ? '☀️ 라이트모드' : '🌙 다크모드';
     });
 }
 
-function updateDarkModeIcon(isDark) {
-    var icon = document.querySelector('#dark-mode-toggle i');
-    if (icon) {
-        icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
-    }
-}
-
-// ========== API 키 관리 ==========
+// ===================== API 키 관리 =====================
 function initApiKeyPanel() {
-    var toggleBtn = document.getElementById('api-key-toggle-btn');
-    var panel = document.getElementById('api-key-panel');
-    var closeBtn = document.getElementById('api-key-close-btn');
-    var saveBtn = document.getElementById('api-key-save-btn');
-    var deleteBtn = document.getElementById('api-key-delete-btn');
-    var input = document.getElementById('api-key-input');
-    var statusText = document.getElementById('api-key-status-text');
-    var statusIcon = document.getElementById('api-key-status-icon');
-    
-    function updateApiKeyStatus() {
-        var hasKey = localStorage.getItem('GEMINI_API_KEY');
-        if (statusText) statusText.textContent = hasKey ? 'API 키 설정됨' : 'API 키 설정';
-        if (statusIcon) statusIcon.textContent = hasKey ? '✅' : '🔑';
+    const btn = document.getElementById('btn-api-settings');
+    const panel = document.getElementById('api-key-panel');
+    const input = document.getElementById('api-key-input');
+    const saveBtn = document.getElementById('btn-save-api-key');
+    const closeBtn = document.getElementById('btn-close-api-panel');
+
+    const savedKey = localStorage.getItem('GEMINI_API_KEY');
+    if (savedKey) {
+        input.value = savedKey;
     }
-    
-    updateApiKeyStatus();
-    
-    if (toggleBtn && panel) {
-        toggleBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            panel.classList.toggle('hidden');
-            if (!panel.classList.contains('hidden') && input) {
-                input.value = localStorage.getItem('GEMINI_API_KEY') || '';
-            }
-        });
-    }
-    
-    if (closeBtn && panel) {
-        closeBtn.addEventListener('click', function() {
-            panel.classList.add('hidden');
-        });
-    }
-    
-    if (saveBtn && input) {
-        saveBtn.addEventListener('click', function() {
-            var key = input.value.trim();
-            if (key) {
-                localStorage.setItem('GEMINI_API_KEY', key);
-                alert('API 키가 저장되었습니다.');
-                updateApiKeyStatus();
-                panel.classList.add('hidden');
-            } else {
-                alert('API 키를 입력해주세요.');
-            }
-        });
-    }
-    
-    if (deleteBtn) {
-        deleteBtn.addEventListener('click', function() {
-            localStorage.removeItem('GEMINI_API_KEY');
-            if (input) input.value = '';
-            alert('API 키가 삭제되었습니다.');
-            updateApiKeyStatus();
-        });
-    }
-    
-    document.addEventListener('click', function(e) {
-        if (panel && toggleBtn && !panel.contains(e.target) && !toggleBtn.contains(e.target)) {
-            panel.classList.add('hidden');
-        }
+
+    btn.addEventListener('click', () => {
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
     });
-}
 
-// ========== 텍스트 영역 ==========
-function initTextarea() {
-    var sampleBtn = document.getElementById('korea-senior-sample-btn');
-    var clearBtn = document.getElementById('korea-senior-clear-btn');
-    var textarea = document.getElementById('korea-senior-script');
-    
-    if (sampleBtn) {
-        sampleBtn.addEventListener('click', loadSampleScript);
-    }
-    
-    if (clearBtn && textarea) {
-        clearBtn.addEventListener('click', function() {
-            textarea.value = '';
-            updateCharCounter();
-            hideLoadedFilename();
-        });
-    }
-}
-
-function loadSampleScript() {
-    var textarea = document.getElementById('korea-senior-script');
-    if (!textarea) return;
-    
-    var sample = '[낭독 대본 - 따뜻한 겨울 이야기]\n\n' +
-        '제1장: 첫 만남\n\n' +
-        '찾아와 주셔서 고맙습니다.\n' +
-        '오늘은 제가 겪었던 특별한 겨울 이야기를 들려드릴게요.\n\n' +
-        '그해 겨울은 유난히 추웠습니다.\n' +
-        '눈이 펑펑 내리는 어느 날, 저는 작은 카페에서 따뜻한 코코아를 마시고 있었어요.\n\n' +
-        '그때 문이 열리며 한 할머니께서 들어오셨습니다.\n' +
-        '할머니는 추위에 떨고 계셨고, 저는 자리를 양보해 드렸습니다.\n\n' +
-        '"고마워요, 젊은이."\n' +
-        '할머니의 미소가 참 따뜻했습니다.\n\n' +
-        '우리는 그렇게 처음 만낫습니다.\n' +
-        '서로의 이야기를 나누며, 시간 가는 줄 몰랐어요.\n\n' +
-        '할머니는 올해 일흔다섯이라고 하셨어요.\n' +
-        '그런데 이야기 중간에 갑자기 "나는 예순살인데..." 라고 말씀하셨습니다.\n\n' +
-        '밖은 한겨울 눈보라가 치는데, 할머니는 "이 여름 더위는 정말 힘들구나" 라고 하셨어요.\n\n' +
-        '할머니는 우산을 들고 카페를 나서셨습니다.\n' +
-        '그런데 밖에서 비를 흠뻑 맞으며 걸어가고 계셨어요.\n\n' +
-        '"사장님, 커피 한 잔 주세요."\n' +
-        '다음 날 할머니가 오셔서 "오빠, 아메리카노!" 라고 하셨습니다.\n\n' +
-        '나는 집으로 돌아왔다.\n' +
-        '그는 너무 피곤했다.\n\n' +
-        '삼만 원을 드렸는데, 할머니는 오만 원을 받았다며 거스름돈을 주셨어요.';
-
-    textarea.value = sample;
-    updateCharCounter();
-    hideLoadedFilename();
-    console.log('📝 샘플 대본 로드됨 (다양한 오류 포함)');
-}
-
-// ========== 파일 업로드 ==========
-function initFileUpload() {
-    var uploadBtn = document.getElementById('btn-upload-file');
-    var fileInput = document.getElementById('file-upload-input');
-    var textarea = document.getElementById('korea-senior-script');
-    
-    if (uploadBtn && fileInput) {
-        uploadBtn.addEventListener('click', function() {
-            fileInput.click();
-        });
-        
-        fileInput.addEventListener('change', function(e) {
-            var file = e.target.files[0];
-            if (file && textarea) {
-                currentFileName = file.name.replace(/\.txt$/i, '');
-                var reader = new FileReader();
-                reader.onload = function(event) {
-                    textarea.value = event.target.result;
-                    updateCharCounter();
-                    showLoadedFilename(file.name);
-                    console.log('📂 파일 로드됨:', file.name);
-                };
-                reader.readAsText(file, 'UTF-8');
-            }
-        });
-    }
-}
-
-// ========== 파일명 표시 ==========
-function showLoadedFilename(filename) {
-    var container = document.getElementById('loaded-filename');
-    var text = document.getElementById('filename-text');
-    if (container && text) {
-        text.textContent = filename;
-        container.classList.remove('hidden');
-    }
-}
-
-function hideLoadedFilename() {
-    var container = document.getElementById('loaded-filename');
-    if (container) {
-        container.classList.add('hidden');
-    }
-}
-
-// ========== 글자 수 카운터 ==========
-function initCharCounter() {
-    var textarea = document.getElementById('korea-senior-script');
-    if (textarea) {
-        textarea.addEventListener('input', updateCharCounter);
-        updateCharCounter();
-    }
-}
-
-function updateCharCounter() {
-    var textarea = document.getElementById('korea-senior-script');
-    var counter = document.getElementById('korea-char-counter');
-    if (textarea && counter) {
-        counter.textContent = textarea.value.length + '자 / 무제한';
-    }
-}
-
-// ========== 드래그 앤 드롭 ==========
-function initDragAndDrop() {
-    var dropZone = document.getElementById('drop-zone');
-    var dropOverlay = document.getElementById('drop-overlay');
-    var textarea = document.getElementById('korea-senior-script');
-    
-    if (!dropZone || !textarea) {
-        console.warn('⚠️ 드래그 앤 드롭: 요소를 찾을 수 없음');
-        return;
-    }
-    
-    console.log('✅ 드래그 앤 드롭 초기화됨');
-    
-    function handleFile(file) {
-        if (!file) return;
-        console.log('📁 파일 감지:', file.name);
-        
-        var isTextFile = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt');
-        
-        if (isTextFile) {
-            currentFileName = file.name.replace(/\.txt$/i, '');
-            var reader = new FileReader();
-            reader.onload = function(event) {
-                textarea.value = event.target.result;
-                updateCharCounter();
-                showLoadedFilename(file.name);
-                console.log('📂 드래그 파일 로드 완료:', file.name);
-            };
-            reader.readAsText(file, 'UTF-8');
+    saveBtn.addEventListener('click', () => {
+        const key = input.value.trim();
+        if (key) {
+            localStorage.setItem('GEMINI_API_KEY', key);
+            alert('API 키가 저장되었습니다.');
+            panel.style.display = 'none';
         } else {
-            alert('텍스트 파일(.txt)만 지원합니다.');
+            alert('API 키를 입력해주세요.');
         }
-    }
-    
-    dropZone.addEventListener('dragover', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (dropOverlay) dropOverlay.classList.remove('hidden');
     });
-    
-    dropZone.addEventListener('dragleave', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (dropOverlay) dropOverlay.classList.add('hidden');
-    });
-    
-    dropZone.addEventListener('drop', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (dropOverlay) dropOverlay.classList.add('hidden');
-        handleFile(e.dataTransfer.files[0]);
-    });
-    
-    textarea.addEventListener('dragover', function(e) {
-        e.preventDefault();
-    });
-    
-    textarea.addEventListener('drop', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        handleFile(e.dataTransfer.files[0]);
+
+    closeBtn.addEventListener('click', () => {
+        panel.style.display = 'none';
     });
 }
 
-// ========== 분석 버튼 ==========
+// ===================== 텍스트 영역 =====================
+function initTextArea() {
+    const textarea = document.getElementById('original-script');
+    const charCount = document.getElementById('char-count');
+
+    textarea.addEventListener('input', () => {
+        charCount.textContent = textarea.value.length;
+    });
+}
+
+// ===================== 파일 업로드 =====================
+function initFileUpload() {
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const fileNameDisplay = document.getElementById('file-name-display');
+
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            handleFile(file);
+            fileNameDisplay.textContent = `📎 ${file.name}`;
+        }
+    });
+}
+
+function initDragAndDrop() {
+    const dropZone = document.getElementById('drop-zone');
+    const fileNameDisplay = document.getElementById('file-name-display');
+
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('drag-over');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.classList.remove('drag-over');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        if (file && file.name.endsWith('.txt')) {
+            handleFile(file);
+            fileNameDisplay.textContent = `📎 ${file.name}`;
+        } else {
+            alert('TXT 파일만 업로드 가능합니다.');
+        }
+    });
+
+    console.log('✅ 드래그 앤 드롭 초기화됨');
+}
+
+function handleFile(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const textarea = document.getElementById('original-script');
+        textarea.value = e.target.result;
+        document.getElementById('char-count').textContent = textarea.value.length;
+    };
+    reader.readAsText(file);
+}
+
+// ===================== 분석 버튼 =====================
 function initAnalysisButtons() {
-    var btn1 = document.getElementById('btn-stage1');
-    var btn2 = document.getElementById('btn-stage2');
-    var stopBtn = document.getElementById('btn-stop-analysis');
-    
-    if (btn1) {
-        btn1.addEventListener('click', function() {
-            startAnalysis('stage1');
-        });
-        console.log('✅ 1차 분석 버튼 연결됨');
-    }
-    
-    if (btn2) {
-        btn2.addEventListener('click', function() {
-            startAnalysis('stage2');
-        });
-        console.log('✅ 2차 분석 버튼 연결됨');
-    }
-    
-    if (stopBtn) {
-        stopBtn.addEventListener('click', function() {
-            stopAnalysis();
-        });
-        console.log('✅ 분석 중지 버튼 연결됨');
-    }
+    const btn1 = document.getElementById('btn-analyze-stage1');
+    const btn2 = document.getElementById('btn-analyze-stage2');
+    const stopBtn = document.getElementById('btn-stop-analysis');
+
+    btn1.addEventListener('click', () => startAnalysis('stage1'));
+    btn2.addEventListener('click', () => startAnalysis('stage2'));
+
+    stopBtn.addEventListener('click', () => {
+        if (currentAbortController) {
+            currentAbortController.abort();
+            currentAbortController = null;
+            updateProgress(0, '분석이 중지되었습니다.');
+            stopBtn.disabled = true;
+            alert('분석이 중지되었습니다.');
+        }
+    });
+
+    console.log('✅ 1차 분석 버튼 연결됨');
+    console.log('✅ 2차 분석 버튼 연결됨');
 }
 
-// ========== 분석 중지 함수 ==========
-function stopAnalysis() {
-    if (currentAbortController) {
-        currentAbortController.abort();
-        console.log('⏹️ 분석 중지 요청됨');
-    }
-}
-
+// ===================== 분석 실행 =====================
 async function startAnalysis(stage) {
-    console.log('🔍 ' + stage + ' 분석 시작');
-    
-    var apiKey = localStorage.getItem('GEMINI_API_KEY');
+    console.log(`🔍 ${stage} 분석 시작`);
+
+    const apiKey = localStorage.getItem('GEMINI_API_KEY');
     if (!apiKey) {
         alert('API 키를 먼저 설정해주세요.');
         return;
     }
-    
-    var inputScript = '';
+
+    let scriptText;
     if (stage === 'stage1') {
-        var textarea = document.getElementById('korea-senior-script');
-        inputScript = textarea ? textarea.value.trim() : '';
-        if (!inputScript) {
+        scriptText = document.getElementById('original-script').value.trim();
+        if (!scriptText) {
             alert('분석할 대본을 입력해주세요.');
             return;
         }
-        tabStates.stage1.originalScript = inputScript;
+        state.stage1.originalScript = scriptText;
     } else {
-        if (!tabStates.stage1.revisedScript) {
+        scriptText = state.stage1.revisedScript;
+        if (!scriptText) {
             alert('1차 분석을 먼저 완료해주세요.');
             return;
         }
-        inputScript = tabStates.stage1.revisedScript;
-        tabStates.stage2.originalScript = inputScript;
+        state.stage2.originalScript = scriptText;
     }
-    
+
+    // UI 준비
+    const progressContainer = document.getElementById('progress-container');
+    const stopBtn = document.getElementById('btn-stop-analysis');
+    progressContainer.style.display = 'block';
+    stopBtn.disabled = false;
+    updateProgress(10, 'AI 분석 준비 중...');
+
+    // AbortController 설정
     currentAbortController = new AbortController();
-    
-    var btn = document.getElementById('btn-' + stage);
-    var statusBadge = document.getElementById('status-' + stage);
-    var progressContainer = document.getElementById('progress-container');
-    var progressBar = document.getElementById('progress-bar');
-    var progressText = document.getElementById('progress-text');
-    var stopBtn = document.getElementById('btn-stop-analysis');
-    
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> 분석 중...';
-        btn.className = 'btn-analyze px-4 py-2 bg-gray-400 text-white text-sm rounded-lg cursor-not-allowed';
-    }
-    
-    if (stopBtn) {
-        stopBtn.classList.remove('hidden');
-        stopBtn.disabled = false;
-    }
-    
-    if (statusBadge) {
-        statusBadge.textContent = '분석 중';
-        statusBadge.className = 'status-badge bg-yellow-200 text-yellow-700 text-xs px-2 py-1 rounded-full';
-    }
-    
-    if (progressContainer) progressContainer.classList.remove('hidden');
-    
-    var progress = 0;
-    var progressInterval = setInterval(function() {
-        progress += Math.random() * 15;
-        if (progress > 90) progress = 90;
-        if (progressBar) progressBar.style.width = progress + '%';
-        if (progressText) progressText.textContent = Math.round(progress) + '%';
-    }, 500);
-    
-    tabStates[stage].isAnalyzing = true;
-    
+    const signal = currentAbortController.signal;
+
     try {
-        var prompt = generatePrompt(stage, inputScript);
+        updateProgress(20, '프롬프트 생성 중...');
+        const prompt = generatePrompt(scriptText);
         console.log('📤 프롬프트 생성 완료, 길이:', prompt.length);
-        
-        var result = await callGeminiAPI(prompt, currentAbortController.signal);
+
+        updateProgress(40, 'AI 분석 중... (최대 2분 소요)');
+        const response = await callGeminiAPI(prompt, signal);
         console.log('📥 API 응답 수신');
-        console.log('📄 응답 길이:', result.length);
-        
-        clearInterval(progressInterval);
-        if (progressBar) progressBar.style.width = '100%';
-        if (progressText) progressText.textContent = '100%';
-        
-        renderResults(stage, result);
-        
-        tabStates[stage].isComplete = true;
-        
-        if (statusBadge) {
-            statusBadge.textContent = '완료';
-            statusBadge.className = 'status-badge bg-green-200 text-green-700 text-xs px-2 py-1 rounded-full';
-        }
-        
+
+        updateProgress(70, '결과 파싱 중...');
+        const parsed = parseAnalysisResult(response);
+        console.log('✅ 파싱 완료');
+
+        updateProgress(90, '결과 렌더링 중...');
+        renderResults(parsed, stage);
+
+        // 상태 저장
         if (stage === 'stage1') {
-            var btn2 = document.getElementById('btn-stage2');
-            if (btn2) {
-                btn2.disabled = false;
-                btn2.className = 'btn-analyze px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white text-sm rounded-lg transition-colors shadow-sm';
-            }
-        }
-        
-        if (stage === 'stage2') {
-            var downloadBtn = document.getElementById('download-revised-btn');
-            if (downloadBtn) downloadBtn.disabled = false;
-        }
-        
-        console.log('✅ ' + stage + ' 분석 완료');
-        
-    } catch (error) {
-        clearInterval(progressInterval);
-        
-        if (error.name === 'AbortError') {
-            console.log('⏹️ ' + stage + ' 분석이 사용자에 의해 중지됨');
-            if (statusBadge) {
-                statusBadge.textContent = '중지됨';
-                statusBadge.className = 'status-badge bg-orange-200 text-orange-700 text-xs px-2 py-1 rounded-full';
-            }
-            alert('분석이 중지되었습니다.');
+            state.stage1.analysis = parsed.analysis;
+            state.stage1.revisedScript = parsed.revisedScript;
+            state.stage1.scores = parsed.scores;
+            state.stage1.revisionCount = parsed.analysis ? parsed.analysis.length : 0;
+            document.getElementById('btn-analyze-stage2').disabled = false;
         } else {
-            console.error('❌ ' + stage + ' 분석 실패:', error);
-            if (statusBadge) {
-                statusBadge.textContent = '오류';
-                statusBadge.className = 'status-badge bg-red-200 text-red-700 text-xs px-2 py-1 rounded-full';
-            }
-            alert('분석 중 오류가 발생했습니다:\n' + error.message);
+            state.stage2.analysis = parsed.analysis;
+            state.stage2.revisedScript = parsed.revisedScript;
+            state.stage2.scores = parsed.scores;
+            state.stage2.revisionCount = parsed.analysis ? parsed.analysis.length : 0;
+            document.getElementById('btn-download').disabled = false;
+            renderScores(parsed.scores);
+        }
+
+        updateProgress(100, '분석 완료!');
+        console.log(`✅ ${stage} 분석 완료`);
+
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            console.log('⏹ 분석이 사용자에 의해 중지됨');
+            updateProgress(0, '분석이 중지되었습니다.');
+        } else {
+            console.error('❌ 분석 오류:', error);
+            alert('분석 중 오류가 발생했습니다: ' + error.message);
+            updateProgress(0, '오류 발생');
         }
     } finally {
+        stopBtn.disabled = true;
         currentAbortController = null;
-        
-        if (stopBtn) {
-            stopBtn.classList.add('hidden');
-        }
-        
-        if (btn) {
-            btn.disabled = false;
-            if (stage === 'stage1') {
-                btn.innerHTML = '<i class="fas fa-play mr-1"></i> 1차 분석 시작';
-                btn.className = 'btn-analyze px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm rounded-lg transition-colors shadow-sm';
-            } else {
-                btn.innerHTML = '<i class="fas fa-play mr-1"></i> 2차 분석 시작';
-                btn.className = 'btn-analyze px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white text-sm rounded-lg transition-colors shadow-sm';
-            }
-        }
-        
-        setTimeout(function() {
-            if (progressContainer) progressContainer.classList.add('hidden');
-        }, 1000);
-        
-        tabStates[stage].isAnalyzing = false;
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+        }, 2000);
     }
 }
 
-// ========== 프롬프트 생성 ==========
-function generatePrompt(stage, script) {
-    if (stage === 'stage1') {
-        return '당신은 한국 시니어 낭독용 대본의 **정밀 검수 전문가**입니다.\n\n' +
-            '## 📋 분석 대상 대본:\n"""\n' + script + '\n"""\n\n' +
-            '## 🔍 1차 분석: 아래 오류 유형을 모두 꼼꼼히 검수하세요\n\n' +
-            '(1) 맞춤법/문법/오타\n' +
-            '(2) 인물 설정 일관성 (나이, 이름 등)\n' +
-            '(3) 시간/계절 일관성\n' +
-            '(4) 장소 일관성\n' +
-            '(5) 시대/문화 일관성\n' +
-            '(6) 인물 호칭/존댓말 불일치\n' +
-            '(7) 화자/대사 주체 혼선\n' +
-            '(8) 지시어/대상 불명확\n' +
-            '(9) 물리/현실 불가능 동작\n' +
-            '(10) 소지품/의상/상태 연속성 오류\n' +
-            '(11) 금액/수치/횟수/인원 불일치\n' +
-            '(12) 시점/서술 관점 혼선\n\n' +
-            '## ⚠️ 필수 규칙:\n' +
-            '1. 발견한 오류는 **모두** analysis에 기록\n' +
-            '2. revised에는 **오류를 수정한 전체 대본** 작성\n' +
-            '3. 오류가 없어도 revised에 원본 전체를 그대로 작성\n\n' +
-            '## 📤 출력 형식 (정확히 이 JSON 형식으로만 응답):\n' +
-            '```json\n' +
-            '{\n' +
-            '  "analysis": "번호\\t오류유형\\t오류내용\\t수정내용\\t설명\\n1\\t맞춤법\\t만낫습니다\\t만났습니다\\t오타",\n' +
-            '  "revised": "전체 수정 대본"\n' +
-            '}\n' +
-            '```\n\n' +
-            '## 🚨 주의:\n' +
-            '- JSON 형식 외 다른 텍스트 금지\n' +
-            '- revised는 절대 비워두지 마세요';
-    } else {
-        return '당신은 한국 시니어 낭독용 대본의 **품질 평가 전문가**입니다.\n\n' +
-            '## 📋 1차 검수 완료된 대본:\n"""\n' + script + '\n"""\n\n' +
-            '## 🔍 2차 분석 항목\n\n' +
-            '(1) 스토리 흐름 자연스러움\n' +
-            '(2) 시간 순서 논리성\n' +
-            '(3) 감정선 연결\n' +
-            '(4) 시니어 청취자 적합성\n' +
-            '(5) 장소/시간 표식 누락\n' +
-            '(6) 감정선 급변\n\n' +
-            '## ⚠️ 필수 규칙:\n' +
-            '1. 발견한 오류는 **모두** analysis에 기록\n' +
-            '2. revised에는 **최종 수정된 전체 대본** 작성\n' +
-            '3. scores는 **revised(최종 대본) 기준**으로 평가\n\n' +
-            '## 📤 출력 형식:\n' +
-            '```json\n' +
-            '{\n' +
-            '  "analysis": "번호\\t오류유형\\t오류내용\\t수정내용\\t설명",\n' +
-            '  "revised": "최종 수정된 전체 대본",\n' +
-            '  "scores": {\n' +
-            '    "fun": 85,\n' +
-            '    "flow": 90,\n' +
-            '    "senior": 88,\n' +
-            '    "retention": 82\n' +
-            '  }\n' +
-            '}\n' +
-            '```\n\n' +
-            '## 📊 점수 기준 (0-100점):\n' +
-            '- **fun**: 흥미도, 몰입감\n' +
-            '- **flow**: 전개의 자연스러움\n' +
-            '- **senior**: 50-70대 적합도\n' +
-            '- **retention**: 끝까지 듣고 싶은 정도\n\n' +
-            '## 🚨 주의:\n' +
-            '- scores 반드시 포함\n' +
-            '- JSON 형식 외 텍스트 금지';
-    }
+// ===================== 진행률 업데이트 =====================
+function updateProgress(percent, text) {
+    const bar = document.getElementById('progress-bar');
+    const textEl = document.getElementById('progress-text');
+    bar.style.width = percent + '%';
+    textEl.textContent = text;
 }
 
-// ========== Gemini API 호출 (Vertex AI + Gemini 3 Pro) ==========
+// ===================== 프롬프트 생성 =====================
+function generatePrompt(scriptText) {
+    return `당신은 전문 대본 검수 AI입니다. 아래 대본을 분석하고 JSON 형식으로 결과를 반환하세요.
+
+## 검수 항목 (25가지 오류 유형)
+
+1. 맞춤법 오류
+2. 띄어쓰기 오류
+3. 문법 오류
+4. 어색한 표현
+5. 중복 표현
+6. 비문(문장 성분 오류)
+7. 주술 호응 오류
+8. 시제 불일치
+9. 높임법 오류
+10. 조사 오류
+11. 외래어 표기 오류
+12. 숫자 표기 오류
+13. 문장 부호 오류
+14. 접속어 오류
+15. 지시어 오류
+16. 의미 중복
+17. 불필요한 수식어
+18. 문장 길이 과다
+19. 전문용어 과다 사용
+20. 어려운 한자어
+21. 시니어 부적합 표현
+22. 가독성 저해 표현
+23. 논리적 비약
+24. 맥락 불일치
+25. 어투 불일치
+
+## 분석 대상 대본
+${scriptText}
+
+## 출력 형식 (반드시 이 JSON 형식으로만 출력)
+{
+  "analysis": [
+    {
+      "line": 1,
+      "errorType": "오류 유형",
+      "original": "원본 텍스트",
+      "suggestion": "수정 제안",
+      "reason": "수정 이유"
+    }
+  ],
+  "revisedScript": "전체 수정된 대본 텍스트",
+  "scores": {
+    "overall": 85,
+    "grammar": 90,
+    "readability": 80,
+    "seniorFriendly": 75,
+    "bounceRisk": 20
+  }
+}
+
+## 점수 기준
+- overall: 전체 품질 점수 (0-100)
+- grammar: 문법 정확도 (0-100)
+- readability: 가독성 (0-100)
+- seniorFriendly: 시니어 적합도 (0-100)
+- bounceRisk: 이탈 위험도 (0-100, 낮을수록 좋음)
+
+반드시 위 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.`;
+}
+
+// ===================== Gemini API 호출 =====================
 async function callGeminiAPI(prompt, signal) {
-    var apiKey = localStorage.getItem('GEMINI_API_KEY');
-    if (!apiKey) throw new Error('API 키가 설정되지 않았습니다.');
-    
-    var endpoint = 'https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-3-pro-preview:generateContent?key=' + apiKey;
-    
-    console.log('🌐 Vertex AI 엔드포인트 호출: gemini-3-pro-preview');
-    
-    var fetchOptions = {
+    const apiKey = localStorage.getItem('GEMINI_API_KEY');
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${apiKey}`;
+
+    const response = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
             contents: [{
                 role: 'user',
@@ -601,460 +365,299 @@ async function callGeminiAPI(prompt, signal) {
                 temperature: 0.2,
                 maxOutputTokens: 65536
             }
-        })
-    };
-    
-    if (signal) {
-        fetchOptions.signal = signal;
-    }
-    
-    var response = await fetch(endpoint, fetchOptions);
-    
+        }),
+        signal: signal
+    });
+
     if (!response.ok) {
-        var errorData = await response.json().catch(function() { return {}; });
-        throw new Error(errorData.error?.message || 'API 오류: ' + response.status);
+        let errorMsg = 'API 오류: ' + response.status;
+        try {
+            const errData = await response.json();
+            errorMsg = errData.error?.message || errorMsg;
+        } catch (e) {}
+        throw new Error(errorMsg);
     }
-    
-    var data = await response.json();
-    var text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (!text) throw new Error('API 응답이 비어있습니다.');
-    
+
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!text) {
+        throw new Error('API 응답이 비어있습니다.');
+    }
+
     return text;
 }
 
-// ========== 결과 파싱 ==========
-function parseAnalysisResult(rawText) {
-    console.log('📝 파싱 시작, 원본 길이:', rawText ? rawText.length : 0);
-    
-    if (!rawText || typeof rawText !== 'string') {
-        return { analysis: '', revised: '', scores: null, parseError: true };
+// ===================== 결과 파싱 =====================
+function parseAnalysisResult(responseText) {
+    console.log('📝 파싱 시작, 원본 길이:', responseText.length);
+
+    let jsonStr = responseText;
+
+    // JSON 블록 추출
+    const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+        jsonStr = jsonMatch[1];
+    } else {
+        const braceStart = responseText.indexOf('{');
+        const braceEnd = responseText.lastIndexOf('}');
+        if (braceStart !== -1 && braceEnd !== -1) {
+            jsonStr = responseText.substring(braceStart, braceEnd + 1);
+        }
     }
-    
-    var jsonStr = rawText.trim();
-    jsonStr = jsonStr.replace(/^```json\s*/i, '');
-    jsonStr = jsonStr.replace(/^```\s*/i, '');
-    jsonStr = jsonStr.replace(/\s*```$/i, '');
-    jsonStr = jsonStr.trim();
-    
-    var braceStart = jsonStr.indexOf('{');
-    var braceEnd = jsonStr.lastIndexOf('}');
-    if (braceStart !== -1 && braceEnd !== -1 && braceEnd > braceStart) {
-        jsonStr = jsonStr.substring(braceStart, braceEnd + 1);
-    }
-    
+
     try {
-        var parsed = JSON.parse(jsonStr);
+        const parsed = JSON.parse(jsonStr);
         console.log('✅ JSON 파싱 성공');
         return {
-            analysis: parsed.analysis || '',
-            revised: parsed.revised || '',
-            scores: parsed.scores || null,
-            parseError: false
+            analysis: parsed.analysis || [],
+            revisedScript: parsed.revisedScript || '',
+            scores: parsed.scores || {},
+            parseError: null
         };
     } catch (e) {
-        console.error('❌ JSON 파싱 실패:', e.message);
-        
-        var analysis = '';
-        var revised = '';
-        var scores = null;
-        
-        var analysisMatch = rawText.match(/"analysis"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"revised"|"\s*,\s*"scores"|"\s*})/);
-        if (analysisMatch) {
-            analysis = analysisMatch[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
-        }
-        
-        var revisedMatch = rawText.match(/"revised"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"scores"|"\s*})/);
-        if (revisedMatch) {
-            revised = revisedMatch[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
-        }
-        
-        var scoresMatch = rawText.match(/"scores"\s*:\s*(\{[\s\S]*?\})/);
-        if (scoresMatch) {
-            try { scores = JSON.parse(scoresMatch[1]); } catch (se) {}
-        }
-        
-        if (analysis || revised) {
-            return { analysis: analysis, revised: revised, scores: scores, parseError: false };
-        }
-        
-        return { analysis: rawText, revised: '', scores: null, parseError: true };
+        console.error('❌ JSON 파싱 실패:', e);
+        return {
+            analysis: [],
+            revisedScript: responseText,
+            scores: {},
+            parseError: e.message
+        };
     }
 }
 
-// ========== 수정 개수 계산 ==========
-function countChangedLines(original, revised) {
-    if (!original || !revised) return 0;
-    
-    var originalLines = original.split('\n');
-    var revisedLines = revised.split('\n');
-    var changedCount = 0;
-    
-    for (var i = 0; i < revisedLines.length; i++) {
-        var revisedLine = revisedLines[i];
-        var originalLine = originalLines[i] || '';
-        
-        if (revisedLine.trim() !== '' && originalLine.trim() !== revisedLine.trim()) {
-            changedCount++;
-        }
-    }
-    
-    return changedCount;
+// ===================== 결과 렌더링 =====================
+function renderResults(parsed, stage) {
+    const analysisContainer = document.getElementById(`analysis-${stage}`);
+    const revisedContainer = document.getElementById(`revised-${stage}`);
+    const countSpan = document.getElementById(`revision-count-${stage}`);
+
+    // 분석 결과 테이블 렌더링
+    renderAnalysisTable(parsed.analysis, parsed.parseError, stage, analysisContainer);
+
+    // 수정본 렌더링
+    const originalScript = stage === 'stage1' ? state.stage1.originalScript : state.stage2.originalScript;
+    renderFullScriptWithHighlight(originalScript, parsed.revisedScript, revisedContainer);
+
+    // 수정 개수 표시
+    const revisionCount = parsed.analysis ? parsed.analysis.length : 0;
+    countSpan.textContent = revisionCount > 0 ? `(${revisionCount}건 수정)` : '';
 }
 
-// ========== 수정 개수 표시 업데이트 ==========
-function updateRevisionCount(stage, count) {
-    var countEl = document.getElementById('revision-count-' + stage);
-    if (countEl) {
-        if (count > 0) {
-            countEl.textContent = count + '개 수정';
-            countEl.className = 'text-xs text-green-400 font-bold';
-        } else {
-            countEl.textContent = '수정 없음';
-            countEl.className = 'text-xs text-gray-400';
-        }
+// ===================== 분석 테이블 렌더링 =====================
+function renderAnalysisTable(analysis, parseError, stage, container) {
+    if (parseError) {
+        container.innerHTML = `<p class="error">파싱 오류: ${parseError}</p>`;
+        return;
     }
+
+    if (!analysis || analysis.length === 0) {
+        container.innerHTML = '<p class="success">✅ 발견된 오류가 없습니다.</p>';
+        return;
+    }
+
+    const targetContainerId = stage === 'stage1' ? 'revised-stage1' : 'revised-stage2';
+
+    let html = '<p class="click-hint">💡 각 행을 클릭하면 수정된 부분으로 이동합니다</p>';
+    html += '<table class="analysis-table"><thead><tr><th>줄</th><th>오류 유형</th><th>원본</th><th>수정 제안</th><th>이유</th></tr></thead><tbody>';
+
+    analysis.forEach((item, index) => {
+        html += `<tr class="clickable-row" 
+            data-target-container="${targetContainerId}" 
+            data-search-text="${escapeHtml(item.suggestion || item.original)}"
+            data-line="${item.line}"
+            onclick="scrollToHighlight(this)">
+            <td>${item.line || '-'}</td>
+            <td>${escapeHtml(item.errorType || '-')}</td>
+            <td class="original-text">${escapeHtml(item.original || '-')}</td>
+            <td class="suggestion-text">${escapeHtml(item.suggestion || '-')}</td>
+            <td>${escapeHtml(item.reason || '-')}</td>
+        </tr>`;
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
 }
 
-// ========== 결과 렌더링 ==========
-function renderResults(stage, result) {
-    console.log('🎨 renderResults 호출: ' + stage);
-    
-    var parsed = parseAnalysisResult(result);
-    
-    tabStates[stage].analysisResult = parsed.analysis;
-    tabStates[stage].revisedScript = parsed.revised;
-    if (parsed.scores) {
-        tabStates[stage].scores = parsed.scores;
-    }
-    
-    var tableContainer = document.getElementById('result-table-' + stage);
-    if (tableContainer) {
-        tableContainer.innerHTML = renderAnalysisTable(parsed.analysis, parsed.parseError, stage);
-    }
-    
-    var revisedContainer = document.getElementById('revised-' + stage);
-    if (revisedContainer) {
-        var original = stage === 'stage1' ? tabStates.stage1.originalScript : tabStates.stage1.revisedScript;
-        var revised = parsed.revised;
-        
-        if (revised && revised.length > 0) {
-            revisedContainer.innerHTML = renderFullScriptWithHighlight(original, revised);
-            
-            // 수정 개수 계산 및 표시
-            var changedCount = countChangedLines(original, revised);
-            updateRevisionCount(stage, changedCount);
-            console.log('📊 ' + stage + ' 수정 개수:', changedCount);
-        } else {
-            revisedContainer.innerHTML = '<div class="p-4 text-red-400 text-center"><i class="fas fa-exclamation-triangle mr-2"></i>수정본이 생성되지 않았습니다.</div>';
-            updateRevisionCount(stage, 0);
-        }
-    }
-    
-    if (stage === 'stage2') {
-        if (parsed.scores) {
-            renderScores(parsed.scores);
-        } else {
-            renderScores({ fun: 0, flow: 0, senior: 0, retention: 0 });
-        }
-    }
-}
-
-// ========== 점수 렌더링 ==========
-function renderScores(scores) {
-    var funEl = document.getElementById('score-fun');
-    var flowEl = document.getElementById('score-flow');
-    var seniorEl = document.getElementById('score-senior');
-    var retentionEl = document.getElementById('score-retention');
-    var totalEl = document.getElementById('score-total');
-    var verdictEl = document.getElementById('score-verdict');
-    var badgeEl = document.getElementById('score-result-badge');
-    
-    var fun = parseInt(scores.fun) || 0;
-    var flow = parseInt(scores.flow) || 0;
-    var senior = parseInt(scores.senior) || 0;
-    var retention = parseInt(scores.retention) || 0;
-    var total = Math.round((fun + flow + senior + retention) / 4);
-    
-    if (funEl) funEl.textContent = fun + '점';
-    if (flowEl) flowEl.textContent = flow + '점';
-    if (seniorEl) seniorEl.textContent = senior + '점';
-    if (retentionEl) retentionEl.textContent = retention + '점';
-    if (totalEl) totalEl.textContent = total + '점';
-    
-    var isPass = total >= 98;
-    
-    if (verdictEl) {
-        if (total === 0) {
-            verdictEl.innerHTML = '<div class="text-center"><i class="fas fa-question-circle text-gray-400 text-xl mb-1"></i><p class="text-gray-400 font-bold text-sm">평가 실패</p></div>';
-            verdictEl.className = 'bg-gray-500/20 border border-gray-500/50 rounded-lg p-2 text-center flex items-center justify-center';
-        } else if (isPass) {
-            verdictEl.innerHTML = '<div class="text-center"><i class="fas fa-check-circle text-green-400 text-xl mb-1"></i><p class="text-green-400 font-bold text-sm">통과</p></div>';
-            verdictEl.className = 'bg-green-500/20 border border-green-500/50 rounded-lg p-2 text-center flex items-center justify-center';
-        } else {
-            verdictEl.innerHTML = '<div class="text-center"><i class="fas fa-times-circle text-red-400 text-xl mb-1"></i><p class="text-red-400 font-bold text-sm">재검토 필요</p></div>';
-            verdictEl.className = 'bg-red-500/20 border border-red-500/50 rounded-lg p-2 text-center flex items-center justify-center';
-        }
-    }
-    
-    if (badgeEl) {
-        if (total === 0) {
-            badgeEl.textContent = '평가 실패';
-            badgeEl.className = 'px-3 py-1 rounded-full text-xs font-bold bg-gray-500 text-white';
-        } else if (isPass) {
-            badgeEl.textContent = '통과 (' + total + '점)';
-            badgeEl.className = 'px-3 py-1 rounded-full text-xs font-bold bg-green-500 text-white';
-        } else {
-            badgeEl.textContent = '재검토 (' + total + '점)';
-            badgeEl.className = 'px-3 py-1 rounded-full text-xs font-bold bg-red-500 text-white';
-        }
-    }
-}
-
-// ========== 분석 결과 테이블 렌더링 (클릭 이동 기능 포함) ==========
-function renderAnalysisTable(analysisText, isParseError, stage) {
-    if (!analysisText || typeof analysisText !== 'string') {
-        return '<div class="p-4 text-gray-400 text-center"><i class="fas fa-info-circle mr-2"></i>분석 결과가 없습니다.</div>';
-    }
-    
-    if (isParseError) {
-        return '<div class="p-3"><div class="bg-orange-900/30 border border-orange-700 rounded-lg p-3 mb-3">' +
-            '<p class="text-orange-300 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i>JSON 파싱 실패 - 원본 응답:</p></div>' +
-            '<pre class="whitespace-pre-wrap text-xs text-gray-300 bg-gray-800 p-3 rounded max-h-60 overflow-y-auto">' + escapeHtml(analysisText) + '</pre></div>';
-    }
-    
-    var text = analysisText.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
-    var lines = text.trim().split('\n').filter(function(line) { return line.trim(); });
-    
-    if (lines.length === 0 || text.indexOf('오류 없음') !== -1 || text.indexOf('오류없음') !== -1) {
-        return '<div class="p-4 text-center"><div class="inline-flex items-center justify-center w-12 h-12 bg-green-500/20 rounded-full mb-2">' +
-            '<i class="fas fa-check text-green-400 text-xl"></i></div>' +
-            '<p class="text-green-400 font-medium">오류가 발견되지 않았습니다</p></div>';
-    }
-    
-    var targetContainerId = stage === 'stage1' ? 'revised-stage1' : 'revised-stage2';
-    
-    var html = '<div class="overflow-x-auto"><table class="w-full text-xs">' +
-        '<thead><tr class="bg-gray-700/50">' +
-        '<th class="px-2 py-1 text-left text-gray-300 font-medium">번호</th>' +
-        '<th class="px-2 py-1 text-left text-gray-300 font-medium">오류유형</th>' +
-        '<th class="px-2 py-1 text-left text-gray-300 font-medium">오류내용</th>' +
-        '<th class="px-2 py-1 text-left text-gray-300 font-medium">수정내용</th>' +
-        '<th class="px-2 py-1 text-left text-gray-300 font-medium">설명</th>' +
-        '</tr></thead><tbody>';
-    
-    var rowCount = 0;
-    for (var i = 0; i < lines.length; i++) {
-        var line = lines[i].trim();
-        if (!line) continue;
-        
-        var cols = line.split('\t');
-        if (cols.length >= 2) {
-            rowCount++;
-            var rowClass = rowCount % 2 === 0 ? 'bg-gray-800/30' : 'bg-gray-800/10';
-            var correctedText = cols[3] ? escapeHtml(cols[3]) : '';
-            
-            html += '<tr class="' + rowClass + ' analysis-row cursor-pointer" ' +
-                'data-target-container="' + targetContainerId + '" ' +
-                'data-search-text="' + correctedText + '" ' +
-                'onclick="scrollToHighlight(this)">';
-            
-            for (var j = 0; j < 5; j++) {
-                var content = cols[j] ? escapeHtml(cols[j]) : '-';
-                if (j === 2) {
-                    html += '<td class="px-2 py-1 text-red-300">' + content + '</td>';
-                } else if (j === 3) {
-                    html += '<td class="px-2 py-1 text-green-300">' + content + '</td>';
-                } else {
-                    html += '<td class="px-2 py-1 text-gray-300">' + content + '</td>';
-                }
-            }
-            html += '</tr>';
-        }
-    }
-    
-    html += '</tbody></table></div>';
-    
-    if (rowCount === 0) {
-        return '<div class="p-4 text-center"><div class="inline-flex items-center justify-center w-12 h-12 bg-green-500/20 rounded-full mb-2">' +
-            '<i class="fas fa-check text-green-400 text-xl"></i></div>' +
-            '<p class="text-green-400 font-medium">오류가 발견되지 않았습니다</p></div>';
-    }
-    
-    html = '<div class="p-2 bg-gray-700/30 border-b border-gray-600 flex items-center justify-between">' +
-        '<span class="text-xs text-gray-400">발견된 오류: <span class="text-red-400 font-bold">' + rowCount + '개</span></span>' +
-        '<span class="text-xs text-blue-400"><i class="fas fa-mouse-pointer mr-1"></i>클릭 → 해당 위치 이동</span></div>' + html;
-    
-    return html;
-}
-
-// ========== 클릭 시 해당 라인으로 스크롤 ==========
+// ===================== 클릭 시 해당 위치로 스크롤 =====================
 function scrollToHighlight(row) {
-    var containerId = row.getAttribute('data-target-container');
-    var searchText = row.getAttribute('data-search-text');
-    
-    if (!containerId || !searchText) return;
-    
-    var container = document.getElementById(containerId);
+    const targetContainerId = row.getAttribute('data-target-container');
+    const searchText = row.getAttribute('data-search-text');
+    const container = document.getElementById(targetContainerId);
+
     if (!container) return;
-    
-    var prevClicked = container.querySelectorAll('.clicked-highlight');
-    for (var i = 0; i < prevClicked.length; i++) {
-        prevClicked[i].classList.remove('clicked-highlight');
-    }
-    
-    var highlights = container.querySelectorAll('.highlight-changed');
-    var targetElement = null;
-    
-    for (var j = 0; j < highlights.length; j++) {
-        var hlText = highlights[j].textContent;
-        if (hlText.indexOf(searchText) !== -1 || searchText.indexOf(hlText) !== -1) {
-            targetElement = highlights[j];
-            break;
+
+    // 수정된 텍스트가 있는 span 찾기
+    const highlights = container.querySelectorAll('.changed-text');
+    let targetElement = null;
+
+    // 검색 텍스트와 매칭되는 요소 찾기
+    highlights.forEach(el => {
+        if (el.textContent.includes(searchText) || searchText.includes(el.textContent)) {
+            targetElement = el;
         }
+    });
+
+    // 매칭되는 요소가 없으면 첫 번째 하이라이트로
+    if (!targetElement && highlights.length > 0) {
+        const lineIndex = parseInt(row.getAttribute('data-line')) - 1;
+        targetElement = highlights[Math.min(lineIndex, highlights.length - 1)] || highlights[0];
     }
-    
-    if (!targetElement) {
-        var allLines = container.querySelectorAll('div[data-line-index]');
-        for (var k = 0; k < allLines.length; k++) {
-            if (allLines[k].textContent.indexOf(searchText) !== -1) {
-                targetElement = allLines[k];
-                break;
-            }
-        }
-    }
-    
+
     if (targetElement) {
-        targetElement.classList.add('clicked-highlight');
+        // 기존 플래시 효과 제거
+        container.querySelectorAll('.highlight-flash').forEach(el => {
+            el.classList.remove('highlight-flash');
+        });
+
+        // 스크롤 및 플래시 효과
         targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
-        setTimeout(function() {
-            targetElement.classList.remove('clicked-highlight');
-        }, 3000);
+        targetElement.classList.add('highlight-flash');
+
+        setTimeout(() => {
+            targetElement.classList.remove('highlight-flash');
+        }, 1500);
     } else {
-        container.scrollTop = 0;
+        // 컨테이너 상단으로 스크롤
+        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 }
 
-// ========== 수정 대본 렌더링 (변경 부분 하이라이트) ==========
-function renderFullScriptWithHighlight(original, revised) {
-    if (!revised) return '<div class="p-4 text-gray-400 text-center">수정된 대본이 없습니다.</div>';
-    
-    var originalLines = original ? original.split('\n') : [];
-    var revisedLines = revised.split('\n');
-    
-    var html = '<div class="p-3 space-y-1 text-sm leading-relaxed">';
-    
-    for (var i = 0; i < revisedLines.length; i++) {
-        var revisedLine = revisedLines[i];
-        var originalLine = originalLines[i] || '';
-        
-        if (revisedLine.trim() === '') {
-            html += '<div class="h-2" data-line-index="' + i + '"></div>';
-        } else if (originalLine.trim() !== revisedLine.trim()) {
-            html += '<div class="text-gray-200" data-line-index="' + i + '">' + 
-                highlightChangedParts(originalLine, revisedLine) + '</div>';
-        } else {
-            html += '<div class="text-gray-200" data-line-index="' + i + '">' + escapeHtml(revisedLine) + '</div>';
-        }
+// ===================== 수정본 렌더링 (변경 부분 하이라이트) =====================
+function renderFullScriptWithHighlight(originalScript, revisedScript, container) {
+    if (!revisedScript) {
+        container.innerHTML = '<p class="placeholder">수정된 내용이 없습니다.</p>';
+        return;
     }
-    
+
+    const originalLines = originalScript.split('\n');
+    const revisedLines = revisedScript.split('\n');
+    let html = '<div class="revised-script">';
+
+    revisedLines.forEach((revisedLine, index) => {
+        const originalLine = originalLines[index] || '';
+
+        if (revisedLine !== originalLine && originalLine.trim() !== '') {
+            // 변경된 라인 - 변경 부분 하이라이트
+            const highlightedLine = highlightChangedParts(originalLine, revisedLine);
+            html += `<p class="line-revised" data-line="${index + 1}">${highlightedLine}</p>`;
+        } else {
+            // 변경되지 않은 라인
+            html += `<p class="line-unchanged">${escapeHtml(revisedLine)}</p>`;
+        }
+    });
+
     html += '</div>';
-    return html;
+    container.innerHTML = html;
 }
 
-// ========== 변경된 부분만 하이라이트 ==========
+// ===================== 변경된 부분 하이라이트 =====================
 function highlightChangedParts(original, revised) {
-    if (!original || original.trim() === '') {
-        return '<span class="highlight-changed">' + escapeHtml(revised) + '</span>';
+    if (original === revised) {
+        return escapeHtml(revised);
     }
-    
-    var result = '';
-    var i = 0, j = 0;
-    var originalChars = original.split('');
-    var revisedChars = revised.split('');
-    var changedBuffer = '';
-    var unchangedBuffer = '';
-    
-    while (j < revisedChars.length) {
-        if (i < originalChars.length && originalChars[i] === revisedChars[j]) {
-            if (changedBuffer) {
-                result += '<span class="highlight-changed">' + escapeHtml(changedBuffer) + '</span>';
-                changedBuffer = '';
-            }
-            unchangedBuffer += revisedChars[j];
-            i++;
-            j++;
+
+    // 간단한 차이점 표시: 전체 라인이 다르면 수정된 부분 전체 하이라이트
+    const originalWords = original.split(/(\s+)/);
+    const revisedWords = revised.split(/(\s+)/);
+
+    let result = '';
+    const maxLen = Math.max(originalWords.length, revisedWords.length);
+
+    for (let i = 0; i < revisedWords.length; i++) {
+        const origWord = originalWords[i] || '';
+        const revWord = revisedWords[i] || '';
+
+        if (origWord !== revWord && revWord.trim() !== '') {
+            result += `<span class="changed-text">${escapeHtml(revWord)}</span>`;
         } else {
-            if (unchangedBuffer) {
-                result += escapeHtml(unchangedBuffer);
-                unchangedBuffer = '';
-            }
-            
-            var foundInOriginal = false;
-            for (var k = i; k < Math.min(i + 10, originalChars.length); k++) {
-                if (originalChars[k] === revisedChars[j]) {
-                    i = k;
-                    foundInOriginal = true;
-                    break;
-                }
-            }
-            
-            if (!foundInOriginal) {
-                changedBuffer += revisedChars[j];
-                j++;
-            }
+            result += escapeHtml(revWord);
         }
     }
-    
-    if (unchangedBuffer) {
-        result += escapeHtml(unchangedBuffer);
-    }
-    if (changedBuffer) {
-        result += '<span class="highlight-changed">' + escapeHtml(changedBuffer) + '</span>';
-    }
-    
-    return result || escapeHtml(revised);
+
+    return result;
 }
 
-// ========== 유틸리티 ==========
+// ===================== 점수 렌더링 =====================
+function renderScores(scores) {
+    const container = document.getElementById('score-display');
+
+    if (!scores || Object.keys(scores).length === 0) {
+        container.innerHTML = '<p class="placeholder">점수 정보가 없습니다.</p>';
+        return;
+    }
+
+    const getScoreClass = (score, isRisk = false) => {
+        if (isRisk) {
+            if (score <= 30) return 'score-good';
+            if (score <= 60) return 'score-warning';
+            return 'score-danger';
+        }
+        if (score >= 80) return 'score-good';
+        if (score >= 60) return 'score-warning';
+        return 'score-danger';
+    };
+
+    let html = '<div class="score-grid">';
+
+    html += `<div class="score-card ${getScoreClass(scores.overall || 0)}">
+        <div class="score-value">${scores.overall || 0}</div>
+        <div class="score-label">전체 품질</div>
+    </div>`;
+
+    html += `<div class="score-card ${getScoreClass(scores.grammar || 0)}">
+        <div class="score-value">${scores.grammar || 0}</div>
+        <div class="score-label">문법 정확도</div>
+    </div>`;
+
+    html += `<div class="score-card ${getScoreClass(scores.readability || 0)}">
+        <div class="score-value">${scores.readability || 0}</div>
+        <div class="score-label">가독성</div>
+    </div>`;
+
+    html += `<div class="score-card ${getScoreClass(scores.seniorFriendly || 0)}">
+        <div class="score-value">${scores.seniorFriendly || 0}</div>
+        <div class="score-label">시니어 적합도</div>
+    </div>`;
+
+    html += `<div class="score-card ${getScoreClass(scores.bounceRisk || 0, true)}">
+        <div class="score-value">${scores.bounceRisk || 0}</div>
+        <div class="score-label">이탈 위험도</div>
+    </div>`;
+
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// ===================== 다운로드 =====================
+function initDownloadButton() {
+    const btn = document.getElementById('btn-download');
+    btn.addEventListener('click', () => {
+        const finalScript = state.stage2.revisedScript || state.stage1.revisedScript;
+        if (!finalScript) {
+            alert('다운로드할 수정본이 없습니다.');
+            return;
+        }
+
+        const blob = new Blob([finalScript], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'MISLGOM_최종수정본.txt';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+}
+
+// ===================== 유틸리티 =====================
 function escapeHtml(text) {
     if (!text) return '';
-    var div = document.createElement('div');
+    const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
-// ========== 다운로드 버튼 ==========
-function initDownloadButtons() {
-    var downloadBtn = document.getElementById('download-revised-btn');
-    if (downloadBtn) {
-        downloadBtn.addEventListener('click', function() {
-            downloadScript();
-        });
-    }
-}
-
-function downloadScript() {
-    var script = tabStates.stage2.revisedScript || tabStates.stage1.revisedScript;
-    if (!script) {
-        alert('다운로드할 수정 대본이 없습니다.');
-        return;
-    }
-    
-    var blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = currentFileName + '_수정완료.txt';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    console.log('📥 다운로드 완료:', currentFileName + '_수정완료.txt');
-}
-
-// ========== 부팅 확인 ==========
-window.__MAIN_JS_LOADED__ = true;
-console.log('[BOOT] main.js v4.3 로드 완료');
+// 전역 함수로 노출 (onclick에서 사용)
+window.scrollToHighlight = scrollToHighlight;
