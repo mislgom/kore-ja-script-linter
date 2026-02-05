@@ -459,7 +459,7 @@ function renderAnalysisTable(analysis, parseError, stage, container) {
     const targetContainerId = stage === 'stage1' ? 'revised-stage1' : 'revised-stage2';
 
     let html = '<p class="click-hint">💡 각 행을 클릭하면 수정된 부분으로 이동합니다</p>';
-    html += '<table class="analysis-table"><thead><tr><th>줄</th><th>오류 유형</th><th>원본</th><th>수정 제안</th><th>이유</th></tr></thead><tbody>';
+    html += '<table class="analysis-table"><thead><tr><th>줄</th><th>유형</th><th>원본</th><th>수정</th><th>이유</th></tr></thead><tbody>';
 
     analysis.forEach((item, index) => {
         html += `<tr class="clickable-row" 
@@ -469,8 +469,8 @@ function renderAnalysisTable(analysis, parseError, stage, container) {
             onclick="scrollToHighlight(this)">
             <td>${item.line || '-'}</td>
             <td>${escapeHtml(item.errorType || '-')}</td>
-            <td class="original-text">${escapeHtml(item.original || '-')}</td>
-            <td class="suggestion-text">${escapeHtml(item.suggestion || '-')}</td>
+            <td>${escapeHtml(item.original || '-')}</td>
+            <td>${escapeHtml(item.suggestion || '-')}</td>
             <td>${escapeHtml(item.reason || '-')}</td>
         </tr>`;
     });
@@ -557,12 +557,11 @@ function highlightChangedParts(original, revised) {
         return escapeHtml(revised);
     }
 
-    // 간단한 차이점 표시: 전체 라인이 다르면 수정된 부분 전체 하이라이트
+    // 단어 단위로 비교
     const originalWords = original.split(/(\s+)/);
     const revisedWords = revised.split(/(\s+)/);
 
     let result = '';
-    const maxLen = Math.max(originalWords.length, revisedWords.length);
 
     for (let i = 0; i < revisedWords.length; i++) {
         const origWord = originalWords[i] || '';
