@@ -910,33 +910,38 @@ function updateStage3Progress(percent, text) {
     if (textEl) textEl.textContent = text;
 }
 
-// ===================== 3차 분석 프롬프트 생성 (후킹 부분 추출 + 마지막 호기심 유발 멘트) =====================
+// ===================== 3차 분석 프롬프트 생성 (극강 후킹 + 어그로 + 컷 동기화) =====================
 function generateStage3Prompt(scriptText) {
-    return `당신은 두 가지 역할을 수행합니다:
+    return `당신은 세계 최고의 바이럴 콘텐츠 전문가이자 20년차 영화·드라마 홍보 마케터입니다.
 
-[역할 1] 20년차 영화·드라마 홍보 마케터
-- 목표: 원본 대본에서 후킹이 가장 강한 부분만 추출하여 숏츠 대본 구성
-- 중요: 새로운 문장을 만들지 마세요! 원본 대본의 문장을 그대로 사용하세요!
-- 조건:
-  - 원본 대본에서 가장 임팩트 있는 부분만 선별
-  - 감정적 절정, 반전, 충격적 대사, 갈등 장면 우선 선택
-  - 선택한 문장은 원본 그대로 유지 (단어 하나도 바꾸지 마세요)
+[미션] 
+원본 대본에서 가장 충격적이고, 자극적이며, 클릭하지 않고는 못 배기는 장면만 추출하여 
+"이 숏츠를 본 사람은 반드시 롱폼 영상을 봐야겠다"는 생각이 들게 만드세요.
+
+[역할 1] 극강의 후킹 & 어그로 전문가
+- 목표: 남녀노소 누구나 스크롤을 멈추고 "뭐야 이거?!" 하게 만드는 숏츠 대본
+- 선별 기준 (우선순위):
+  1. 충격적인 반전 장면 (배신, 폭로, 반격)
+  2. 감정 폭발 장면 (분노, 절규, 오열)
+  3. 긴장감 최고조 장면 (위기, 대치, 협박)
+  4. 자극적인 대사 (독설, 저주, 선전포고)
+  5. 떡밥/궁금증 유발 장면
+
+- 중요 규칙:
+  - 원본 대본의 문장을 그대로 사용 (단어 하나도 수정 금지!)
+  - 가장 어그로 끌리는 순서로 재배치
+  - 첫 문장은 3초 안에 시청자를 사로잡을 최강 후킹
   - 총 분량 1분 미만 (약 150~200자)
-  - 도입 3초 이내 강한 후킹이 되는 문장으로 시작
 
-[역할 2] 20년차 영화·드라마 영상 기획 및 전문 제작자
-- 사용 툴: grok 기반 이미지→영상 생성
-- 출력: 9:16 세로 영상 (숏츠/릴스/틱톡)
-- 각 컷마다 3가지 프롬프트 버전 제공 (영문/한글 쌍)
+[역할 2] 영상 기획 전문가
+- 숏츠 대본의 각 문장 = 1컷
+- 숏츠 대본 문장 수와 영상 프롬프트 컷 수는 반드시 동일해야 함!
+- 각 컷마다 3가지 영상 프롬프트 버전 제공 (영문/한글)
+- 9:16 세로 영상, grok 영상 생성 최적화
 
-[중요! 마지막 호기심 유발 멘트 필수]
-숏츠 대본의 마지막에는 반드시 시청자의 호기심을 유발하는 멘트를 추가하세요.
-이 멘트는 대본의 주인공 이름과 상황에 맞게 새로 작성합니다.
-
-예시 형식:
-- "과연 [주인공]은/는 [핵심 갈등/목표]를 [달성/해결]할 수 있을까요? 충격적인 뒷이야기, 지금 바로 확인하세요!"
-- "과연 해린은 남편의 복수를 완성할 수 있을까요? 충격적인 뒷이야기, 지금 바로 확인하세요!"
-- "과연 민수는 진실을 밝혀낼 수 있을까요? 충격적인 반전, 지금 바로 확인하세요!"
+[마지막 호기심 유발 멘트 필수]
+숏츠 대본 마지막에 반드시 시청자의 호기심을 폭발시키는 멘트 추가:
+예시: "과연 [주인공]은/는 [핵심 갈등]을/를 [해결]할 수 있을까요? 충격적인 뒷이야기, 지금 바로 확인하세요!"
 
 [원본 대본]
 ${scriptText}
@@ -944,43 +949,44 @@ ${scriptText}
 [출력 형식]
 반드시 아래 JSON 형식으로만 응답하세요:
 {
-  "analysis": "어떤 기준으로 후킹 부분을 선별했는지 설명",
+  "analysis": "어떤 기준으로 후킹 장면을 선별했는지 설명",
   "main_character": "대본의 주인공 이름",
   "core_conflict": "핵심 갈등 또는 목표 요약",
-  "shorts_script": "원본에서 추출한 후킹 문장들 (원본 그대로, 줄바꿈으로 구분)",
-  "closing_hook": "과연 [주인공]은/는 [핵심 갈등]을/를 [해결]할 수 있을까요? 충격적인 뒷이야기, 지금 바로 확인하세요!",
-  "selected_lines": [
-    {"line_number": 1, "reason": "이 문장을 선택한 이유"}
+  "shorts_cuts": [
+    {
+      "cut_number": 1,
+      "original_text": "원본 대본에서 추출한 문장 (그대로)",
+      "hooking_reason": "이 문장이 후킹/어그로인 이유"
+    }
   ],
+  "closing_hook": "과연 [주인공]은/는 [핵심 갈등]을/를 [해결]할 수 있을까요? 충격적인 뒷이야기, 지금 바로 확인하세요!",
   "video_prompts": [
     {
       "cut": 1,
-      "original_text": "이 컷에 해당하는 원본 대본 문장",
-      "description": "이 컷의 장면 설명",
-      "mood": "분위기 (예: dramatic, suspenseful, romantic)",
-      "voice": "말소리/음성 톤 설명",
-      "bgm": "배경음악 추천",
-      "sfx": "효과음 추천",
+      "original_text": "해당 컷의 원본 대본 문장 (shorts_cuts와 동일)",
+      "description": "장면 설명",
+      "mood": "분위기",
+      "voice": "음성 톤",
+      "bgm": "배경음악",
+      "sfx": "효과음",
       "prompts": {
-        "v1_en": "Grok prompt version 1 in English, 9:16 vertical, cinematic, short-form video style",
-        "v1_ko": "Grok 프롬프트 버전 1 한글, 9:16 세로, 시네마틱, 숏폼 영상 스타일",
-        "v2_en": "Grok prompt version 2 in English, different angle or mood",
-        "v2_ko": "Grok 프롬프트 버전 2 한글, 다른 각도나 분위기",
-        "v3_en": "Grok prompt version 3 in English, creative variation",
-        "v3_ko": "Grok 프롬프트 버전 3 한글, 창의적 변형"
+        "v1_en": "Grok prompt v1 English, 9:16, cinematic, short-form",
+        "v1_ko": "Grok 프롬프트 v1 한글",
+        "v2_en": "Grok prompt v2 English, different angle",
+        "v2_ko": "Grok 프롬프트 v2 한글",
+        "v3_en": "Grok prompt v3 English, creative",
+        "v3_ko": "Grok 프롬프트 v3 한글"
       }
     }
   ]
 }
 
-[중요 규칙]
-1. shorts_script의 모든 문장은 원본 대본에 있는 문장이어야 합니다 (마지막 호기심 유발 멘트 제외)
-2. 문장을 수정하거나 새로 만들지 마세요 (마지막 호기심 유발 멘트 제외)
-3. 후킹 강도가 높은 순서로 배치하세요
-4. closing_hook은 반드시 대본의 주인공과 상황에 맞게 새로 작성하세요
-5. 컷 수는 숏츠 대본 분량에 따라 3~6개로 자동 산정
-6. 각 프롬프트는 grok 영상 생성에 최적화
-7. 9:16, cinematic, short-form 키워드 필수 포함`;
+[절대 규칙]
+1. shorts_cuts의 문장 수 = video_prompts의 컷 수 (반드시 동일!)
+2. 모든 문장은 원본 대본에서 그대로 추출 (수정/창작 금지, closing_hook 제외)
+3. 첫 컷은 가장 충격적인 문장으로!
+4. 어그로 강도: 세계 최강, 누구도 대적 불가 수준
+5. 9:16, cinematic, short-form, dramatic 키워드 필수`;
 }
 
 // ===================== 3차 분석 결과 파싱 =====================
@@ -1026,9 +1032,8 @@ function parseStage3Result(responseText) {
             analysis: parsed.analysis || '',
             main_character: parsed.main_character || '',
             core_conflict: parsed.core_conflict || '',
-            shorts_script: parsed.shorts_script || '',
+            shorts_cuts: parsed.shorts_cuts || [],
             closing_hook: parsed.closing_hook || '',
-            selected_lines: parsed.selected_lines || [],
             video_prompts: parsed.video_prompts || [],
             parseError: null
         };
@@ -1036,18 +1041,13 @@ function parseStage3Result(responseText) {
         console.error('❌ 3차 JSON 파싱 실패:', e.message);
         
         let analysis = '';
-        let shorts_script = '';
+        let shorts_cuts = [];
         let closing_hook = '';
         let video_prompts = [];
 
         try {
             const analysisMatch = jsonStr.match(/"analysis"\s*:\s*"([^"]+)"/);
             if (analysisMatch) analysis = analysisMatch[1];
-        } catch (e) {}
-
-        try {
-            const scriptMatch = jsonStr.match(/"shorts_script"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"closing_hook"|"\s*,\s*"selected_lines"|"\s*,\s*"video_prompts"|"\s*})/);
-            if (scriptMatch) shorts_script = scriptMatch[1].replace(/\\n/g, '\n');
         } catch (e) {}
 
         try {
@@ -1059,9 +1059,8 @@ function parseStage3Result(responseText) {
             analysis: analysis,
             main_character: '',
             core_conflict: '',
-            shorts_script: shorts_script,
+            shorts_cuts: shorts_cuts,
             closing_hook: closing_hook,
-            selected_lines: [],
             video_prompts: video_prompts,
             parseError: e.message
         };
@@ -1072,28 +1071,31 @@ function parseStage3Result(responseText) {
 function renderStage3Results(parsed) {
     const shortsContainer = document.getElementById('shorts-script-container');
     if (shortsContainer) {
-        if (parsed.shorts_script) {
-            const lines = parsed.shorts_script.split('\n');
+        if (parsed.shorts_cuts && parsed.shorts_cuts.length > 0) {
             let html = '<div class="shorts-script">';
             
-            html += '<p style="margin-bottom: 15px; padding: 10px; background: #2d2d4a; border-radius: 6px; color: #ffd700; font-size: 13px;">💡 아래 문장들은 원본 대본에서 후킹이 강한 부분만 추출한 것입니다</p>';
+            html += '<p style="margin-bottom: 15px; padding: 10px; background: linear-gradient(135deg, #ff6b6b22, #ee5a2422); border-radius: 6px; color: #ffd700; font-size: 13px; border: 1px solid #ff6b6b;">🔥 극강 후킹 & 어그로 숏츠 대본 - 롱폼 시청 유도 최적화</p>';
             
-            lines.forEach((line, index) => {
-                if (line.trim()) {
-                    html += `<p style="margin: 8px 0; padding: 8px; background: #1e1e3f; border-radius: 4px; border-left: 3px solid #ff6b6b; color: #fff;">${escapeHtml(line)}</p>`;
-                }
+            parsed.shorts_cuts.forEach((cut, index) => {
+                html += `
+                <div style="margin: 12px 0; padding: 12px; background: #1e1e3f; border-radius: 6px; border-left: 4px solid #ff6b6b;">
+                    <p style="color: #ff6b6b; font-size: 12px; margin-bottom: 6px;">컷 ${cut.cut_number || index + 1}</p>
+                    <p style="color: #fff; font-size: 15px; line-height: 1.5;">${escapeHtml(cut.original_text || '')}</p>
+                    <p style="color: #888; font-size: 11px; margin-top: 6px;">💡 ${escapeHtml(cut.hooking_reason || '')}</p>
+                </div>`;
             });
             
-            // 마지막 호기심 유발 멘트 추가
+            // 마지막 호기심 유발 멘트
             if (parsed.closing_hook) {
-                html += `<div style="margin-top: 20px; padding: 15px; background: linear-gradient(135deg, #ff6b6b22, #ee5a2422); border-radius: 8px; border: 2px solid #ff6b6b;">
-                    <p style="color: #ffd700; font-weight: bold; margin-bottom: 8px;">🎯 마무리 호기심 유발 멘트</p>
+                html += `<div style="margin-top: 20px; padding: 15px; background: linear-gradient(135deg, #ff6b6b33, #ee5a2433); border-radius: 8px; border: 2px solid #ff6b6b;">
+                    <p style="color: #ffd700; font-weight: bold; margin-bottom: 8px;">🎯 마무리 호기심 폭발 멘트</p>
                     <p style="color: #fff; font-size: 15px; line-height: 1.6;">${escapeHtml(parsed.closing_hook)}</p>
                 </div>`;
             }
             
             html += '</div>';
             
+            // 분석 정보
             if (parsed.analysis) {
                 html += `<div style="margin-top: 15px; padding: 10px; background: #1e1e3f; border-radius: 6px; border: 1px solid #444;">
                     <strong style="color: #ffd700;">📊 선별 기준:</strong>
@@ -1109,14 +1111,12 @@ function renderStage3Results(parsed) {
                 </div>`;
             }
             
-            if (parsed.selected_lines && parsed.selected_lines.length > 0) {
-                html += `<div style="margin-top: 15px; padding: 10px; background: #1e1e3f; border-radius: 6px; border: 1px solid #444;">
-                    <strong style="color: #ffd700;">📌 선택 이유:</strong>`;
-                parsed.selected_lines.forEach((item, idx) => {
-                    html += `<p style="margin-top: 8px; color: #ccc; font-size: 13px;"><span style="color: #ff6b6b;">[${item.line_number || idx + 1}줄]</span> ${escapeHtml(item.reason || '')}</p>`;
-                });
-                html += '</div>';
-            }
+            // 컷 수 표시
+            html += `<div style="margin-top: 15px; padding: 10px; background: #252542; border-radius: 6px; text-align: center;">
+                <span style="color: #ffd700;">총 ${parsed.shorts_cuts.length}컷</span>
+                <span style="color: #888;"> | </span>
+                <span style="color: #ccc;">영상 프롬프트 ${parsed.video_prompts ? parsed.video_prompts.length : 0}컷</span>
+            </div>`;
             
             shortsContainer.innerHTML = html;
         } else {
@@ -1129,29 +1129,31 @@ function renderStage3Results(parsed) {
         if (parsed.video_prompts && parsed.video_prompts.length > 0) {
             let html = '';
             
+            html += `<p style="margin-bottom: 15px; padding: 10px; background: #252542; border-radius: 6px; color: #ffd700; font-size: 13px;">🎥 숏츠 대본과 1:1 매칭된 영상 프롬프트 (총 ${parsed.video_prompts.length}컷)</p>`;
+            
             parsed.video_prompts.forEach((cut, index) => {
                 html += `
                 <div style="margin-bottom: 20px; padding: 15px; background: #1e1e3f; border-radius: 8px; border: 1px solid #333;">
                     <h4 style="color: #ff6b6b; margin-bottom: 10px;">🎬 컷 ${cut.cut || index + 1}</h4>
-                    ${cut.original_text ? `<p style="color: #ffd700; margin-bottom: 8px; padding: 8px; background: #252542; border-radius: 4px;"><strong>원본 대사:</strong> "${escapeHtml(cut.original_text)}"</p>` : ''}
-                    <p style="color: #ccc; margin-bottom: 8px;"><strong>장면:</strong> ${escapeHtml(cut.description || '')}</p>
-                    <p style="color: #ccc; margin-bottom: 8px;"><strong>분위기:</strong> ${escapeHtml(cut.mood || '')}</p>
-                    <p style="color: #ccc; margin-bottom: 8px;"><strong>음성 톤:</strong> ${escapeHtml(cut.voice || '')}</p>
-                    <p style="color: #ccc; margin-bottom: 8px;"><strong>BGM:</strong> ${escapeHtml(cut.bgm || '')}</p>
+                    ${cut.original_text ? `<p style="color: #ffd700; margin-bottom: 10px; padding: 10px; background: #252542; border-radius: 4px; border-left: 3px solid #ff6b6b;"><strong>대사:</strong> "${escapeHtml(cut.original_text)}"</p>` : ''}
+                    <p style="color: #ccc; margin-bottom: 6px;"><strong>장면:</strong> ${escapeHtml(cut.description || '')}</p>
+                    <p style="color: #ccc; margin-bottom: 6px;"><strong>분위기:</strong> ${escapeHtml(cut.mood || '')}</p>
+                    <p style="color: #ccc; margin-bottom: 6px;"><strong>음성 톤:</strong> ${escapeHtml(cut.voice || '')}</p>
+                    <p style="color: #ccc; margin-bottom: 6px;"><strong>BGM:</strong> ${escapeHtml(cut.bgm || '')}</p>
                     <p style="color: #ccc; margin-bottom: 12px;"><strong>효과음:</strong> ${escapeHtml(cut.sfx || '')}</p>
                     
-                    <div style="background: #252542; padding: 10px; border-radius: 6px;">
-                        <p style="color: #ffd700; margin-bottom: 8px;"><strong>프롬프트 1안</strong></p>
-                        <p style="color: #aaa; font-size: 13px; margin-bottom: 4px;">EN: ${escapeHtml(cut.prompts?.v1_en || '')}</p>
-                        <p style="color: #aaa; font-size: 13px; margin-bottom: 12px;">KO: ${escapeHtml(cut.prompts?.v1_ko || '')}</p>
+                    <div style="background: #252542; padding: 12px; border-radius: 6px;">
+                        <p style="color: #ffd700; margin-bottom: 8px;"><strong>🎨 프롬프트 1안</strong></p>
+                        <p style="color: #aaa; font-size: 13px; margin-bottom: 4px;"><strong>EN:</strong> ${escapeHtml(cut.prompts?.v1_en || '')}</p>
+                        <p style="color: #aaa; font-size: 13px; margin-bottom: 12px;"><strong>KO:</strong> ${escapeHtml(cut.prompts?.v1_ko || '')}</p>
                         
-                        <p style="color: #ffd700; margin-bottom: 8px;"><strong>프롬프트 2안</strong></p>
-                        <p style="color: #aaa; font-size: 13px; margin-bottom: 4px;">EN: ${escapeHtml(cut.prompts?.v2_en || '')}</p>
-                        <p style="color: #aaa; font-size: 13px; margin-bottom: 12px;">KO: ${escapeHtml(cut.prompts?.v2_ko || '')}</p>
+                        <p style="color: #ffd700; margin-bottom: 8px;"><strong>🎨 프롬프트 2안</strong></p>
+                        <p style="color: #aaa; font-size: 13px; margin-bottom: 4px;"><strong>EN:</strong> ${escapeHtml(cut.prompts?.v2_en || '')}</p>
+                        <p style="color: #aaa; font-size: 13px; margin-bottom: 12px;"><strong>KO:</strong> ${escapeHtml(cut.prompts?.v2_ko || '')}</p>
                         
-                        <p style="color: #ffd700; margin-bottom: 8px;"><strong>프롬프트 3안</strong></p>
-                        <p style="color: #aaa; font-size: 13px; margin-bottom: 4px;">EN: ${escapeHtml(cut.prompts?.v3_en || '')}</p>
-                        <p style="color: #aaa; font-size: 13px;">KO: ${escapeHtml(cut.prompts?.v3_ko || '')}</p>
+                        <p style="color: #ffd700; margin-bottom: 8px;"><strong>🎨 프롬프트 3안</strong></p>
+                        <p style="color: #aaa; font-size: 13px; margin-bottom: 4px;"><strong>EN:</strong> ${escapeHtml(cut.prompts?.v3_en || '')}</p>
+                        <p style="color: #aaa; font-size: 13px;"><strong>KO:</strong> ${escapeHtml(cut.prompts?.v3_ko || '')}</p>
                     </div>
                 </div>`;
             });
