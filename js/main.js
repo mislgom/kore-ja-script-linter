@@ -1,11 +1,11 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.9 - Vertex AI + Gemini 3 Flash
+ * main.js v4.10 - Vertex AI + Gemini 3 Flash
  * 25가지 오류 유형 검수, 4-패널 레이아웃, 새 점수 체계
- * + 3차 분석 (숏츠 제작) 추가
+ * + 3차 분석 (숏츠 제작) 추가 - 처음부터 UI 표시
  */
 
-console.log('🚀 main.js v4.9 (Vertex AI + Gemini 3 Flash + 숏츠 제작) 로드됨');
+console.log('🚀 main.js v4.10 (Vertex AI + Gemini 3 Flash + 숏츠 제작) 로드됨');
 
 // ===================== 전역 상태 =====================
 const state = {
@@ -52,7 +52,7 @@ function initApp() {
     initDownloadButton();
     initStage3UI();
     initStage3Button();
-    console.log('✅ main.js v4.9 초기화 완료');
+    console.log('✅ main.js v4.10 초기화 완료');
 }
 
 // ===================== 다크모드 =====================
@@ -384,7 +384,7 @@ ${scriptText}
 async function callGeminiAPI(prompt, signal) {
     const apiKey = localStorage.getItem('GEMINI_API_KEY');
     
-    const endpoint = `https://aiplatform.googleapis.com/v1/projects/gen-lang-client-0624453722/locations/global/publishers/google/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
     const response = await fetch(endpoint, {
         method: 'POST',
@@ -758,7 +758,15 @@ function initDownloadButton() {
     });
 }
 
-// ===================== 3차 분석 UI 초기화 =====================
+// ===================== HTML 이스케이프 =====================
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ===================== 3차 분석 UI 초기화 (처음부터 표시) =====================
 function initStage3UI() {
     const scoreDisplay = document.getElementById('score-display');
     if (!scoreDisplay) {
@@ -772,49 +780,54 @@ function initStage3UI() {
         return;
     }
 
-    // 3차 분석 섹션 HTML 생성
+    // 3차 분석 섹션 HTML 생성 (처음부터 display: block으로 표시)
     const stage3HTML = `
-    <div id="stage3-section" class="stage3-section" style="margin-top: 30px; display: none;">
+    <div id="stage3-section" class="stage3-section" style="margin-top: 30px;">
+        <h2 style="text-align: center; margin-bottom: 20px; color: #ff6b6b;">🎬 3차 분석 (숏츠 제작)</h2>
+        
         <div style="text-align: center; margin-bottom: 20px;">
-            <button id="btn-analyze-stage3" class="btn btn-primary" disabled style="background: linear-gradient(135deg, #ff6b6b, #ee5a24); padding: 12px 30px; font-size: 16px; font-weight: bold;">
+            <button id="btn-analyze-stage3" class="btn btn-primary" disabled style="background: linear-gradient(135deg, #ff6b6b, #ee5a24); padding: 12px 30px; font-size: 16px; font-weight: bold; border: none; border-radius: 8px; color: white; cursor: pointer;">
                 🎬 3차 분석 (숏츠 제작) 시작
             </button>
+            <p style="margin-top: 10px; color: #888; font-size: 14px;">※ 2차 분석 완료 후 활성화됩니다</p>
         </div>
         
         <div id="stage3-progress" style="display: none; margin-bottom: 20px;">
-            <div class="progress-container">
-                <div id="stage3-progress-bar" class="progress-bar" style="width: 0%;"></div>
+            <div style="background: #333; border-radius: 10px; overflow: hidden; height: 20px;">
+                <div id="stage3-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ff6b6b, #ee5a24); transition: width 0.3s;"></div>
             </div>
-            <p id="stage3-progress-text" style="text-align: center; margin-top: 10px;">준비 중...</p>
+            <p id="stage3-progress-text" style="text-align: center; margin-top: 10px; color: #ccc;">준비 중...</p>
         </div>
 
-        <div id="stage3-results" style="display: none;">
+        <div id="stage3-results" class="results-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
             <!-- 숏츠 대본 영역 -->
-            <div class="panel" style="margin-bottom: 20px;">
-                <div class="panel-header">
-                    <span>🎬 숏츠 대본 (1분 미만)</span>
-                </div>
-                <div id="shorts-script-container" class="panel-content" style="min-height: 150px; max-height: 400px; overflow-y: auto; padding: 15px; background: #1a1a2e; border-radius: 8px;">
-                    <p class="placeholder">3차 분석을 시작하면 숏츠 대본이 표시됩니다.</p>
+            <div class="result-panel" style="background: #1a1a2e; border-radius: 12px; padding: 20px;">
+                <h3 style="margin-bottom: 15px; color: #ffd700;">🎬 숏츠 대본 (1분 미만)</h3>
+                <div id="shorts-script-container" style="min-height: 200px; max-height: 400px; overflow-y: auto; padding: 15px; background: #252542; border-radius: 8px;">
+                    <p class="placeholder" style="color: #666;">3차 분석을 시작하면 숏츠 대본이 표시됩니다.</p>
                 </div>
             </div>
 
             <!-- 영상화 프롬프트 영역 -->
-            <div class="panel">
-                <div class="panel-header">
-                    <span>🎥 영상화 프롬프트 (컷 단위)</span>
-                </div>
-                <div id="video-prompts-container" class="panel-content" style="min-height: 200px; max-height: 600px; overflow-y: auto; padding: 15px; background: #1a1a2e; border-radius: 8px;">
-                    <p class="placeholder">3차 분석을 시작하면 영상화 프롬프트가 표시됩니다.</p>
+            <div class="result-panel" style="background: #1a1a2e; border-radius: 12px; padding: 20px;">
+                <h3 style="margin-bottom: 15px; color: #ffd700;">🎥 영상화 프롬프트 (컷 단위)</h3>
+                <div id="video-prompts-container" style="min-height: 200px; max-height: 400px; overflow-y: auto; padding: 15px; background: #252542; border-radius: 8px;">
+                    <p class="placeholder" style="color: #666;">3차 분석을 시작하면 영상화 프롬프트가 표시됩니다.</p>
                 </div>
             </div>
         </div>
     </div>
     `;
 
-    // score-display 바로 다음에 삽입
-    scoreDisplay.insertAdjacentHTML('afterend', stage3HTML);
-    console.log('✅ 3차 분석 UI 생성 완료');
+    // score-display의 부모 섹션 다음에 삽입
+    const scoreSection = scoreDisplay.closest('.score-section');
+    if (scoreSection) {
+        scoreSection.insertAdjacentHTML('afterend', stage3HTML);
+    } else {
+        scoreDisplay.insertAdjacentHTML('afterend', stage3HTML);
+    }
+    
+    console.log('✅ 3차 분석 UI 생성 완료 (처음부터 표시)');
 }
 
 // ===================== 3차 분석 버튼 초기화 =====================
@@ -849,13 +862,9 @@ async function startStage3Analysis() {
     state.stage3.originalScript = finalScript;
 
     // UI 표시
-    const stage3Section = document.getElementById('stage3-section');
     const stage3Progress = document.getElementById('stage3-progress');
-    const stage3Results = document.getElementById('stage3-results');
     
-    stage3Section.style.display = 'block';
     stage3Progress.style.display = 'block';
-    stage3Results.style.display = 'none';
 
     updateStage3Progress(10, '숏츠 제작 준비 중...');
 
@@ -887,7 +896,6 @@ async function startStage3Analysis() {
 
         setTimeout(() => {
             stage3Progress.style.display = 'none';
-            stage3Results.style.display = 'block';
         }, 1000);
 
     } catch (error) {
@@ -1047,7 +1055,7 @@ function renderStage3Results(parsed) {
             let html = '<div class="shorts-script">';
             lines.forEach((line, index) => {
                 if (line.trim()) {
-                    html += `<p style="margin: 8px 0; padding: 8px; background: #252542; border-radius: 4px; border-left: 3px solid #ff6b6b;">${escapeHtml(line)}</p>`;
+                    html += `<p style="margin: 8px 0; padding: 8px; background: #1e1e3f; border-radius: 4px; border-left: 3px solid #ff6b6b; color: #fff;">${escapeHtml(line)}</p>`;
                 }
             });
             html += '</div>';
@@ -1061,7 +1069,7 @@ function renderStage3Results(parsed) {
             
             shortsContainer.innerHTML = html;
         } else {
-            shortsContainer.innerHTML = '<p class="error">숏츠 대본 생성에 실패했습니다.</p>';
+            shortsContainer.innerHTML = '<p style="color: #ff6b6b;">숏츠 대본 생성에 실패했습니다.</p>';
         }
     }
 
@@ -1073,94 +1081,33 @@ function renderStage3Results(parsed) {
             
             parsed.video_prompts.forEach((cut, index) => {
                 html += `
-                <div class="cut-section" style="margin-bottom: 25px; padding: 15px; background: #252542; border-radius: 8px; border: 1px solid #444;">
-                    <h4 style="color: #ff6b6b; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #444;">
-                        🎬 컷 ${cut.cut || index + 1} ${cut.description ? '- ' + cut.description : ''}
-                    </h4>
+                <div style="margin-bottom: 20px; padding: 15px; background: #1e1e3f; border-radius: 8px; border: 1px solid #333;">
+                    <h4 style="color: #ff6b6b; margin-bottom: 10px;">🎬 컷 ${cut.cut || index + 1}</h4>
+                    <p style="color: #ccc; margin-bottom: 8px;"><strong>장면:</strong> ${escapeHtml(cut.description || '')}</p>
+                    <p style="color: #ccc; margin-bottom: 8px;"><strong>분위기:</strong> ${escapeHtml(cut.mood || '')}</p>
+                    <p style="color: #ccc; margin-bottom: 8px;"><strong>음성 톤:</strong> ${escapeHtml(cut.voice || '')}</p>
+                    <p style="color: #ccc; margin-bottom: 8px;"><strong>BGM:</strong> ${escapeHtml(cut.bgm || '')}</p>
+                    <p style="color: #ccc; margin-bottom: 12px;"><strong>효과음:</strong> ${escapeHtml(cut.sfx || '')}</p>
                     
-                    <div style="display: grid; gap: 10px; margin-bottom: 15px;">
-                        <div style="padding: 8px; background: #1a1a2e; border-radius: 4px;">
-                            <strong style="color: #ffd700;">🎭 분위기:</strong> <span style="color: #fff;">${escapeHtml(cut.mood || '-')}</span>
-                        </div>
-                        <div style="padding: 8px; background: #1a1a2e; border-radius: 4px;">
-                            <strong style="color: #ffd700;">🎤 말소리/음성 톤:</strong> <span style="color: #fff;">${escapeHtml(cut.voice || '-')}</span>
-                        </div>
-                        <div style="padding: 8px; background: #1a1a2e; border-radius: 4px;">
-                            <strong style="color: #ffd700;">🎵 배경음악(BGM):</strong> <span style="color: #fff;">${escapeHtml(cut.bgm || '-')}</span>
-                        </div>
-                        <div style="padding: 8px; background: #1a1a2e; border-radius: 4px;">
-                            <strong style="color: #ffd700;">🔊 효과음(SFX):</strong> <span style="color: #fff;">${escapeHtml(cut.sfx || '-')}</span>
-                        </div>
+                    <div style="background: #252542; padding: 10px; border-radius: 6px;">
+                        <p style="color: #ffd700; margin-bottom: 8px;"><strong>프롬프트 1안</strong></p>
+                        <p style="color: #aaa; font-size: 13px; margin-bottom: 4px;">EN: ${escapeHtml(cut.prompts?.v1_en || '')}</p>
+                        <p style="color: #aaa; font-size: 13px; margin-bottom: 12px;">KO: ${escapeHtml(cut.prompts?.v1_ko || '')}</p>
+                        
+                        <p style="color: #ffd700; margin-bottom: 8px;"><strong>프롬프트 2안</strong></p>
+                        <p style="color: #aaa; font-size: 13px; margin-bottom: 4px;">EN: ${escapeHtml(cut.prompts?.v2_en || '')}</p>
+                        <p style="color: #aaa; font-size: 13px; margin-bottom: 12px;">KO: ${escapeHtml(cut.prompts?.v2_ko || '')}</p>
+                        
+                        <p style="color: #ffd700; margin-bottom: 8px;"><strong>프롬프트 3안</strong></p>
+                        <p style="color: #aaa; font-size: 13px; margin-bottom: 4px;">EN: ${escapeHtml(cut.prompts?.v3_en || '')}</p>
+                        <p style="color: #aaa; font-size: 13px;">KO: ${escapeHtml(cut.prompts?.v3_ko || '')}</p>
                     </div>
-                    
-                    <div class="prompts-grid" style="display: grid; gap: 15px;">
-                        ${renderPromptVersions(cut.prompts)}
-                    </div>
-                </div>
-                `;
+                </div>`;
             });
             
             promptsContainer.innerHTML = html;
         } else {
-            promptsContainer.innerHTML = '<p class="error">영상화 프롬프트 생성에 실패했습니다.</p>';
+            promptsContainer.innerHTML = '<p style="color: #ff6b6b;">영상화 프롬프트 생성에 실패했습니다.</p>';
         }
     }
 }
-
-// ===================== 프롬프트 버전 렌더링 =====================
-function renderPromptVersions(prompts) {
-    if (!prompts) return '<p>프롬프트 없음</p>';
-    
-    let html = '';
-    
-    // 1안
-    html += `
-    <div style="padding: 12px; background: #1e1e3f; border-radius: 6px; border-left: 4px solid #4ecdc4;">
-        <strong style="color: #4ecdc4;">📝 1안</strong>
-        <div style="margin-top: 8px;">
-            <p style="margin: 5px 0; color: #aaa; font-size: 12px;">English:</p>
-            <p style="margin: 5px 0; padding: 8px; background: #252542; border-radius: 4px; color: #fff; font-size: 13px;">${escapeHtml(prompts.v1_en || '-')}</p>
-            <p style="margin: 5px 0; color: #aaa; font-size: 12px;">한글:</p>
-            <p style="margin: 5px 0; padding: 8px; background: #252542; border-radius: 4px; color: #fff; font-size: 13px;">${escapeHtml(prompts.v1_ko || '-')}</p>
-        </div>
-    </div>
-    `;
-    
-    // 2안
-    html += `
-    <div style="padding: 12px; background: #1e1e3f; border-radius: 6px; border-left: 4px solid #ff6b6b;">
-        <strong style="color: #ff6b6b;">📝 2안</strong>
-        <div style="margin-top: 8px;">
-            <p style="margin: 5px 0; color: #aaa; font-size: 12px;">English:</p>
-            <p style="margin: 5px 0; padding: 8px; background: #252542; border-radius: 4px; color: #fff; font-size: 13px;">${escapeHtml(prompts.v2_en || '-')}</p>
-            <p style="margin: 5px 0; color: #aaa; font-size: 12px;">한글:</p>
-            <p style="margin: 5px 0; padding: 8px; background: #252542; border-radius: 4px; color: #fff; font-size: 13px;">${escapeHtml(prompts.v2_ko || '-')}</p>
-        </div>
-    </div>
-    `;
-    
-    // 3안
-    html += `
-    <div style="padding: 12px; background: #1e1e3f; border-radius: 6px; border-left: 4px solid #ffd700;">
-        <strong style="color: #ffd700;">📝 3안</strong>
-        <div style="margin-top: 8px;">
-            <p style="margin: 5px 0; color: #aaa; font-size: 12px;">English:</p>
-            <p style="margin: 5px 0; padding: 8px; background: #252542; border-radius: 4px; color: #fff; font-size: 13px;">${escapeHtml(prompts.v3_en || '-')}</p>
-            <p style="margin: 5px 0; color: #aaa; font-size: 12px;">한글:</p>
-            <p style="margin: 5px 0; padding: 8px; background: #252542; border-radius: 4px; color: #fff; font-size: 13px;">${escapeHtml(prompts.v3_ko || '-')}</p>
-        </div>
-    </div>
-    `;
-    
-    return html;
-}
-
-// ===================== 유틸리티 =====================
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-window.scrollToHighlight = scrollToHighlight;
