@@ -274,22 +274,25 @@ async function startAnalysis(stage) {
         const parsed = parseAnalysisResult(response);
         console.log('✅ 파싱 완료');
 
+        // 수정 반영 검증 및 강제 적용
+        const verified = verifyAndApplyCorrections(parsed);
+
         updateProgress(90, '결과 렌더링 중...');
-        renderResults(parsed, stage);
+        renderResults(verified, stage);
 
         if (stage === 'stage1') {
-            state.stage1.analysis = parsed.analysis;
-            state.stage1.revisedScript = parsed.revisedScript;
-            state.stage1.scores = parsed.scores;
-            state.stage1.revisionCount = parsed.analysis ? parsed.analysis.length : 0;
+            state.stage1.analysis = verified.analysis;
+            state.stage1.revisedScript = verified.revisedScript;
+            state.stage1.scores = verified.scores;
+            state.stage1.revisionCount = verified.analysis ? verified.analysis.length : 0;
             document.getElementById('btn-analyze-stage2').disabled = false;
         } else {
-            state.stage2.analysis = parsed.analysis;
-            state.stage2.revisedScript = parsed.revisedScript;
-            state.stage2.scores = parsed.scores;
-            state.stage2.revisionCount = parsed.analysis ? parsed.analysis.length : 0;
+            state.stage2.analysis = verified.analysis;
+            state.stage2.revisedScript = verified.revisedScript;
+            state.stage2.scores = verified.scores;
+            state.stage2.revisionCount = verified.analysis ? verified.analysis.length : 0;
             document.getElementById('btn-download').disabled = false;
-            renderScores(parsed.scores);
+            renderScores(verified.scores);
         }
 
         updateProgress(100, '분석 완료!');
@@ -321,48 +324,45 @@ function updateProgress(percent, text) {
     textEl.textContent = text;
 }
 
-// ===================== 프롬프트 생성 =====================
+// ===================== 프롬프트 생성 (일관성 강화) =====================
 function generatePrompt(scriptText) {
-    return `당신은 한국어 대본 검수 전문가입니다.
+    return `당신은 한국어 대본 검수 전문가입니다. 아래 규칙을 정확히 따라 분석하세요.
 
-## 필수 규칙
+[규칙 1] 시대배경 검사
+대본에 조선시대/사극 표현(~하옵니다, ~소서, 전하, 마마, 나리 등)이 있으면 시대극입니다.
+시대극에서 다음 현대어는 반드시 오류로 처리:
+- 펜 → 붓
+- 노트 → 서책
+- 회사 → 상단
+- 학교 → 서당
+- 선생님 → 훈장
+- 경찰 → 포졸
+- 병원 → 의원
+- 의사 → 의원
 
-1. 시대배경 부적합 단어 검출: 조선시대/사극 배경인 경우 현대 외래어(펜, 노트, 컴퓨터, 폰 등)를 반드시 찾아서 수정
-2. 모든 수정사항은 revisedScript에 100% 반영
-3. revisedScript는 전체 대본 포함 (생략 금지)
-4. 각 줄은 공백 포함 최대 17자
+[규칙 2] 필수 검사 항목 (모든 대본)
+- 맞춤법 오류
+- 띄어쓰기 오류
+- 문장부호 오류 (마침표, 쉼표 누락)
+- 어색한 표현
+- 중복 표현
 
-## 검수 항목
-- 시대배경 부적합 표현 (펜→붓, 노트→서책)
-- 맞춤법, 띄어쓰기, 문법 오류
-- 어색한 표현, 중복 표현
-- 문장 부호 오류
-- 시니어 부적합 표현
+[규칙 3] 수정 반영 필수
+analysis의 모든 original → suggestion 변경사항은 revisedScript에 100% 반영해야 합니다.
+절대로 누락하지 마세요.
 
-## 분석 대상 대본
+[규칙 4] 줄맞춤
+revisedScript의 각 줄은 공백 포함 17자 이내로 작성하세요.
+
+[규칙 5] 전체 대본 포함
+revisedScript에는 전체 대본을 포함하세요. 생략 금지.
+
+[대본]
 ${scriptText}
 
-## 출력 형식
-반드시 아래 JSON 형식으로 출력하세요. 반드시 중괄호 { 로 시작해야 합니다.
-
-{
-  "analysis": [
-    {
-      "line": 1,
-      "errorType": "오류유형",
-      "original": "원본",
-      "suggestion": "수정",
-      "reason": "이유"
-    }
-  ],
-  "revisedScript": "전체 수정된 대본 (줄바꿈은 실제 줄바꿈으로)",
-  "scores": {
-    "entertainment": 85,
-    "seniorTarget": 90,
-    "storyFlow": 80,
-    "bounceRate": 15
-  }
-}`;
+[출력 형식]
+반드시 아래 형식의 유효한 JSON으로만 응답하세요:
+{"analysis":[{"line":1,"errorType":"오류유형","original":"원본","suggestion":"수정","reason":"이유"}],"revisedScript":"수정된 전체 대본","scores":{"entertainment":85,"seniorTarget":90,"storyFlow":80,"bounceRate":15}}`;
 }
 
 // ===================== Gemini API 호출 =====================
@@ -382,7 +382,9 @@ async function callGeminiAPI(prompt, signal) {
                 parts: [{ text: prompt }]
             }],
             generationConfig: {
-                temperature: 0.1,
+                temperature: 0,
+                topP: 1,
+                topK: 1,
                 maxOutputTokens: 65536
             }
         }),
@@ -408,61 +410,49 @@ async function callGeminiAPI(prompt, signal) {
     return text;
 }
 
-// ===================== 결과 파싱 (초강화 버전) =====================
+// ===================== 결과 파싱 =====================
 function parseAnalysisResult(responseText) {
     console.log('📝 파싱 시작, 원본 길이:', responseText.length);
 
     let jsonStr = responseText.trim();
 
-    // 1. ```json ... ``` 또는 ``` ... ``` 블록 제거
-    jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
+    // 1. 코드 블록 제거
+    jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
 
-    // 2. 앞뒤 공백 및 줄바꿈 정리
-    jsonStr = jsonStr.trim();
-
-    // 3. { 로 시작하지 않으면 { 추가
+    // 2. { 로 시작하도록 보정
     if (!jsonStr.startsWith('{')) {
-        // "analysis" 로 시작하는 경우
-        if (jsonStr.startsWith('"analysis"') || jsonStr.startsWith("'analysis")){
+        const firstBrace = jsonStr.indexOf('{');
+        if (firstBrace !== -1) {
+            jsonStr = jsonStr.substring(firstBrace);
+        } else if (jsonStr.startsWith('"analysis"')) {
             jsonStr = '{' + jsonStr;
         }
-        // analysis 로 시작하는 경우 (따옴표 없이)
-        else if (jsonStr.startsWith('analysis')) {
-            jsonStr = '{"' + jsonStr.substring(8); // 'analysis' 제거 후 재구성
-            jsonStr = '{"analysis"' + jsonStr;
-        }
     }
 
-    // 4. } 로 끝나지 않으면 } 추가
-    if (!jsonStr.endsWith('}')) {
-        jsonStr = jsonStr + '}';
+    // 3. } 로 끝나도록 보정
+    const lastBrace = jsonStr.lastIndexOf('}');
+    if (lastBrace !== -1) {
+        jsonStr = jsonStr.substring(0, lastBrace + 1);
     }
 
-    // 5. 중괄호 균형 맞추기
-    const openBraces = (jsonStr.match(/{/g) || []).length;
-    const closeBraces = (jsonStr.match(/}/g) || []).length;
-    if (openBraces > closeBraces) {
-        jsonStr = jsonStr + '}'.repeat(openBraces - closeBraces);
+    // 4. 괄호 균형 맞추기
+    let openBraces = (jsonStr.match(/{/g) || []).length;
+    let closeBraces = (jsonStr.match(/}/g) || []).length;
+    while (openBraces > closeBraces) {
+        jsonStr += '}';
+        closeBraces++;
     }
 
-    // 6. 대괄호 균형 맞추기
-    const openBrackets = (jsonStr.match(/\[/g) || []).length;
-    const closeBrackets = (jsonStr.match(/\]/g) || []).length;
-    if (openBrackets > closeBrackets) {
-        // 마지막 } 앞에 ] 추가
-        const lastBraceIndex = jsonStr.lastIndexOf('}');
-        jsonStr = jsonStr.substring(0, lastBraceIndex) + ']'.repeat(openBrackets - closeBrackets) + jsonStr.substring(lastBraceIndex);
+    let openBrackets = (jsonStr.match(/\[/g) || []).length;
+    let closeBrackets = (jsonStr.match(/\]/g) || []).length;
+    while (openBrackets > closeBrackets) {
+        const lastBraceIdx = jsonStr.lastIndexOf('}');
+        jsonStr = jsonStr.substring(0, lastBraceIdx) + ']' + jsonStr.substring(lastBraceIdx);
+        closeBrackets++;
     }
 
-    // 7. 잘못된 콤마 제거
+    // 5. 잘못된 콤마 제거
     jsonStr = jsonStr.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
-
-    // 8. 작은따옴표를 큰따옴표로 변환 (JSON 키/값)
-    // 주의: 문자열 내부의 작은따옴표는 유지
-    jsonStr = jsonStr.replace(/:\s*'([^']*)'/g, ': "$1"');
-    jsonStr = jsonStr.replace(/'(\w+)':/g, '"$1":');
-
-    console.log('📄 정리된 JSON 앞부분:', jsonStr.substring(0, 300));
 
     try {
         const parsed = JSON.parse(jsonStr);
@@ -475,68 +465,84 @@ function parseAnalysisResult(responseText) {
         };
     } catch (e) {
         console.error('❌ JSON 파싱 실패:', e.message);
-        
-        // 부분 추출 시도
-        let analysis = [];
-        let revisedScript = '';
-        let scores = {};
-
-        // analysis 배열 추출 시도
-        try {
-            const analysisMatch = jsonStr.match(/"analysis"\s*:\s*\[([\s\S]*?)\](?=\s*,?\s*"revisedScript")/);
-            if (analysisMatch) {
-                const analysisStr = '[' + analysisMatch[1] + ']';
-                analysis = JSON.parse(analysisStr.replace(/,\s*]/g, ']'));
-                console.log('✅ analysis 부분 파싱 성공, 항목 수:', analysis.length);
-            }
-        } catch (e2) {
-            console.log('⚠️ analysis 부분 파싱 실패');
-        }
-
-        // revisedScript 추출 시도
-        try {
-            const scriptMatch = jsonStr.match(/"revisedScript"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"scores"|"\s*})/);
-            if (scriptMatch) {
-                revisedScript = scriptMatch[1]
-                    .replace(/\\n/g, '\n')
-                    .replace(/\\"/g, '"')
-                    .replace(/\\\\/g, '\\');
-                console.log('✅ revisedScript 부분 파싱 성공, 길이:', revisedScript.length);
-            }
-        } catch (e3) {
-            console.log('⚠️ revisedScript 부분 파싱 실패');
-        }
-
-        // scores 추출 시도
-        try {
-            const scoresMatch = jsonStr.match(/"scores"\s*:\s*(\{[^}]+\})/);
-            if (scoresMatch) {
-                scores = JSON.parse(scoresMatch[1]);
-                console.log('✅ scores 부분 파싱 성공');
-            }
-        } catch (e4) {
-            console.log('⚠️ scores 부분 파싱 실패');
-        }
-
-        // 부분 파싱 결과가 있으면 사용
-        if (analysis.length > 0 || revisedScript.length > 0) {
-            console.log('⚠️ 부분 파싱으로 복구 완료');
-            return {
-                analysis: analysis,
-                revisedScript: revisedScript,
-                scores: scores,
-                parseError: null
-            };
-        }
-
-        // 완전 실패 시 원본 텍스트 반환
-        return {
-            analysis: [],
-            revisedScript: responseText,
-            scores: {},
-            parseError: e.message
-        };
+        return extractPartialData(jsonStr, responseText);
     }
+}
+
+// ===================== 부분 데이터 추출 =====================
+function extractPartialData(jsonStr, originalText) {
+    let analysis = [];
+    let revisedScript = '';
+    let scores = {};
+
+    // analysis 추출
+    try {
+        const analysisMatch = jsonStr.match(/"analysis"\s*:\s*\[([\s\S]*?)\](?=\s*,?\s*"revisedScript")/);
+        if (analysisMatch) {
+            analysis = JSON.parse('[' + analysisMatch[1] + ']');
+            console.log('✅ analysis 추출 성공:', analysis.length);
+        }
+    } catch (e) {}
+
+    // revisedScript 추출
+    try {
+        const scriptMatch = jsonStr.match(/"revisedScript"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"scores"|"\s*})/);
+        if (scriptMatch) {
+            revisedScript = scriptMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+            console.log('✅ revisedScript 추출 성공:', revisedScript.length);
+        }
+    } catch (e) {}
+
+    // scores 추출
+    try {
+        const scoresMatch = jsonStr.match(/"scores"\s*:\s*(\{[^}]+\})/);
+        if (scoresMatch) {
+            scores = JSON.parse(scoresMatch[1]);
+            console.log('✅ scores 추출 성공');
+        }
+    } catch (e) {}
+
+    if (analysis.length > 0 || revisedScript.length > 0) {
+        return { analysis, revisedScript, scores, parseError: null };
+    }
+
+    return { analysis: [], revisedScript: originalText, scores: {}, parseError: '파싱 실패' };
+}
+
+// ===================== 수정 반영 검증 및 강제 적용 =====================
+function verifyAndApplyCorrections(parsed) {
+    if (!parsed.analysis || parsed.analysis.length === 0) {
+        return parsed;
+    }
+
+    let revisedScript = parsed.revisedScript;
+    let appliedCount = 0;
+    let missingCount = 0;
+
+    // 각 수정사항이 revisedScript에 반영되었는지 확인
+    parsed.analysis.forEach((item, index) => {
+        if (item.original && item.suggestion) {
+            // suggestion이 revisedScript에 있는지 확인
+            if (revisedScript.includes(item.suggestion)) {
+                appliedCount++;
+            } else if (revisedScript.includes(item.original)) {
+                // original이 아직 있으면 강제로 수정 적용
+                revisedScript = revisedScript.replace(item.original, item.suggestion);
+                appliedCount++;
+                missingCount++;
+                console.log(`⚠️ 누락된 수정 강제 적용: "${item.original}" → "${item.suggestion}"`);
+            }
+        }
+    });
+
+    console.log(`✅ 수정 반영 검증: ${appliedCount}/${parsed.analysis.length}건 적용, ${missingCount}건 강제 적용`);
+
+    return {
+        analysis: parsed.analysis,
+        revisedScript: revisedScript,
+        scores: parsed.scores,
+        parseError: parsed.parseError
+    };
 }
 
 // ===================== 결과 렌더링 =====================
