@@ -1,10 +1,11 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.8 - Vertex AI + Gemini 3 Flash
+ * main.js v4.9 - Vertex AI + Gemini 3 Flash
  * 25가지 오류 유형 검수, 4-패널 레이아웃, 새 점수 체계
+ * + 3차 분석 (숏츠 제작) 추가
  */
 
-console.log('🚀 main.js v4.8 (Vertex AI + Gemini 3 Flash) 로드됨');
+console.log('🚀 main.js v4.9 (Vertex AI + Gemini 3 Flash + 숏츠 제작) 로드됨');
 
 // ===================== 전역 상태 =====================
 const state = {
@@ -20,6 +21,13 @@ const state = {
         analysis: null,
         revisedScript: '',
         scores: null,
+        revisionCount: 0
+    },
+    stage3: {
+        originalScript: '',
+        analysis: null,
+        shortsScript: '',
+        videoPrompts: [],
         revisionCount: 0
     }
 };
@@ -42,7 +50,9 @@ function initApp() {
     initClearButton();
     initAnalysisButtons();
     initDownloadButton();
-    console.log('✅ main.js v4.8 초기화 완료');
+    initStage3UI();
+    initStage3Button();
+    console.log('✅ main.js v4.9 초기화 완료');
 }
 
 // ===================== 다크모드 =====================
@@ -225,7 +235,7 @@ function initAnalysisButtons() {
     console.log('✅ 중지 버튼 연결됨');
 }
 
-// ===================== 분석 실행 =====================
+// ===================== 분석 실행 (1차, 2차) =====================
 async function startAnalysis(stage) {
     console.log(`🔍 ${stage} 분석 시작`);
 
@@ -274,7 +284,6 @@ async function startAnalysis(stage) {
         const parsed = parseAnalysisResult(response);
         console.log('✅ 파싱 완료');
 
-        // 수정 반영 검증 및 강제 적용
         const verified = verifyAndApplyCorrections(parsed);
 
         updateProgress(90, '결과 렌더링 중...');
@@ -293,6 +302,12 @@ async function startAnalysis(stage) {
             state.stage2.revisionCount = verified.analysis ? verified.analysis.length : 0;
             document.getElementById('btn-download').disabled = false;
             renderScores(verified.scores);
+            
+            // 2차 분석 완료 시 3차 분석 버튼 활성화
+            const btn3 = document.getElementById('btn-analyze-stage3');
+            if (btn3) {
+                btn3.disabled = false;
+            }
         }
 
         updateProgress(100, '분석 완료!');
@@ -324,7 +339,7 @@ function updateProgress(percent, text) {
     textEl.textContent = text;
 }
 
-// ===================== 프롬프트 생성 (일관성 강화) =====================
+// ===================== 프롬프트 생성 (1차, 2차용) =====================
 function generatePrompt(scriptText) {
     return `당신은 한국어 대본 검수 전문가입니다. 아래 규칙을 정확히 따라 분석하세요.
 
@@ -415,11 +430,8 @@ function parseAnalysisResult(responseText) {
     console.log('📝 파싱 시작, 원본 길이:', responseText.length);
 
     let jsonStr = responseText.trim();
-
-    // 1. 코드 블록 제거
     jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
 
-    // 2. { 로 시작하도록 보정
     if (!jsonStr.startsWith('{')) {
         const firstBrace = jsonStr.indexOf('{');
         if (firstBrace !== -1) {
@@ -429,13 +441,11 @@ function parseAnalysisResult(responseText) {
         }
     }
 
-    // 3. } 로 끝나도록 보정
     const lastBrace = jsonStr.lastIndexOf('}');
     if (lastBrace !== -1) {
         jsonStr = jsonStr.substring(0, lastBrace + 1);
     }
 
-    // 4. 괄호 균형 맞추기
     let openBraces = (jsonStr.match(/{/g) || []).length;
     let closeBraces = (jsonStr.match(/}/g) || []).length;
     while (openBraces > closeBraces) {
@@ -451,7 +461,6 @@ function parseAnalysisResult(responseText) {
         closeBrackets++;
     }
 
-    // 5. 잘못된 콤마 제거
     jsonStr = jsonStr.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
 
     try {
@@ -475,7 +484,6 @@ function extractPartialData(jsonStr, originalText) {
     let revisedScript = '';
     let scores = {};
 
-    // analysis 추출
     try {
         const analysisMatch = jsonStr.match(/"analysis"\s*:\s*\[([\s\S]*?)\](?=\s*,?\s*"revisedScript")/);
         if (analysisMatch) {
@@ -484,7 +492,6 @@ function extractPartialData(jsonStr, originalText) {
         }
     } catch (e) {}
 
-    // revisedScript 추출
     try {
         const scriptMatch = jsonStr.match(/"revisedScript"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"scores"|"\s*})/);
         if (scriptMatch) {
@@ -493,7 +500,6 @@ function extractPartialData(jsonStr, originalText) {
         }
     } catch (e) {}
 
-    // scores 추출
     try {
         const scoresMatch = jsonStr.match(/"scores"\s*:\s*(\{[^}]+\})/);
         if (scoresMatch) {
@@ -519,14 +525,11 @@ function verifyAndApplyCorrections(parsed) {
     let appliedCount = 0;
     let missingCount = 0;
 
-    // 각 수정사항이 revisedScript에 반영되었는지 확인
     parsed.analysis.forEach((item, index) => {
         if (item.original && item.suggestion) {
-            // suggestion이 revisedScript에 있는지 확인
             if (revisedScript.includes(item.suggestion)) {
                 appliedCount++;
             } else if (revisedScript.includes(item.original)) {
-                // original이 아직 있으면 강제로 수정 적용
                 revisedScript = revisedScript.replace(item.original, item.suggestion);
                 appliedCount++;
                 missingCount++;
@@ -753,6 +756,403 @@ function initDownloadButton() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     });
+}
+
+// ===================== 3차 분석 UI 초기화 =====================
+function initStage3UI() {
+    const scoreDisplay = document.getElementById('score-display');
+    if (!scoreDisplay) {
+        console.log('⚠️ score-display 요소를 찾을 수 없음');
+        return;
+    }
+
+    // 3차 분석 섹션이 이미 있는지 확인
+    if (document.getElementById('stage3-section')) {
+        console.log('✅ 3차 분석 UI 이미 존재');
+        return;
+    }
+
+    // 3차 분석 섹션 HTML 생성
+    const stage3HTML = `
+    <div id="stage3-section" class="stage3-section" style="margin-top: 30px; display: none;">
+        <div style="text-align: center; margin-bottom: 20px;">
+            <button id="btn-analyze-stage3" class="btn btn-primary" disabled style="background: linear-gradient(135deg, #ff6b6b, #ee5a24); padding: 12px 30px; font-size: 16px; font-weight: bold;">
+                🎬 3차 분석 (숏츠 제작) 시작
+            </button>
+        </div>
+        
+        <div id="stage3-progress" style="display: none; margin-bottom: 20px;">
+            <div class="progress-container">
+                <div id="stage3-progress-bar" class="progress-bar" style="width: 0%;"></div>
+            </div>
+            <p id="stage3-progress-text" style="text-align: center; margin-top: 10px;">준비 중...</p>
+        </div>
+
+        <div id="stage3-results" style="display: none;">
+            <!-- 숏츠 대본 영역 -->
+            <div class="panel" style="margin-bottom: 20px;">
+                <div class="panel-header">
+                    <span>🎬 숏츠 대본 (1분 미만)</span>
+                </div>
+                <div id="shorts-script-container" class="panel-content" style="min-height: 150px; max-height: 400px; overflow-y: auto; padding: 15px; background: #1a1a2e; border-radius: 8px;">
+                    <p class="placeholder">3차 분석을 시작하면 숏츠 대본이 표시됩니다.</p>
+                </div>
+            </div>
+
+            <!-- 영상화 프롬프트 영역 -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span>🎥 영상화 프롬프트 (컷 단위)</span>
+                </div>
+                <div id="video-prompts-container" class="panel-content" style="min-height: 200px; max-height: 600px; overflow-y: auto; padding: 15px; background: #1a1a2e; border-radius: 8px;">
+                    <p class="placeholder">3차 분석을 시작하면 영상화 프롬프트가 표시됩니다.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+
+    // score-display 바로 다음에 삽입
+    scoreDisplay.insertAdjacentHTML('afterend', stage3HTML);
+    console.log('✅ 3차 분석 UI 생성 완료');
+}
+
+// ===================== 3차 분석 버튼 초기화 =====================
+function initStage3Button() {
+    // DOM이 준비된 후 버튼 이벤트 연결
+    setTimeout(() => {
+        const btn3 = document.getElementById('btn-analyze-stage3');
+        if (btn3) {
+            btn3.addEventListener('click', () => startStage3Analysis());
+            console.log('✅ 3차 분석 버튼 연결됨');
+        }
+    }, 100);
+}
+
+// ===================== 3차 분석 실행 =====================
+async function startStage3Analysis() {
+    console.log('🎬 3차 분석 (숏츠 제작) 시작');
+
+    const apiKey = localStorage.getItem('GEMINI_API_KEY');
+    if (!apiKey) {
+        alert('API 키를 먼저 설정해주세요.');
+        return;
+    }
+
+    // 2차 분석 결과 확인
+    const finalScript = state.stage2.revisedScript;
+    if (!finalScript) {
+        alert('2차 분석을 먼저 완료해주세요.');
+        return;
+    }
+
+    state.stage3.originalScript = finalScript;
+
+    // UI 표시
+    const stage3Section = document.getElementById('stage3-section');
+    const stage3Progress = document.getElementById('stage3-progress');
+    const stage3Results = document.getElementById('stage3-results');
+    
+    stage3Section.style.display = 'block';
+    stage3Progress.style.display = 'block';
+    stage3Results.style.display = 'none';
+
+    updateStage3Progress(10, '숏츠 제작 준비 중...');
+
+    currentAbortController = new AbortController();
+    const signal = currentAbortController.signal;
+
+    try {
+        updateStage3Progress(20, '숏츠 대본 프롬프트 생성 중...');
+        const prompt = generateStage3Prompt(finalScript);
+        console.log('📤 3차 프롬프트 생성 완료, 길이:', prompt.length);
+
+        updateStage3Progress(40, 'AI 숏츠 제작 중... (최대 2분 소요)');
+        const response = await callGeminiAPI(prompt, signal);
+        console.log('📥 3차 API 응답 수신');
+
+        updateStage3Progress(70, '결과 파싱 중...');
+        const parsed = parseStage3Result(response);
+        console.log('✅ 3차 파싱 완료');
+
+        updateStage3Progress(90, '결과 렌더링 중...');
+        renderStage3Results(parsed);
+
+        state.stage3.analysis = parsed.analysis;
+        state.stage3.shortsScript = parsed.shorts_script;
+        state.stage3.videoPrompts = parsed.video_prompts;
+
+        updateStage3Progress(100, '숏츠 제작 완료!');
+        console.log('✅ 3차 분석 완료');
+
+        setTimeout(() => {
+            stage3Progress.style.display = 'none';
+            stage3Results.style.display = 'block';
+        }, 1000);
+
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            console.log('⏹ 3차 분석이 중지됨');
+            updateStage3Progress(0, '분석이 중지되었습니다.');
+        } else {
+            console.error('❌ 3차 분석 오류:', error);
+            alert('3차 분석 중 오류가 발생했습니다: ' + error.message);
+            updateStage3Progress(0, '오류 발생');
+        }
+    } finally {
+        currentAbortController = null;
+    }
+}
+
+// ===================== 3차 분석 진행률 업데이트 =====================
+function updateStage3Progress(percent, text) {
+    const bar = document.getElementById('stage3-progress-bar');
+    const textEl = document.getElementById('stage3-progress-text');
+    if (bar) bar.style.width = percent + '%';
+    if (textEl) textEl.textContent = text;
+}
+
+// ===================== 3차 분석 프롬프트 생성 =====================
+function generateStage3Prompt(scriptText) {
+    return `당신은 두 가지 역할을 수행합니다:
+
+[역할 1] 20년차 영화·드라마 홍보 마케터
+- 목표: 웹/유튜브 트렌드 기반 숏츠용 대본 제작
+- 조건:
+  - 영상 길이 1분 미만 (약 150~200자)
+  - 도입 3초 이내 강한 후킹 필수
+  - 불필요한 설명 제거, 감정/사건 중심 압축
+  - 어그로 극대화, 클릭 유도 문구 포함
+
+[역할 2] 20년차 영화·드라마 영상 기획 및 전문 제작자
+- 사용 툴: grok 기반 이미지→영상 생성
+- 출력: 9:16 세로 영상 (숏츠/릴스/틱톡)
+- 각 컷마다 3가지 프롬프트 버전 제공 (영문/한글 쌍)
+
+[원본 대본]
+${scriptText}
+
+[출력 형식]
+반드시 아래 JSON 형식으로만 응답하세요:
+{
+  "analysis": "숏츠 후킹 포인트 요약 및 컷 구성 기준 설명",
+  "shorts_script": "1분 미만 숏츠 대본 전체 (줄바꿈으로 구분)",
+  "video_prompts": [
+    {
+      "cut": 1,
+      "description": "이 컷의 장면 설명",
+      "mood": "분위기 (예: dramatic, suspenseful, romantic)",
+      "voice": "말소리/음성 톤 설명",
+      "bgm": "배경음악 추천",
+      "sfx": "효과음 추천",
+      "prompts": {
+        "v1_en": "Grok prompt version 1 in English, 9:16 vertical, cinematic, short-form video style",
+        "v1_ko": "Grok 프롬프트 버전 1 한글, 9:16 세로, 시네마틱, 숏폼 영상 스타일",
+        "v2_en": "Grok prompt version 2 in English, different angle or mood",
+        "v2_ko": "Grok 프롬프트 버전 2 한글, 다른 각도나 분위기",
+        "v3_en": "Grok prompt version 3 in English, creative variation",
+        "v3_ko": "Grok 프롬프트 버전 3 한글, 창의적 변형"
+      }
+    }
+  ]
+}
+
+[중요]
+- 컷 수는 숏츠 대본 분량에 따라 3~6개로 자동 산정
+- 각 프롬프트는 grok 영상 생성에 최적화
+- 9:16, cinematic, short-form 키워드 필수 포함
+- mood는 대본 감정 분석 기반으로 설정`;
+}
+
+// ===================== 3차 분석 결과 파싱 =====================
+function parseStage3Result(responseText) {
+    console.log('📝 3차 파싱 시작, 원본 길이:', responseText.length);
+
+    let jsonStr = responseText.trim();
+    jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+
+    if (!jsonStr.startsWith('{')) {
+        const firstBrace = jsonStr.indexOf('{');
+        if (firstBrace !== -1) {
+            jsonStr = jsonStr.substring(firstBrace);
+        }
+    }
+
+    const lastBrace = jsonStr.lastIndexOf('}');
+    if (lastBrace !== -1) {
+        jsonStr = jsonStr.substring(0, lastBrace + 1);
+    }
+
+    // 괄호 균형 맞추기
+    let openBraces = (jsonStr.match(/{/g) || []).length;
+    let closeBraces = (jsonStr.match(/}/g) || []).length;
+    while (openBraces > closeBraces) {
+        jsonStr += '}';
+        closeBraces++;
+    }
+
+    let openBrackets = (jsonStr.match(/\[/g) || []).length;
+    let closeBrackets = (jsonStr.match(/\]/g) || []).length;
+    while (openBrackets > closeBrackets) {
+        const lastBraceIdx = jsonStr.lastIndexOf('}');
+        jsonStr = jsonStr.substring(0, lastBraceIdx) + ']' + jsonStr.substring(lastBraceIdx);
+        closeBrackets++;
+    }
+
+    jsonStr = jsonStr.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+
+    try {
+        const parsed = JSON.parse(jsonStr);
+        console.log('✅ 3차 JSON 파싱 성공');
+        return {
+            analysis: parsed.analysis || '',
+            shorts_script: parsed.shorts_script || '',
+            video_prompts: parsed.video_prompts || [],
+            parseError: null
+        };
+    } catch (e) {
+        console.error('❌ 3차 JSON 파싱 실패:', e.message);
+        
+        // 부분 추출 시도
+        let analysis = '';
+        let shorts_script = '';
+        let video_prompts = [];
+
+        try {
+            const analysisMatch = jsonStr.match(/"analysis"\s*:\s*"([^"]+)"/);
+            if (analysisMatch) analysis = analysisMatch[1];
+        } catch (e) {}
+
+        try {
+            const scriptMatch = jsonStr.match(/"shorts_script"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"video_prompts"|"\s*})/);
+            if (scriptMatch) shorts_script = scriptMatch[1].replace(/\\n/g, '\n');
+        } catch (e) {}
+
+        return {
+            analysis: analysis,
+            shorts_script: shorts_script,
+            video_prompts: video_prompts,
+            parseError: e.message
+        };
+    }
+}
+
+// ===================== 3차 분석 결과 렌더링 =====================
+function renderStage3Results(parsed) {
+    // 숏츠 대본 렌더링
+    const shortsContainer = document.getElementById('shorts-script-container');
+    if (shortsContainer) {
+        if (parsed.shorts_script) {
+            const lines = parsed.shorts_script.split('\n');
+            let html = '<div class="shorts-script">';
+            lines.forEach((line, index) => {
+                if (line.trim()) {
+                    html += `<p style="margin: 8px 0; padding: 8px; background: #252542; border-radius: 4px; border-left: 3px solid #ff6b6b;">${escapeHtml(line)}</p>`;
+                }
+            });
+            html += '</div>';
+            
+            if (parsed.analysis) {
+                html += `<div style="margin-top: 15px; padding: 10px; background: #1e1e3f; border-radius: 6px; border: 1px solid #444;">
+                    <strong style="color: #ffd700;">📊 분석:</strong>
+                    <p style="margin-top: 8px; color: #ccc;">${escapeHtml(parsed.analysis)}</p>
+                </div>`;
+            }
+            
+            shortsContainer.innerHTML = html;
+        } else {
+            shortsContainer.innerHTML = '<p class="error">숏츠 대본 생성에 실패했습니다.</p>';
+        }
+    }
+
+    // 영상화 프롬프트 렌더링
+    const promptsContainer = document.getElementById('video-prompts-container');
+    if (promptsContainer) {
+        if (parsed.video_prompts && parsed.video_prompts.length > 0) {
+            let html = '';
+            
+            parsed.video_prompts.forEach((cut, index) => {
+                html += `
+                <div class="cut-section" style="margin-bottom: 25px; padding: 15px; background: #252542; border-radius: 8px; border: 1px solid #444;">
+                    <h4 style="color: #ff6b6b; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #444;">
+                        🎬 컷 ${cut.cut || index + 1} ${cut.description ? '- ' + cut.description : ''}
+                    </h4>
+                    
+                    <div style="display: grid; gap: 10px; margin-bottom: 15px;">
+                        <div style="padding: 8px; background: #1a1a2e; border-radius: 4px;">
+                            <strong style="color: #ffd700;">🎭 분위기:</strong> <span style="color: #fff;">${escapeHtml(cut.mood || '-')}</span>
+                        </div>
+                        <div style="padding: 8px; background: #1a1a2e; border-radius: 4px;">
+                            <strong style="color: #ffd700;">🎤 말소리/음성 톤:</strong> <span style="color: #fff;">${escapeHtml(cut.voice || '-')}</span>
+                        </div>
+                        <div style="padding: 8px; background: #1a1a2e; border-radius: 4px;">
+                            <strong style="color: #ffd700;">🎵 배경음악(BGM):</strong> <span style="color: #fff;">${escapeHtml(cut.bgm || '-')}</span>
+                        </div>
+                        <div style="padding: 8px; background: #1a1a2e; border-radius: 4px;">
+                            <strong style="color: #ffd700;">🔊 효과음(SFX):</strong> <span style="color: #fff;">${escapeHtml(cut.sfx || '-')}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="prompts-grid" style="display: grid; gap: 15px;">
+                        ${renderPromptVersions(cut.prompts)}
+                    </div>
+                </div>
+                `;
+            });
+            
+            promptsContainer.innerHTML = html;
+        } else {
+            promptsContainer.innerHTML = '<p class="error">영상화 프롬프트 생성에 실패했습니다.</p>';
+        }
+    }
+}
+
+// ===================== 프롬프트 버전 렌더링 =====================
+function renderPromptVersions(prompts) {
+    if (!prompts) return '<p>프롬프트 없음</p>';
+    
+    let html = '';
+    
+    // 1안
+    html += `
+    <div style="padding: 12px; background: #1e1e3f; border-radius: 6px; border-left: 4px solid #4ecdc4;">
+        <strong style="color: #4ecdc4;">📝 1안</strong>
+        <div style="margin-top: 8px;">
+            <p style="margin: 5px 0; color: #aaa; font-size: 12px;">English:</p>
+            <p style="margin: 5px 0; padding: 8px; background: #252542; border-radius: 4px; color: #fff; font-size: 13px;">${escapeHtml(prompts.v1_en || '-')}</p>
+            <p style="margin: 5px 0; color: #aaa; font-size: 12px;">한글:</p>
+            <p style="margin: 5px 0; padding: 8px; background: #252542; border-radius: 4px; color: #fff; font-size: 13px;">${escapeHtml(prompts.v1_ko || '-')}</p>
+        </div>
+    </div>
+    `;
+    
+    // 2안
+    html += `
+    <div style="padding: 12px; background: #1e1e3f; border-radius: 6px; border-left: 4px solid #ff6b6b;">
+        <strong style="color: #ff6b6b;">📝 2안</strong>
+        <div style="margin-top: 8px;">
+            <p style="margin: 5px 0; color: #aaa; font-size: 12px;">English:</p>
+            <p style="margin: 5px 0; padding: 8px; background: #252542; border-radius: 4px; color: #fff; font-size: 13px;">${escapeHtml(prompts.v2_en || '-')}</p>
+            <p style="margin: 5px 0; color: #aaa; font-size: 12px;">한글:</p>
+            <p style="margin: 5px 0; padding: 8px; background: #252542; border-radius: 4px; color: #fff; font-size: 13px;">${escapeHtml(prompts.v2_ko || '-')}</p>
+        </div>
+    </div>
+    `;
+    
+    // 3안
+    html += `
+    <div style="padding: 12px; background: #1e1e3f; border-radius: 6px; border-left: 4px solid #ffd700;">
+        <strong style="color: #ffd700;">📝 3안</strong>
+        <div style="margin-top: 8px;">
+            <p style="margin: 5px 0; color: #aaa; font-size: 12px;">English:</p>
+            <p style="margin: 5px 0; padding: 8px; background: #252542; border-radius: 4px; color: #fff; font-size: 13px;">${escapeHtml(prompts.v3_en || '-')}</p>
+            <p style="margin: 5px 0; color: #aaa; font-size: 12px;">한글:</p>
+            <p style="margin: 5px 0; padding: 8px; background: #252542; border-radius: 4px; color: #fff; font-size: 13px;">${escapeHtml(prompts.v3_ko || '-')}</p>
+        </div>
+    </div>
+    `;
+    
+    return html;
 }
 
 // ===================== 유틸리티 =====================
