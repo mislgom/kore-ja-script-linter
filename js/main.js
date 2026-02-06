@@ -380,11 +380,11 @@ ${scriptText}
 {"analysis":[{"line":1,"errorType":"오류유형","original":"원본","suggestion":"수정","reason":"이유"}],"revisedScript":"수정된 전체 대본","scores":{"entertainment":85,"seniorTarget":90,"storyFlow":80,"bounceRate":15}}`;
 }
 
-// ===================== Gemini API 호출 =====================
+// ===================== Gemini API 호출 (Vertex AI 엔드포인트 유지) =====================
 async function callGeminiAPI(prompt, signal) {
     const apiKey = localStorage.getItem('GEMINI_API_KEY');
     
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    const endpoint = `https://aiplatform.googleapis.com/v1/projects/gen-lang-client-0624453722/locations/global/publishers/google/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
     const response = await fetch(endpoint, {
         method: 'POST',
@@ -780,7 +780,7 @@ function initStage3UI() {
         return;
     }
 
-    // 3차 분석 섹션 HTML 생성 (처음부터 display: block으로 표시)
+    // 3차 분석 섹션 HTML 생성 (처음부터 표시)
     const stage3HTML = `
     <div id="stage3-section" class="stage3-section" style="margin-top: 30px;">
         <h2 style="text-align: center; margin-bottom: 20px; color: #ff6b6b;">🎬 3차 분석 (숏츠 제작)</h2>
@@ -832,7 +832,6 @@ function initStage3UI() {
 
 // ===================== 3차 분석 버튼 초기화 =====================
 function initStage3Button() {
-    // DOM이 준비된 후 버튼 이벤트 연결
     setTimeout(() => {
         const btn3 = document.getElementById('btn-analyze-stage3');
         if (btn3) {
@@ -852,7 +851,6 @@ async function startStage3Analysis() {
         return;
     }
 
-    // 2차 분석 결과 확인
     const finalScript = state.stage2.revisedScript;
     if (!finalScript) {
         alert('2차 분석을 먼저 완료해주세요.');
@@ -861,9 +859,7 @@ async function startStage3Analysis() {
 
     state.stage3.originalScript = finalScript;
 
-    // UI 표시
     const stage3Progress = document.getElementById('stage3-progress');
-    
     stage3Progress.style.display = 'block';
 
     updateStage3Progress(10, '숏츠 제작 준비 중...');
@@ -991,7 +987,6 @@ function parseStage3Result(responseText) {
         jsonStr = jsonStr.substring(0, lastBrace + 1);
     }
 
-    // 괄호 균형 맞추기
     let openBraces = (jsonStr.match(/{/g) || []).length;
     let closeBraces = (jsonStr.match(/}/g) || []).length;
     while (openBraces > closeBraces) {
@@ -1021,7 +1016,6 @@ function parseStage3Result(responseText) {
     } catch (e) {
         console.error('❌ 3차 JSON 파싱 실패:', e.message);
         
-        // 부분 추출 시도
         let analysis = '';
         let shorts_script = '';
         let video_prompts = [];
@@ -1047,7 +1041,6 @@ function parseStage3Result(responseText) {
 
 // ===================== 3차 분석 결과 렌더링 =====================
 function renderStage3Results(parsed) {
-    // 숏츠 대본 렌더링
     const shortsContainer = document.getElementById('shorts-script-container');
     if (shortsContainer) {
         if (parsed.shorts_script) {
@@ -1073,7 +1066,6 @@ function renderStage3Results(parsed) {
         }
     }
 
-    // 영상화 프롬프트 렌더링
     const promptsContainer = document.getElementById('video-prompts-container');
     if (promptsContainer) {
         if (parsed.video_prompts && parsed.video_prompts.length > 0) {
