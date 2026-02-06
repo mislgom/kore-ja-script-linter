@@ -321,71 +321,36 @@ function updateProgress(percent, text) {
     textEl.textContent = text;
 }
 
-// ===================== 프롬프트 생성 (초강력 버전 + 시대배경 분석) =====================
+// ===================== 프롬프트 생성 (초강력 버전 + 시대배경 분석 + JSON 형식 강화) =====================
 function generatePrompt(scriptText) {
     return `당신은 세계 최고 수준의 한국어 대본 검수 전문가이자 역사 고증 전문가입니다.
-현미경으로 세포를 관찰하듯이 대본의 모든 글자, 띄어쓰기, 단어 하나하나를 극도로 꼼꼼하게 분석해야 합니다.
 
-## 🚨🚨🚨 절대 필수 규칙 (위반 시 완전 실패) 🚨🚨🚨
+## 절대 필수 규칙
 
-### 규칙 1: 시대배경 부적합 단어/표현 검출 (최우선)
-대본의 시대배경을 먼저 파악하고, 그 시대에 맞지 않는 모든 단어와 표현을 반드시 찾아내세요!
+### 규칙 1: 시대배경 부적합 단어 검출 (최우선)
+대본의 시대배경을 먼저 파악하세요. 조선시대/사극 배경인 경우 다음 단어들은 반드시 오류로 잡아야 합니다:
 
-#### 조선시대/사극 배경인 경우 절대 사용 금지 단어 (발견 즉시 오류 처리):
-- 현대 외래어: 펜, 볼펜, 노트, 컴퓨터, 핸드폰, 폰, 스마트폰, 인터넷, TV, 텔레비전, 라디오, 카메라, 사진, 영화, 버스, 택시, 자동차, 차, 기차, 비행기, 엘리베이터, 에스컬레이터, 에어컨, 냉장고, 세탁기, 전자레인지, 마이크, 스피커
-- 현대 용어: 회사, 직장, 출근, 퇴근, 월급, 연봉, 보너스, 휴가, 주말, 평일, 데이트, 셀카, SNS, 카톡, 문자, 이메일, 블로그, 유튜브, 게임, 쇼핑, 마트, 편의점, 카페, 커피, 콜라, 햄버거, 피자, 치킨, 라면
-- 현대 문체: "~해요", "~죠", "~거든요", "~잖아요", "오케이", "굿", "쿨", "섹시", "멋있다", "예쁘다" (현대적 뉘앙스)
+현대 외래어 (발견 즉시 오류): 펜, 볼펜, 노트, 컴퓨터, 핸드폰, 폰, 인터넷, TV, 카메라, 버스, 택시, 자동차, 기차, 비행기, 에어컨, 냉장고, 마이크
 
-#### 시대별 적합한 대체어 예시:
-- 펜 → 붓, 필(筆)
-- 노트 → 책자, 서책, 수첩
-- 회사 → 상단, 포목점, 객주
-- 예쁘다 → 아리땁다, 곱다, 수려하다
-- 멋있다 → 늠름하다, 위풍당당하다
+현대 용어 (발견 즉시 오류): 회사, 직장, 출근, 퇴근, 월급, 데이트, SNS, 카톡, 문자, 이메일, 카페, 커피, 햄버거, 피자, 치킨, 라면
 
-### 규칙 2: 100% 완벽한 오류 검출
-- 대본의 모든 문장을 한 글자씩 3번 반복해서 읽으면서 오류를 찾으세요
-- 사소한 띄어쓰기, 맞춤법 오류도 절대 놓치지 마세요
-- "이 정도는 괜찮다"는 생각 절대 금지!
-- 시대배경 부적합 단어는 단 하나도 놓치면 안 됩니다!
+시대별 대체어:
+- 펜 → 붓
+- 노트 → 서책, 책자
+- 회사 → 상단, 포목점
 
-### 규칙 3: 100% 완벽한 수정 반영 (가장 중요!!!)
-⚠️⚠️⚠️ 이 규칙을 어기면 완전히 실패한 것입니다 ⚠️⚠️⚠️
+### 규칙 2: 100% 수정 반영
+analysis의 모든 suggestion은 revisedScript에 반드시 100% 반영되어야 합니다.
+단 하나라도 빠지면 실패입니다.
 
-- analysis에서 찾은 모든 오류는 예외 없이 100% revisedScript에 수정 반영되어야 합니다
-- suggestion에 적은 수정 내용이 revisedScript에 글자 하나 틀리지 않고 정확히 동일하게 들어가야 합니다
-- 수정사항이 10개면 revisedScript에 10개 모두 반영!
-- 수정사항이 50개면 revisedScript에 50개 모두 반영!
-- 단 하나라도 빠지면 실패입니다!
+### 규칙 3: 전체 대본 포함
+revisedScript에는 전체 대본을 포함해야 합니다. 생략 금지.
 
-### 규칙 4: 전체 대본 필수 포함
-- revisedScript에는 반드시 전체 대본을 처음부터 끝까지 포함해야 합니다
-- 절대로 "(중략)", "(생략)", "...", "(이하 생략)", "(앞부분 생략)" 등으로 생략하지 마세요
-- 원본 대본의 첫 문장부터 마지막 문장까지 모두 있어야 합니다
+### 규칙 4: 줄맞춤
+각 줄은 공백 포함 최대 17자. 초과 시 줄바꿈.
 
-## ★★★ BRU 자막 줄맞춤 규칙 (필수) ★★★
-
-### 핵심 원칙
-- 각 줄은 공백 포함 최대 17자 (16~17자 권장)
-- 17자를 초과하면 반드시 줄바꿈(\\n)으로 분할
-
-### 분할 우선순위
-1. 문장부호 뒤: 。！？…
-2. 쉼표/중간 부호 뒤: 、，,;:
-3. 조사/어미 경계: "은/는/이/가/을/를/에/에서/로/와/과/도/만" 등
-4. 공백(단어 경계)
-5. 최후 수단: 17자에서 강제 절단
-
-### 줄맞춤 금지 규칙
-- 줄 시작 금지: ) ] } 」』"' 。！？、，,.!?:;…
-- 줄 종료 금지: ( [ { 「『"'
-
-## 🔍 검수 항목 (26가지 - 시대배경 포함)
-
-### A. 시대배경 검증 (최우선!)
-0. **시대배경 부적합 표현** - 시대에 맞지 않는 현대어, 외래어, 신조어 (펜, 노트, 회사, 폰 등)
-
-### B. 기본 문법 (1-10)
+## 검수 항목 (26가지)
+0. 시대배경 부적합 표현
 1. 맞춤법 오류
 2. 띄어쓰기 오류
 3. 문법 오류
@@ -396,76 +361,36 @@ function generatePrompt(scriptText) {
 8. 시제 불일치
 9. 높임법 오류
 10. 조사 오류
-
-### C. 표기법 (11-15)
 11. 외래어 표기 오류
 12. 숫자 표기 오류
 13. 문장 부호 오류
 14. 접속어 오류
 15. 지시어 오류
-
-### D. 문체/가독성 (16-25)
 16. 의미 중복
 17. 불필요한 수식어
 18. 문장 길이 과다
-19. 전문용어 과다 사용
+19. 전문용어 과다
 20. 어려운 한자어
 21. 시니어 부적합 표현
-22. 가독성 저해 표현
+22. 가독성 저해
 23. 논리적 비약
 24. 맥락 불일치
 25. 어투 불일치
 
-## 📝 분석 대상 대본
+## 분석 대상 대본
 ${scriptText}
 
-## 📤 출력 형식 (반드시 이 JSON 형식으로만 출력)
+## 출력 형식
+반드시 아래 JSON 형식으로만 출력하세요. 다른 텍스트 없이 JSON만 출력하세요.
+revisedScript 내의 줄바꿈은 \\n으로 표현하세요.
 
-\`\`\`json
-{
-  "analysis": [
-    {
-      "line": 1,
-      "errorType": "시대배경 부적합 표현",
-      "original": "펜을 들고",
-      "suggestion": "붓을 들고",
-      "reason": "조선시대에 '펜'은 존재하지 않음. '붓'으로 수정"
-    }
-  ],
-  "revisedScript": "전체 수정된 대본 (모든 수정사항 100% 반영, 생략 절대 금지)",
-  "scores": {
-    "entertainment": 85,
-    "seniorTarget": 90,
-    "storyFlow": 80,
-    "bounceRate": 15
-  }
-}
-\`\`\`
-
-## 점수 기준
-- entertainment: 재미요소 (0-100)
-- seniorTarget: 시니어 타겟 적합성 (0-100)
-- storyFlow: 이야기 흐름 (0-100)
-- bounceRate: 시청자 이탈율 (0-100, 낮을수록 좋음)
-
-## ⚠️⚠️⚠️ 최종 확인 체크리스트 (출력 전 3번 확인!!!) ⚠️⚠️⚠️
-
-□ 시대배경에 맞지 않는 단어를 모두 찾았는가? (펜, 노트, 회사 등)
-□ analysis의 모든 suggestion이 revisedScript에 100% 정확히 반영되었는가?
-□ revisedScript에 전체 대본이 처음부터 끝까지 생략 없이 포함되었는가?
-□ 모든 줄이 17자 이내인가?
-□ 수정사항 중 단 하나라도 revisedScript에서 빠진 것이 없는가?
-
-⚠️ 위 체크리스트를 통과하지 못하면 다시 처음부터 검토하세요!
-
-반드시 위 JSON 형식으로만 응답하세요.`;
+{"analysis":[{"line":1,"errorType":"오류유형","original":"원본텍스트","suggestion":"수정텍스트","reason":"수정이유"}],"revisedScript":"전체수정대본","scores":{"entertainment":85,"seniorTarget":90,"storyFlow":80,"bounceRate":15}}`;
 }
 
 // ===================== Gemini API 호출 (Vertex AI + Gemini 3 Flash) =====================
 async function callGeminiAPI(prompt, signal) {
     const apiKey = localStorage.getItem('GEMINI_API_KEY');
     
-    // Vertex AI Studio API 키 + Gemini 3 Flash 엔드포인트
     const endpoint = `https://aiplatform.googleapis.com/v1/projects/gen-lang-client-0624453722/locations/global/publishers/google/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
     const response = await fetch(endpoint, {
@@ -480,7 +405,8 @@ async function callGeminiAPI(prompt, signal) {
             }],
             generationConfig: {
                 temperature: 0.05,
-                maxOutputTokens: 65536
+                maxOutputTokens: 65536,
+                responseMimeType: "application/json"
             }
         }),
         signal: signal
@@ -505,22 +431,43 @@ async function callGeminiAPI(prompt, signal) {
     return text;
 }
 
-// ===================== 결과 파싱 =====================
+// ===================== 결과 파싱 (강화된 버전) =====================
 function parseAnalysisResult(responseText) {
     console.log('📝 파싱 시작, 원본 길이:', responseText.length);
 
-    let jsonStr = responseText;
+    let jsonStr = responseText.trim();
 
-    const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
-    if (jsonMatch) {
-        jsonStr = jsonMatch[1];
-    } else {
-        const braceStart = responseText.indexOf('{');
-        const braceEnd = responseText.lastIndexOf('}');
-        if (braceStart !== -1 && braceEnd !== -1) {
-            jsonStr = responseText.substring(braceStart, braceEnd + 1);
+    // 1. ```json ... ``` 블록 추출
+    const jsonBlockMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonBlockMatch) {
+        jsonStr = jsonBlockMatch[1].trim();
+    }
+
+    // 2. ``` ... ``` 블록 추출 (json 키워드 없는 경우)
+    if (jsonStr.startsWith('```')) {
+        const plainBlockMatch = jsonStr.match(/```\s*([\s\S]*?)\s*```/);
+        if (plainBlockMatch) {
+            jsonStr = plainBlockMatch[1].trim();
         }
     }
+
+    // 3. { } 추출
+    const firstBrace = jsonStr.indexOf('{');
+    const lastBrace = jsonStr.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        jsonStr = jsonStr.substring(firstBrace, lastBrace + 1);
+    }
+
+    // 4. JSON 문자열 정리
+    jsonStr = jsonStr
+        .replace(/,\s*}/g, '}')  // 마지막 콤마 제거
+        .replace(/,\s*]/g, ']')  // 배열 마지막 콤마 제거
+        .replace(/[\x00-\x1F\x7F]/g, (char) => {
+            if (char === '\n') return '\\n';
+            if (char === '\r') return '\\r';
+            if (char === '\t') return '\\t';
+            return '';
+        });
 
     try {
         const parsed = JSON.parse(jsonStr);
@@ -533,6 +480,49 @@ function parseAnalysisResult(responseText) {
         };
     } catch (e) {
         console.error('❌ JSON 파싱 실패:', e);
+        console.log('📄 파싱 시도한 문자열:', jsonStr.substring(0, 500));
+        
+        // 5. 부분 추출 시도
+        let analysis = [];
+        let revisedScript = '';
+        let scores = {};
+
+        // analysis 배열 추출
+        const analysisMatch = jsonStr.match(/"analysis"\s*:\s*\[([\s\S]*?)\]/);
+        if (analysisMatch) {
+            try {
+                analysis = JSON.parse('[' + analysisMatch[1] + ']');
+            } catch (e2) {
+                console.log('analysis 부분 파싱 실패');
+            }
+        }
+
+        // revisedScript 추출
+        const scriptMatch = jsonStr.match(/"revisedScript"\s*:\s*"([\s\S]*?)(?:","scores"|"}$)/);
+        if (scriptMatch) {
+            revisedScript = scriptMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+        }
+
+        // scores 추출
+        const scoresMatch = jsonStr.match(/"scores"\s*:\s*\{([^}]+)\}/);
+        if (scoresMatch) {
+            try {
+                scores = JSON.parse('{' + scoresMatch[1] + '}');
+            } catch (e3) {
+                console.log('scores 부분 파싱 실패');
+            }
+        }
+
+        if (analysis.length > 0 || revisedScript) {
+            console.log('⚠️ 부분 파싱으로 복구 성공');
+            return {
+                analysis: analysis,
+                revisedScript: revisedScript,
+                scores: scores,
+                parseError: null
+            };
+        }
+
         return {
             analysis: [],
             revisedScript: responseText,
@@ -636,7 +626,6 @@ function renderFullScriptWithHighlight(revisedScript, analysis, container) {
         return;
     }
 
-    // 분석 결과에서 수정된 텍스트 목록 추출
     const suggestions = new Set();
     if (analysis && analysis.length > 0) {
         analysis.forEach(item => {
@@ -646,7 +635,6 @@ function renderFullScriptWithHighlight(revisedScript, analysis, container) {
         });
     }
 
-    // 전체 대본을 줄 단위로 처리
     const lines = revisedScript.split('\n');
     let html = '<div class="script-scroll-wrapper"><div class="revised-script">';
 
@@ -654,7 +642,6 @@ function renderFullScriptWithHighlight(revisedScript, analysis, container) {
         let processedLine = escapeHtml(line);
         let hasHighlight = false;
 
-        // 각 수정 제안과 비교하여 하이라이트
         suggestions.forEach(suggestion => {
             const escapedSuggestion = escapeHtml(suggestion);
             if (processedLine.includes(escapedSuggestion)) {
@@ -691,10 +678,7 @@ function renderScores(scores) {
     const storyFlow = scores.storyFlow || 0;
     const bounceRate = scores.bounceRate || 0;
     
-    // 이탈율을 점수로 변환
     const bounceScore = 100 - bounceRate;
-
-    // 평균 계산
     const average = Math.round((entertainment + seniorTarget + storyFlow + bounceScore) / 4);
     const isPass = average >= 95;
 
