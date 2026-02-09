@@ -1,14 +1,14 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.14 - Vertex AI + Gemini 3 Flash
+ * main.js v4.15 - Vertex AI + Gemini 3 Flash
  * 25가지 오류 유형 검수 + 조선시대 고증 검수 병합
  * - 고증 오류: 자동 수정 (첫 번째 대체어 적용)
  * - 수정 반영 강화: 로컬 강제 치환
  * - "수정 전/후" 버튼: 원문 복원 기능 (스크롤 위치 유지)
- * - 테이블 스타일 통일 (고증/일반 구분 제거)
+ * - API 키 검증 + 5분 타임아웃 + 디버깅 로그 강화
  */
 
-console.log('🚀 main.js v4.14 (Vertex AI + Gemini 3 Flash + 고증 자동수정 + 원문복원) 로드됨');
+console.log('🚀 main.js v4.15 (Vertex AI + Gemini 3 Flash + API 디버깅 강화) 로드됨');
 
 // ===================== 조선시대 고증 DB =====================
 const HISTORICAL_RULES = {
@@ -193,6 +193,12 @@ const state = {
 
 let currentAbortController = null;
 
+// ===================== API 설정 =====================
+const API_CONFIG = {
+    TIMEOUT: 300000, // 5분 (300초)
+    ENDPOINT: 'https://aiplatform.googleapis.com/v1/projects/gen-lang-client-0624453722/locations/global/publishers/google/models/gemini-3-flash-preview:generateContent'
+};
+
 // ===================== DOM 로드 후 초기화 =====================
 document.addEventListener('DOMContentLoaded', () => {
     console.log('📄 DOMContentLoaded 발생');
@@ -211,7 +217,8 @@ function initApp() {
     initDownloadButton();
     initRevertButtons();
     console.log('✅ 고증 DB 로드됨: ' + getTotalHistoricalRules() + '개 규칙');
-    console.log('✅ main.js v4.14 초기화 완료');
+    console.log('✅ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
+    console.log('✅ main.js v4.15 초기화 완료');
 }
 
 // ===================== 고증 DB 규칙 수 계산 =====================
@@ -260,6 +267,7 @@ function initApiKeyPanel() {
         const key = input.value.trim();
         if (key) {
             localStorage.setItem('GEMINI_API_KEY', key);
+            console.log('🔑 API 키 저장됨, 키 시작: ' + key.substring(0, 10) + '...');
             alert('API 키가 저장되었습니다.');
             panel.style.display = 'none';
         } else {
@@ -270,6 +278,28 @@ function initApiKeyPanel() {
     closeBtn.addEventListener('click', () => {
         panel.style.display = 'none';
     });
+}
+
+// ===================== API 키 검증 =====================
+function validateApiKey(apiKey) {
+    if (!apiKey) {
+        console.error('❌ API 키가 없습니다.');
+        return { valid: false, message: 'API 키가 설정되지 않았습니다.' };
+    }
+    
+    console.log('🔑 API 키 검증 중...');
+    console.log('   - 키 길이: ' + apiKey.length + '자');
+    console.log('   - 키 시작: ' + apiKey.substring(0, 10) + '...');
+    console.log('   - 키 끝: ...' + apiKey.substring(apiKey.length - 5));
+    
+    // Google Cloud API 키는 보통 AIza로 시작하지만, 다른 형식도 있을 수 있음
+    if (apiKey.length < 20) {
+        console.warn('⚠️ API 키가 너무 짧습니다.');
+        return { valid: false, message: 'API 키가 너무 짧습니다. 올바른 키인지 확인해주세요.' };
+    }
+    
+    console.log('✅ API 키 형식 확인 완료');
+    return { valid: true, message: 'OK' };
 }
 
 // ===================== 텍스트 영역 =====================
@@ -390,6 +420,7 @@ function initAnalysisButtons() {
             currentAbortController = null;
             updateProgress(0, '분석이 중지되었습니다.');
             stopBtn.disabled = true;
+            console.log('⏹️ 사용자가 분석을 중지했습니다.');
             alert('분석이 중지되었습니다.');
             
             setTimeout(() => {
@@ -617,10 +648,14 @@ function checkAndFixHistoricalAccuracy(scriptText) {
 // ===================== 분석 실행 (1차, 2차) =====================
 async function startAnalysis(stage) {
     console.log(`🔍 ${stage} 분석 시작`);
+    console.log('='.repeat(50));
 
     const apiKey = localStorage.getItem('GEMINI_API_KEY');
-    if (!apiKey) {
-        alert('API 키를 먼저 설정해주세요.');
+    
+    // API 키 검증
+    const keyValidation = validateApiKey(apiKey);
+    if (!keyValidation.valid) {
+        alert(keyValidation.message);
         return;
     }
 
@@ -632,6 +667,7 @@ async function startAnalysis(stage) {
             return;
         }
         state.stage1.originalScript = scriptText;
+        console.log('📝 원본 대본 길이: ' + scriptText.length + '자');
     } else {
         scriptText = state.stage1.revisedScript;
         if (!scriptText) {
@@ -639,6 +675,7 @@ async function startAnalysis(stage) {
             return;
         }
         state.stage2.originalScript = scriptText;
+        console.log('📝 1차 수정본 길이: ' + scriptText.length + '자');
     }
 
     const progressContainer = document.getElementById('progress-container');
@@ -660,11 +697,16 @@ async function startAnalysis(stage) {
     try {
         updateProgress(25, '프롬프트 생성 중...');
         const prompt = generatePrompt(processedScript);
-        console.log('📤 프롬프트 생성 완료, 길이:', prompt.length);
+        console.log('📤 프롬프트 생성 완료, 길이: ' + prompt.length + '자');
 
-        updateProgress(45, 'AI 분석 중... (최대 2분 소요)');
+        updateProgress(45, 'AI 분석 중... (최대 5분 소요)');
+        console.log('🌐 API 호출 시작...');
+        console.log('   - 엔드포인트: ' + API_CONFIG.ENDPOINT);
+        console.log('   - 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
+        
         const response = await callGeminiAPI(prompt, signal);
-        console.log('📥 API 응답 수신');
+        console.log('📥 API 응답 수신 완료');
+        console.log('   - 응답 길이: ' + response.length + '자');
 
         updateProgress(70, '결과 파싱 중...');
         const parsed = parseAnalysisResult(response);
@@ -717,14 +759,22 @@ async function startAnalysis(stage) {
         }
 
         updateProgress(100, '분석 완료!');
+        console.log('='.repeat(50));
         console.log(`✅ ${stage} 분석 완료 (일반: ${verified.analysis?.length || 0}건, 고증: ${historicalIssues.length}건)`);
 
     } catch (error) {
+        console.log('='.repeat(50));
         if (error.name === 'AbortError') {
-            console.log('⏹ 분석이 사용자에 의해 중지됨');
+            console.log('⏹️ 분석이 사용자에 의해 중지됨');
             updateProgress(0, '분석이 중지되었습니다.');
+        } else if (error.message.includes('timeout')) {
+            console.error('⏰ API 타임아웃 발생 (5분 초과)');
+            alert('API 응답 시간이 초과되었습니다 (5분). 다시 시도해주세요.');
+            updateProgress(0, '타임아웃 발생');
         } else {
             console.error('❌ 분석 오류:', error);
+            console.error('   - 오류 메시지:', error.message);
+            console.error('   - 오류 스택:', error.stack);
             alert('분석 중 오류가 발생했습니다: ' + error.message);
             updateProgress(0, '오류 발생');
         }
@@ -857,49 +907,90 @@ ${scriptText}
 {"analysis":[{"line":1,"errorType":"오류유형","original":"원본","suggestion":"수정","reason":"이유"}],"revisedScript":"수정된 전체 대본","scores":{"entertainment":85,"seniorTarget":90,"storyFlow":80,"bounceRate":15}}`;
 }
 
-// ===================== Gemini API 호출 (Vertex AI 엔드포인트 유지) =====================
+// ===================== Gemini API 호출 (5분 타임아웃 + 디버깅 강화) =====================
 async function callGeminiAPI(prompt, signal) {
     const apiKey = localStorage.getItem('GEMINI_API_KEY');
     
-    const endpoint = `https://aiplatform.googleapis.com/v1/projects/gen-lang-client-0624453722/locations/global/publishers/google/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+    const endpoint = `${API_CONFIG.ENDPOINT}?key=${apiKey}`;
+    
+    console.log('🌐 API 요청 전송 중...');
+    const startTime = Date.now();
 
-    const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            contents: [{
-                role: 'user',
-                parts: [{ text: prompt }]
-            }],
-            generationConfig: {
-                temperature: 0,
-                topP: 1,
-                topK: 1,
-                maxOutputTokens: 65536
+    // 타임아웃 설정 (5분)
+    const timeoutId = setTimeout(() => {
+        if (currentAbortController) {
+            currentAbortController.abort();
+            console.error('⏰ API 타임아웃: 5분 초과');
+        }
+    }, API_CONFIG.TIMEOUT);
+
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                contents: [{
+                    role: 'user',
+                    parts: [{ text: prompt }]
+                }],
+                generationConfig: {
+                    temperature: 0,
+                    topP: 1,
+                    topK: 1,
+                    maxOutputTokens: 65536
+                }
+            }),
+            signal: signal
+        });
+
+        clearTimeout(timeoutId);
+        
+        const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+        console.log(`⏱️ API 응답 시간: ${elapsedTime}초`);
+        console.log(`📊 HTTP 상태: ${response.status} ${response.statusText}`);
+
+        if (!response.ok) {
+            let errorMsg = 'API 오류: ' + response.status;
+            try {
+                const errData = await response.json();
+                console.error('❌ API 에러 응답:', errData);
+                errorMsg = errData.error?.message || errorMsg;
+            } catch (e) {
+                console.error('❌ 에러 응답 파싱 실패');
             }
-        }),
-        signal: signal
-    });
+            throw new Error(errorMsg);
+        }
 
-    if (!response.ok) {
-        let errorMsg = 'API 오류: ' + response.status;
-        try {
-            const errData = await response.json();
-            errorMsg = errData.error?.message || errorMsg;
-        } catch (e) {}
-        throw new Error(errorMsg);
+        const data = await response.json();
+        console.log('✅ API 응답 JSON 파싱 성공');
+        
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (!text) {
+            console.error('❌ API 응답에 텍스트가 없습니다.');
+            console.error('   응답 구조:', JSON.stringify(data, null, 2).substring(0, 500));
+            throw new Error('API 응답이 비어있습니다.');
+        }
+
+        console.log('✅ API 텍스트 추출 성공, 길이: ' + text.length + '자');
+        return text;
+        
+    } catch (error) {
+        clearTimeout(timeoutId);
+        
+        if (error.name === 'AbortError') {
+            const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+            if (elapsedTime >= (API_CONFIG.TIMEOUT / 1000)) {
+                throw new Error('timeout: API 응답 시간 초과 (5분)');
+            }
+            throw error;
+        }
+        
+        console.error('❌ API 호출 실패:', error.message);
+        throw error;
     }
-
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!text) {
-        throw new Error('API 응답이 비어있습니다.');
-    }
-
-    return text;
 }
 
 // ===================== 결과 파싱 =====================
