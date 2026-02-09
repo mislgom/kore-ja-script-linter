@@ -1,10 +1,10 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.23 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.23: 수정 반영 강화 + 대본 픽스 버튼 + 2차 분석 시작 버튼
+ * main.js v4.24 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.24: 분석 버튼 위치 변경 (각 분석 결과 칸 아래로 이동)
  */
 
-console.log('🚀 main.js v4.23 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
+console.log('🚀 main.js v4.24 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
 
 // ===================== 조선시대 고증 DB =====================
 const HISTORICAL_RULES = {
@@ -184,21 +184,49 @@ function initApp() {
     initFileUpload();
     initDragAndDrop();
     initClearButton();
-    initAnalysisButtons();
+    hideOriginalAnalysisButtons();
     initDownloadButton();
     initRevertButtons();
-    initFixButtons();
+    initStage1AnalysisButton();
     initStage2AnalysisButton();
+    initStopButton();
     console.log('✅ 고증 DB 로드됨: ' + getTotalHistoricalRules() + '개 규칙');
     console.log('✅ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('✅ 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.23 초기화 완료');
+    console.log('✅ main.js v4.24 초기화 완료');
 }
 
 function getTotalHistoricalRules() {
     let total = 0;
     for (const category in HISTORICAL_RULES) total += HISTORICAL_RULES[category].length;
     return total;
+}
+
+// ===================== 기존 분석 버튼 숨기기 =====================
+function hideOriginalAnalysisButtons() {
+    const btn1 = document.getElementById('btn-analyze-stage1');
+    const btn2 = document.getElementById('btn-analyze-stage2');
+    if (btn1) btn1.style.display = 'none';
+    if (btn2) btn2.style.display = 'none';
+    console.log('✅ 기존 분석 버튼 숨김');
+}
+
+// ===================== 중지 버튼 =====================
+function initStopButton() {
+    const stopBtn = document.getElementById('btn-stop-analysis');
+    if (stopBtn) {
+        stopBtn.addEventListener('click', () => {
+            if (currentAbortController) {
+                currentAbortController.abort();
+                currentAbortController = null;
+                updateProgress(0, '분석 중지됨');
+                stopBtn.disabled = true;
+                alert('분석이 중지되었습니다.');
+                setTimeout(() => document.getElementById('progress-container').style.display = 'none', 1000);
+            }
+        });
+    }
+    console.log('✅ 중지 버튼 초기화됨');
 }
 
 // ===================== 다크모드 =====================
@@ -233,7 +261,6 @@ function initApiKeyPanel() {
         const key = input.value.trim();
         if (key) {
             localStorage.setItem('GEMINI_API_KEY', key);
-            console.log('🔑 API 키 저장됨');
             alert('API 키가 저장되었습니다.');
             panel.style.display = 'none';
         } else alert('API 키를 입력해주세요.');
@@ -306,25 +333,6 @@ function handleFile(file) {
     reader.readAsText(file);
 }
 
-// ===================== 분석 버튼 =====================
-function initAnalysisButtons() {
-    document.getElementById('btn-analyze-stage1').addEventListener('click', () => startAnalysis('stage1'));
-    document.getElementById('btn-analyze-stage2').addEventListener('click', () => startStage2Analysis());
-    document.getElementById('btn-stop-analysis').addEventListener('click', () => {
-        if (currentAbortController) {
-            currentAbortController.abort();
-            currentAbortController = null;
-            updateProgress(0, '분석 중지됨');
-            document.getElementById('btn-stop-analysis').disabled = true;
-            alert('분석이 중지되었습니다.');
-            setTimeout(() => document.getElementById('progress-container').style.display = 'none', 1000);
-        }
-    });
-    console.log('✅ 1차 분석 버튼 연결됨');
-    console.log('✅ 2차 분석 버튼 연결됨');
-    console.log('✅ 중지 버튼 연결됨');
-}
-
 // ===================== 다운로드 =====================
 function initDownloadButton() {
     const btn = document.getElementById('btn-download');
@@ -391,9 +399,59 @@ function addRevertButton(container, stage) {
     parent.appendChild(wrapper);
 }
 
-// ===================== 대본 픽스 버튼 초기화 =====================
-function initFixButtons() {
-    console.log('✅ 대본 픽스 버튼 초기화됨');
+// ===================== 1차 분석 시작 버튼 (1차 분석 결과 아래) =====================
+function initStage1AnalysisButton() {
+    const analysisContainer = document.getElementById('analysis-stage1');
+    if (!analysisContainer) return;
+    
+    const parent = analysisContainer.parentElement;
+    
+    // 기존 버튼 있으면 제거
+    const existingBtn = parent.querySelector('.stage1-start-wrapper');
+    if (existingBtn) existingBtn.remove();
+    
+    const wrapper = document.createElement('div');
+    wrapper.className = 'stage1-start-wrapper';
+    wrapper.style.cssText = 'text-align:center;padding:15px;';
+    
+    const btn = document.createElement('button');
+    btn.id = 'btn-start-stage1';
+    btn.innerHTML = '🔍 1차 분석 시작';
+    btn.style.cssText = 'background:#4CAF50;color:white;border:none;padding:12px 30px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:15px;';
+    btn.addEventListener('click', () => startAnalysis('stage1'));
+    
+    wrapper.appendChild(btn);
+    parent.appendChild(wrapper);
+    
+    console.log('✅ 1차 분석 시작 버튼 초기화됨');
+}
+
+// ===================== 2차 분석 시작 버튼 (2차 분석 결과 아래) =====================
+function initStage2AnalysisButton() {
+    const analysisContainer = document.getElementById('analysis-stage2');
+    if (!analysisContainer) return;
+    
+    const parent = analysisContainer.parentElement;
+    
+    // 기존 버튼 있으면 제거
+    const existingBtn = parent.querySelector('.stage2-start-wrapper');
+    if (existingBtn) existingBtn.remove();
+    
+    const wrapper = document.createElement('div');
+    wrapper.className = 'stage2-start-wrapper';
+    wrapper.style.cssText = 'text-align:center;padding:15px;';
+    
+    const btn = document.createElement('button');
+    btn.id = 'btn-start-stage2';
+    btn.innerHTML = '🔍 2차 분석 시작';
+    btn.style.cssText = 'background:#9c27b0;color:white;border:none;padding:12px 30px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:15px;opacity:0.5;';
+    btn.disabled = true;
+    btn.addEventListener('click', () => startStage2Analysis());
+    
+    wrapper.appendChild(btn);
+    parent.appendChild(wrapper);
+    
+    console.log('✅ 2차 분석 시작 버튼 초기화됨');
 }
 
 // ===================== 대본 픽스 기능 =====================
@@ -421,34 +479,6 @@ function fixScript() {
     
     alert('대본이 픽스되었습니다!\n\n이제 "2차 분석 시작" 버튼을 눌러 2차 분석을 진행하세요.');
     console.log('📌 대본 픽스 완료: ' + s.fixedScript.length + '자');
-}
-
-// ===================== 2차 분석 시작 버튼 =====================
-function initStage2AnalysisButton() {
-    const analysisContainer = document.getElementById('analysis-stage2');
-    if (!analysisContainer) return;
-    
-    const parent = analysisContainer.parentElement;
-    
-    // 기존 버튼 있으면 제거
-    const existingBtn = parent.querySelector('.stage2-start-wrapper');
-    if (existingBtn) existingBtn.remove();
-    
-    const wrapper = document.createElement('div');
-    wrapper.className = 'stage2-start-wrapper';
-    wrapper.style.cssText = 'text-align:center;padding:15px;';
-    
-    const btn = document.createElement('button');
-    btn.id = 'btn-start-stage2';
-    btn.innerHTML = '🔍 2차 분석 시작';
-    btn.style.cssText = 'background:#9c27b0;color:white;border:none;padding:12px 30px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:15px;opacity:0.5;';
-    btn.disabled = true;
-    btn.addEventListener('click', () => startStage2Analysis());
-    
-    wrapper.appendChild(btn);
-    parent.appendChild(wrapper);
-    
-    console.log('✅ 2차 분석 시작 버튼 초기화됨');
 }
 
 // ===================== 2차 분석 시작 =====================
@@ -693,7 +723,7 @@ async function startAnalysis(stage, customScript) {
     const progressContainer = document.getElementById('progress-container');
     const stopBtn = document.getElementById('btn-stop-analysis');
     progressContainer.style.display = 'block';
-    stopBtn.disabled = false;
+    if (stopBtn) stopBtn.disabled = false;
 
     try {
         updateProgress(10, '준비 중...');
@@ -745,19 +775,14 @@ async function startAnalysis(stage, customScript) {
         state[stage].allErrors = allErrors;
         console.log('📋 총 오류: ' + allErrors.length + '개');
 
-        // 5단계: 수정본 생성 (강화된 수정 적용)
+        // 5단계: 수정본 생성
         updateProgress(80, '수정본 생성 중...');
         let revisedScript = histResult.fixedScript;
         
-        // AI 오류 수정 적용
         for (const err of aiErrors) {
             if (err.original && err.corrected && err.original !== err.corrected) {
-                const beforeLen = revisedScript.length;
                 const regex = new RegExp(escapeRegex(err.original), 'g');
                 revisedScript = revisedScript.replace(regex, err.corrected);
-                if (revisedScript.length !== beforeLen || revisedScript.includes(err.corrected)) {
-                    console.log('   ✏️ "' + err.original + '" → "' + err.corrected + '"');
-                }
             }
         }
         
@@ -791,7 +816,7 @@ async function startAnalysis(stage, customScript) {
         progressContainer.style.display = 'none';
     }
 
-    stopBtn.disabled = true;
+    if (stopBtn) stopBtn.disabled = true;
     currentAbortController = null;
 }
 
@@ -873,17 +898,14 @@ function renderRevisedWithMarkers(script, allErrors, container, stage) {
     
     let content = script;
     
-    // 수정된 부분에 마커 삽입 (더 강력한 방식)
+    // 수정된 부분에 마커 삽입
     if (allErrors && allErrors.length > 0) {
-        // 긴 텍스트부터 처리 (겹침 방지)
         const sortedErrors = [...allErrors].sort((a, b) => (b.corrected?.length || 0) - (a.corrected?.length || 0));
         
         for (const err of sortedErrors) {
             if (err.corrected && err.corrected.trim() && err.corrected !== '(대체어 없음)') {
                 const marker = '<<<OK_' + err.index + '>>>' + err.corrected + '<<</OK>>>';
                 const regex = new RegExp(escapeRegex(err.corrected), 'g');
-                
-                // 이미 마커가 있는 부분은 건너뛰기
                 if (!content.includes(marker)) {
                     content = content.replace(regex, marker);
                 }
@@ -892,7 +914,6 @@ function renderRevisedWithMarkers(script, allErrors, container, stage) {
     }
     
     content = escapeHtml(content);
-    // 연한 녹색 하이라이트로 변환
     content = content.replace(/&lt;&lt;&lt;OK_(\d+)&gt;&gt;&gt;(.*?)&lt;&lt;&lt;\/OK&gt;&gt;&gt;/g, '<mark class="corrected-mark" data-error-index="$1" style="background:#a5d6a7;color:#1b5e20;padding:1px 4px;border-radius:3px;cursor:pointer;">$2</mark>');
     
     content.split('\n').forEach(line => {
@@ -905,7 +926,7 @@ function renderRevisedWithMarkers(script, allErrors, container, stage) {
 
 // ===================== 클릭 시 수정본으로 이동 =====================
 function scrollToErrorInRevised(stage, errorIndex, correctedText) {
-    console.log('🖱️ 클릭: stage=' + stage + ', index=' + errorIndex + ', text=' + correctedText);
+    console.log('🖱️ 클릭: stage=' + stage + ', index=' + errorIndex);
     
     const revisedContainer = document.getElementById('revised-' + stage);
     if (!revisedContainer) return;
@@ -922,10 +943,8 @@ function scrollToErrorInRevised(stage, errorIndex, correctedText) {
     }
     
     setTimeout(() => {
-        // 해당 마커 찾기
         let marks = revisedContainer.querySelectorAll('.corrected-mark[data-error-index="' + errorIndex + '"]');
         
-        // 마커를 못 찾으면 텍스트로 검색
         if (marks.length === 0 && correctedText) {
             const allMarks = revisedContainer.querySelectorAll('.corrected-mark');
             for (const m of allMarks) {
@@ -939,19 +958,16 @@ function scrollToErrorInRevised(stage, errorIndex, correctedText) {
         if (marks.length > 0) {
             const mark = marks[0];
             
-            // 기존 하이라이트 초기화
             revisedContainer.querySelectorAll('.corrected-mark').forEach(m => {
                 m.style.background = '#a5d6a7';
                 m.style.color = '#1b5e20';
                 m.style.boxShadow = 'none';
             });
             
-            // 선택된 마커 강조
             mark.style.background = '#69f0ae';
             mark.style.color = '#004d40';
             mark.style.boxShadow = '0 0 10px rgba(105, 240, 174, 0.8)';
             
-            // 스크롤 이동
             const wrapper = revisedContainer.querySelector('.script-scroll-wrapper');
             if (wrapper) {
                 const markRect = mark.getBoundingClientRect();
@@ -960,7 +976,6 @@ function scrollToErrorInRevised(stage, errorIndex, correctedText) {
                 wrapper.scrollTo({ top: Math.max(0, scrollTop), behavior: 'smooth' });
             }
             
-            // 깜빡임 효과
             let blink = 0;
             const blinkInterval = setInterval(() => {
                 mark.style.background = blink % 2 === 0 ? '#ffff00' : '#69f0ae';
@@ -971,13 +986,9 @@ function scrollToErrorInRevised(stage, errorIndex, correctedText) {
                 }
             }, 200);
             
-            console.log('✅ 마커 찾음, 이동 완료');
-            
-        } else {
-            // 텍스트로 직접 검색하여 스크롤
-            console.log('⚠️ 마커 없음, 텍스트 검색');
+        } else if (correctedText) {
             const wrapper = revisedContainer.querySelector('.script-scroll-wrapper');
-            if (wrapper && correctedText) {
+            if (wrapper) {
                 const text = wrapper.textContent;
                 const pos = text.indexOf(correctedText);
                 if (pos !== -1) {
