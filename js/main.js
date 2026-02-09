@@ -1,11 +1,10 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.18 - Vertex AI API 키 + Gemini 2.5 Flash
- * 25가지 오류 유형 검수 + 조선시대 고증 검수 병합
- * - v4.18: JSON 복구 강화 + 고증/AI 오류 통합 + maxOutputTokens 증가
+ * main.js v4.19 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.19: 분석 결과 클릭 시 수정본 해당 위치로 이동 + 하이라이트
  */
 
-console.log('🚀 main.js v4.18 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
+console.log('🚀 main.js v4.19 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
 
 // ===================== 조선시대 고증 DB =====================
 const HISTORICAL_RULES = {
@@ -157,13 +156,13 @@ const HISTORICAL_RULES = {
 
 // ===================== 전역 상태 =====================
 const state = {
-    stage1: { originalScript: '', analysis: null, revisedScript: '', historicalIssues: [], scores: null, revisionCount: 0 },
-    stage2: { originalScript: '', analysis: null, revisedScript: '', historicalIssues: [], scores: null, revisionCount: 0 }
+    stage1: { originalScript: '', analysis: null, revisedScript: '', historicalIssues: [], allErrors: [], revisionCount: 0 },
+    stage2: { originalScript: '', analysis: null, revisedScript: '', historicalIssues: [], allErrors: [], revisionCount: 0 }
 };
 
 let currentAbortController = null;
 
-// ===================== API 설정 (v4.18) =====================
+// ===================== API 설정 =====================
 const API_CONFIG = {
     TIMEOUT: 300000,
     MODEL: 'gemini-2.5-flash',
@@ -171,7 +170,7 @@ const API_CONFIG = {
     MAX_OUTPUT_TOKENS: 16384
 };
 
-// ===================== DOM 로드 후 초기화 =====================
+// ===================== 초기화 =====================
 document.addEventListener('DOMContentLoaded', () => {
     console.log('📄 DOMContentLoaded 발생');
     initApp();
@@ -191,14 +190,13 @@ function initApp() {
     console.log('✅ 고증 DB 로드됨: ' + getTotalHistoricalRules() + '개 규칙');
     console.log('✅ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('✅ 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.18 초기화 완료');
+    console.log('✅ main.js v4.19 초기화 완료');
+    console.log('📌 v4.19 업데이트: 분석 결과 클릭 → 수정본 해당 위치 이동 + 하이라이트');
 }
 
 function getTotalHistoricalRules() {
     let total = 0;
-    for (const category in HISTORICAL_RULES) {
-        total += HISTORICAL_RULES[category].length;
-    }
+    for (const category in HISTORICAL_RULES) total += HISTORICAL_RULES[category].length;
     return total;
 }
 
@@ -218,7 +216,7 @@ function initDarkMode() {
     });
 }
 
-// ===================== API 키 관리 =====================
+// ===================== API 키 =====================
 function initApiKeyPanel() {
     const btn = document.getElementById('btn-api-settings');
     const panel = document.getElementById('api-key-panel');
@@ -229,10 +227,7 @@ function initApiKeyPanel() {
     const savedKey = localStorage.getItem('GEMINI_API_KEY');
     if (savedKey) input.value = savedKey;
 
-    btn.addEventListener('click', () => {
-        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    });
-
+    btn.addEventListener('click', () => panel.style.display = panel.style.display === 'none' ? 'block' : 'none');
     saveBtn.addEventListener('click', () => {
         const key = input.value.trim();
         if (key) {
@@ -240,104 +235,67 @@ function initApiKeyPanel() {
             console.log('🔑 API 키 저장됨');
             alert('API 키가 저장되었습니다.');
             panel.style.display = 'none';
-        } else {
-            alert('API 키를 입력해주세요.');
-        }
+        } else alert('API 키를 입력해주세요.');
     });
-
     closeBtn.addEventListener('click', () => panel.style.display = 'none');
 }
 
 function validateApiKey(apiKey) {
-    if (!apiKey) {
-        console.error('❌ API 키가 없습니다.');
-        return { valid: false, message: 'API 키가 설정되지 않았습니다.' };
-    }
-    console.log('🔑 API 키 검증 중...');
-    console.log('   - 키 길이: ' + apiKey.length + '자');
-    console.log('   - 키 시작: ' + apiKey.substring(0, 10) + '...');
-    if (apiKey.length < 20) {
-        return { valid: false, message: 'API 키가 너무 짧습니다.' };
-    }
-    console.log('✅ API 키 형식 확인 완료');
+    if (!apiKey) return { valid: false, message: 'API 키가 설정되지 않았습니다.' };
+    console.log('🔑 API 키 검증: ' + apiKey.substring(0, 10) + '...');
+    if (apiKey.length < 20) return { valid: false, message: 'API 키가 너무 짧습니다.' };
+    console.log('✅ API 키 확인 완료');
     return { valid: true, message: 'OK' };
 }
 
-// ===================== 텍스트 영역 =====================
+// ===================== 텍스트/파일 =====================
 function initTextArea() {
     const textarea = document.getElementById('original-script');
     const charCount = document.getElementById('char-count');
-    textarea.addEventListener('input', () => {
-        charCount.textContent = textarea.value.length;
-    });
+    textarea.addEventListener('input', () => charCount.textContent = textarea.value.length);
 }
 
-// ===================== 지우기 버튼 =====================
 function initClearButton() {
     const clearBtn = document.getElementById('btn-clear-script');
-    const textarea = document.getElementById('original-script');
-    const charCount = document.getElementById('char-count');
-    const fileNameDisplay = document.getElementById('file-name-display');
-
     clearBtn.addEventListener('click', () => {
-        textarea.value = '';
-        charCount.textContent = '0';
-        fileNameDisplay.textContent = '';
-        console.log('🗑️ 대본 내용 삭제됨');
+        document.getElementById('original-script').value = '';
+        document.getElementById('char-count').textContent = '0';
+        document.getElementById('file-name-display').textContent = '';
+        console.log('🗑️ 대본 삭제됨');
     });
     console.log('✅ 지우기 버튼 초기화됨');
 }
 
-// ===================== 파일 업로드 =====================
 function initFileUpload() {
     const fileInput = document.getElementById('file-input');
-    const fileNameDisplay = document.getElementById('file-name-display');
-
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file && file.name.endsWith('.txt')) {
             handleFile(file);
-            fileNameDisplay.textContent = `📎 ${file.name}`;
-        } else {
-            alert('TXT 파일만 업로드 가능합니다.');
-        }
+            document.getElementById('file-name-display').textContent = `📎 ${file.name}`;
+        } else alert('TXT 파일만 업로드 가능합니다.');
     });
     console.log('✅ 파일 업로드 초기화됨');
 }
 
-// ===================== 드래그 앤 드롭 =====================
 function initDragAndDrop() {
     const dropZone = document.getElementById('drop-zone');
-    const fileNameDisplay = document.getElementById('file-name-display');
-
     ['dragenter', 'dragover'].forEach(evt => {
-        dropZone.addEventListener(evt, (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            dropZone.classList.add('drag-over');
-        });
+        dropZone.addEventListener(evt, (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
     });
-
     dropZone.addEventListener('dragleave', (e) => {
         e.preventDefault();
-        e.stopPropagation();
-        if (!dropZone.contains(e.relatedTarget)) {
-            dropZone.classList.remove('drag-over');
-        }
+        if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over');
     });
-
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
-        e.stopPropagation();
         dropZone.classList.remove('drag-over');
         const file = e.dataTransfer.files[0];
         if (file && file.name.endsWith('.txt')) {
             handleFile(file);
-            fileNameDisplay.textContent = `📎 ${file.name}`;
-            console.log('📄 드래그로 파일 업로드됨:', file.name);
-        } else {
-            alert('TXT 파일만 업로드 가능합니다.');
-        }
+            document.getElementById('file-name-display').textContent = `📎 ${file.name}`;
+            console.log('📄 드래그 업로드:', file.name);
+        } else alert('TXT 파일만 업로드 가능합니다.');
     });
     console.log('✅ 드래그 앤 드롭 초기화됨');
 }
@@ -345,36 +303,26 @@ function initDragAndDrop() {
 function handleFile(file) {
     const reader = new FileReader();
     reader.onload = (e) => {
-        const textarea = document.getElementById('original-script');
-        textarea.value = e.target.result;
-        document.getElementById('char-count').textContent = textarea.value.length;
+        document.getElementById('original-script').value = e.target.result;
+        document.getElementById('char-count').textContent = e.target.result.length;
     };
     reader.readAsText(file);
 }
 
 // ===================== 분석 버튼 =====================
 function initAnalysisButtons() {
-    const btn1 = document.getElementById('btn-analyze-stage1');
-    const btn2 = document.getElementById('btn-analyze-stage2');
-    const stopBtn = document.getElementById('btn-stop-analysis');
-
-    btn1.addEventListener('click', () => startAnalysis('stage1'));
-    btn2.addEventListener('click', () => startAnalysis('stage2'));
-
-    stopBtn.addEventListener('click', () => {
+    document.getElementById('btn-analyze-stage1').addEventListener('click', () => startAnalysis('stage1'));
+    document.getElementById('btn-analyze-stage2').addEventListener('click', () => startAnalysis('stage2'));
+    document.getElementById('btn-stop-analysis').addEventListener('click', () => {
         if (currentAbortController) {
             currentAbortController.abort();
             currentAbortController = null;
-            updateProgress(0, '분석이 중지되었습니다.');
-            stopBtn.disabled = true;
-            console.log('⏹️ 분석 중지됨');
+            updateProgress(0, '분석 중지됨');
+            document.getElementById('btn-stop-analysis').disabled = true;
             alert('분석이 중지되었습니다.');
-            setTimeout(() => {
-                document.getElementById('progress-container').style.display = 'none';
-            }, 1000);
+            setTimeout(() => document.getElementById('progress-container').style.display = 'none', 1000);
         }
     });
-
     console.log('✅ 1차 분석 버튼 연결됨');
     console.log('✅ 2차 분석 버튼 연결됨');
     console.log('✅ 중지 버튼 연결됨');
@@ -382,17 +330,16 @@ function initAnalysisButtons() {
 
 // ===================== 수정 전/후 버튼 =====================
 function initRevertButtons() {
-    const revised1 = document.getElementById('revised-stage1');
-    const revised2 = document.getElementById('revised-stage2');
-    if (revised1) addRevertButton(revised1, 'stage1');
-    if (revised2) addRevertButton(revised2, 'stage2');
+    const r1 = document.getElementById('revised-stage1');
+    const r2 = document.getElementById('revised-stage2');
+    if (r1) addRevertButton(r1, 'stage1');
+    if (r2) addRevertButton(r2, 'stage2');
     console.log('✅ 수정 전/후 버튼 초기화됨');
 }
 
 function addRevertButton(container, stage) {
     const parent = container.parentElement;
     if (parent.querySelector('.revert-btn-wrapper')) return;
-
     const wrapper = document.createElement('div');
     wrapper.className = 'revert-btn-wrapper';
     wrapper.style.cssText = 'text-align:center;padding:10px;border-top:1px solid #ddd;display:flex;justify-content:center;gap:10px;';
@@ -419,8 +366,7 @@ function addRevertButton(container, stage) {
 function showOriginal(stage) {
     const s = state[stage];
     if (!s.originalScript) return alert('원본이 없습니다.');
-    const container = document.getElementById(`revised-${stage}`);
-    renderPlainScript(s.originalScript, container);
+    renderPlainScript(s.originalScript, document.getElementById(`revised-${stage}`));
     document.getElementById(`btn-revert-before-${stage}`).style.opacity = '0.5';
     document.getElementById(`btn-revert-after-${stage}`).style.opacity = '1';
 }
@@ -428,32 +374,24 @@ function showOriginal(stage) {
 function showRevised(stage) {
     const s = state[stage];
     if (!s.revisedScript) return alert('수정본이 없습니다.');
-    const container = document.getElementById(`revised-${stage}`);
-    renderFullScriptWithHighlight(s.revisedScript, s.allErrors, container);
+    renderRevisedWithMarkers(s.revisedScript, s.allErrors, document.getElementById(`revised-${stage}`), stage);
     document.getElementById(`btn-revert-before-${stage}`).style.opacity = '1';
     document.getElementById(`btn-revert-after-${stage}`).style.opacity = '0.5';
 }
 
 function renderPlainScript(script, container) {
-    if (!script) {
-        container.innerHTML = '<p class="placeholder">내용이 없습니다.</p>';
-        return;
-    }
-    const lines = script.split('\n');
+    if (!script) { container.innerHTML = '<p class="placeholder">내용이 없습니다.</p>'; return; }
     let html = '<div class="script-scroll-wrapper"><div class="revised-script">';
-    lines.forEach(line => {
-        html += `<p class="line-unchanged">${escapeHtml(line) || '&nbsp;'}</p>`;
-    });
+    script.split('\n').forEach(line => html += `<p class="line-unchanged">${escapeHtml(line) || '&nbsp;'}</p>`);
     html += '</div></div>';
     container.innerHTML = html;
 }
 
 // ===================== 고증 검사 =====================
 function checkAndFixHistoricalAccuracy(scriptText) {
-    console.log('📜 로컬 고증 검사 시작');
+    console.log('📜 고증 검사 시작');
     const issues = [];
     let fixedScript = scriptText;
-
     const categoryNames = {
         objects: '물건/도구', facilities: '시설/공간', occupations: '직업/직책',
         systems: '제도/단위', lifestyle: '생활용어', foods: '음식', clothing: '의복'
@@ -465,9 +403,7 @@ function checkAndFixHistoricalAccuracy(scriptText) {
             const matches = scriptText.match(regex);
             if (matches) {
                 const replacement = rule.historical[0] !== '없음' ? rule.historical[0] : null;
-                if (replacement) {
-                    fixedScript = fixedScript.replace(regex, replacement);
-                }
+                if (replacement) fixedScript = fixedScript.replace(regex, replacement);
                 issues.push({
                     type: '시대적 고증 오류',
                     category: categoryNames[category],
@@ -480,26 +416,19 @@ function checkAndFixHistoricalAccuracy(scriptText) {
             }
         }
     }
-
-    console.log(`📜 고증 검사 완료: ${issues.length}개 문제 발견`);
+    console.log(`📜 고증 검사 완료: ${issues.length}개 발견`);
     return { issues, fixedScript };
 }
 
 // ===================== API 호출 =====================
 async function callGeminiAPI(prompt, apiKey) {
     const url = `${API_CONFIG.ENDPOINT}/${API_CONFIG.MODEL}:generateContent?key=${apiKey}`;
-
     console.log('📡 API 호출 시작');
     console.log('   - 모델: ' + API_CONFIG.MODEL);
-    console.log('   - 프롬프트 길이: ' + prompt.length + '자');
+    console.log('   - 프롬프트: ' + prompt.length + '자');
 
     currentAbortController = new AbortController();
-    const timeoutId = setTimeout(() => {
-        if (currentAbortController) {
-            currentAbortController.abort();
-            console.error('⏰ API 타임아웃');
-        }
-    }, API_CONFIG.TIMEOUT);
+    const timeoutId = setTimeout(() => { if (currentAbortController) currentAbortController.abort(); }, API_CONFIG.TIMEOUT);
 
     try {
         const response = await fetch(url, {
@@ -507,24 +436,13 @@ async function callGeminiAPI(prompt, apiKey) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: {
-                    temperature: 0.1,
-                    topP: 0.8,
-                    topK: 40,
-                    maxOutputTokens: API_CONFIG.MAX_OUTPUT_TOKENS
-                }
+                generationConfig: { temperature: 0.1, topP: 0.8, topK: 40, maxOutputTokens: API_CONFIG.MAX_OUTPUT_TOKENS }
             }),
             signal: currentAbortController.signal
         });
-
         clearTimeout(timeoutId);
-        console.log('📡 API 응답: ' + response.status);
-
-        if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`API 오류: ${response.status} - ${errText}`);
-        }
-
+        console.log('📡 응답: ' + response.status);
+        if (!response.ok) throw new Error('API 오류: ' + response.status);
         const data = await response.json();
         if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
             const text = data.candidates[0].content.parts[0].text;
@@ -534,7 +452,6 @@ async function callGeminiAPI(prompt, apiKey) {
         throw new Error('응답 형식 오류');
     } catch (error) {
         clearTimeout(timeoutId);
-        if (error.name === 'AbortError') throw new Error('요청 중단됨');
         throw error;
     }
 }
@@ -543,51 +460,42 @@ async function callGeminiAPI(prompt, apiKey) {
 async function startAnalysis(stage) {
     const apiKey = localStorage.getItem('GEMINI_API_KEY');
     const validation = validateApiKey(apiKey);
-    if (!validation.valid) {
-        alert(validation.message + '\n\n⚙️ API 키 설정에서 키를 입력해주세요.');
-        return;
-    }
+    if (!validation.valid) return alert(validation.message);
 
     const textarea = document.getElementById('original-script');
     const scriptText = stage === 'stage1' ? textarea.value.trim() : state.stage1.revisedScript;
-    if (!scriptText) {
-        alert(stage === 'stage1' ? '대본을 입력해주세요.' : '1차 분석을 먼저 진행해주세요.');
-        return;
-    }
+    if (!scriptText) return alert(stage === 'stage1' ? '대본을 입력해주세요.' : '1차 분석을 먼저 진행해주세요.');
 
     console.log(`\n${'='.repeat(50)}`);
     console.log(`🔍 ${stage === 'stage1' ? '1차' : '2차'} 분석 시작 (${scriptText.length}자)`);
     console.log('='.repeat(50));
 
     state[stage].originalScript = scriptText;
-
     const progressContainer = document.getElementById('progress-container');
     const stopBtn = document.getElementById('btn-stop-analysis');
     progressContainer.style.display = 'block';
     stopBtn.disabled = false;
 
     try {
-        updateProgress(10, '분석 준비 중...');
-
-        // 고증 검사
+        updateProgress(10, '준비 중...');
         updateProgress(20, '고증 검사 중...');
         const histResult = checkAndFixHistoricalAccuracy(scriptText);
         state[stage].historicalIssues = histResult.issues;
 
-        // AI 분석
-        updateProgress(40, 'AI 분석 중... (최대 5분)');
+        updateProgress(40, 'AI 분석 중...');
         const prompt = buildAnalysisPrompt(histResult.fixedScript);
         const response = await callGeminiAPI(prompt, apiKey);
 
         updateProgress(70, '응답 분석 중...');
         const aiErrors = parseAnalysisResponse(response);
 
-        // 통합 오류 목록 생성
+        // 통합 오류 목록
         const allErrors = [];
+        let errorIndex = 0;
         
-        // 고증 오류 추가
         for (const h of histResult.issues) {
             allErrors.push({
+                index: errorIndex++,
                 line: '-',
                 type: h.type,
                 original: h.original,
@@ -595,10 +503,9 @@ async function startAnalysis(stage) {
                 reason: h.reason + ` (${h.count}회)`
             });
         }
-        
-        // AI 오류 추가
         for (const e of aiErrors) {
             allErrors.push({
+                index: errorIndex++,
                 line: e.line || '-',
                 type: e.type || '기타',
                 original: e.original || '',
@@ -610,20 +517,25 @@ async function startAnalysis(stage) {
         state[stage].analysis = { errors: aiErrors };
         state[stage].allErrors = allErrors;
 
-        // 수정본 생성
         updateProgress(80, '수정본 생성 중...');
         const revisedScript = applyAllCorrections(histResult.fixedScript, aiErrors);
         state[stage].revisedScript = revisedScript;
         state[stage].revisionCount = allErrors.length;
 
-        // 렌더링
         updateProgress(90, '결과 표시 중...');
         renderAnalysisResult(stage, allErrors);
-        renderRevisedScript(stage, allErrors);
+        renderRevisedWithMarkers(revisedScript, allErrors, document.getElementById(`revised-${stage}`), stage);
 
-        if (stage === 'stage1') {
-            document.getElementById('btn-analyze-stage2').disabled = false;
-        }
+        if (stage === 'stage1') document.getElementById('btn-analyze-stage2').disabled = false;
+
+        // 버튼 활성화
+        const btnBefore = document.getElementById(`btn-revert-before-${stage}`);
+        const btnAfter = document.getElementById(`btn-revert-after-${stage}`);
+        if (btnBefore) { btnBefore.disabled = false; btnBefore.style.opacity = '1'; }
+        if (btnAfter) { btnAfter.disabled = false; btnAfter.style.opacity = '0.5'; }
+
+        const countEl = document.getElementById(`revision-count-${stage}`);
+        if (countEl) countEl.textContent = `수정: ${allErrors.length}건`;
 
         updateProgress(100, '분석 완료!');
         setTimeout(() => progressContainer.style.display = 'none', 1000);
@@ -639,103 +551,56 @@ async function startAnalysis(stage) {
     currentAbortController = null;
 }
 
-// ===================== 프롬프트 생성 =====================
+// ===================== 프롬프트 =====================
 function buildAnalysisPrompt(script) {
     return `당신은 한국어 대본 검수 전문가입니다.
 
-아래 대본에서 오류를 찾아 JSON 배열로만 응답하세요.
-다른 텍스트 없이 순수 JSON만 출력하세요.
+대본에서 오류를 찾아 JSON 배열로만 응답하세요.
 
 [검수 항목]
-1. 오타/맞춤법, 2. 띄어쓰기, 3. 문법, 4. 어색한 표현, 5. 중복 표현,
-6. 비문, 7. 주어-서술어 불일치, 8. 시제 불일치, 9. 존댓말/반말 혼용,
-10. 조사 오류, 11. 접속사 오용, 12. 문장부호 오류
+오타/맞춤법, 띄어쓰기, 문법, 어색한 표현, 중복 표현, 비문, 주어-서술어 불일치, 시제 불일치, 존댓말/반말 혼용, 조사 오류, 접속사 오용, 문장부호 오류
 
-[출력 형식 - 순수 JSON 배열만]
-[
-  {"line":1,"type":"오류유형","original":"원본","corrected":"수정","reason":"이유"},
-  {"line":2,"type":"오류유형","original":"원본","corrected":"수정","reason":"이유"}
-]
+[출력 형식]
+[{"line":1,"type":"유형","original":"원본","corrected":"수정","reason":"이유"}]
 
-오류가 없으면 빈 배열 [] 을 출력하세요.
+오류 없으면 []
 
 [대본]
 ${script}`;
 }
 
-// ===================== 응답 파싱 (v4.18 강화) =====================
+// ===================== 응답 파싱 =====================
 function parseAnalysisResponse(response) {
-    console.log('📝 응답 파싱 시작, 길이:', response.length);
-    
+    console.log('📝 응답 파싱, 길이:', response.length);
     try {
-        // 코드 블록 제거
-        let jsonStr = response
-            .replace(/```json\s*/gi, '')
-            .replace(/```\s*/gi, '')
-            .trim();
-
-        // 배열 추출 시도
+        let jsonStr = response.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
         const arrayMatch = jsonStr.match(/\[[\s\S]*\]/);
-        if (arrayMatch) {
-            jsonStr = arrayMatch[0];
-        }
+        if (arrayMatch) jsonStr = arrayMatch[0];
 
-        // 첫 번째 파싱 시도
         try {
             const parsed = JSON.parse(jsonStr);
-            console.log('✅ JSON 파싱 성공:', parsed.length + '개 오류');
+            console.log('✅ JSON 파싱 성공:', parsed.length + '개');
             return Array.isArray(parsed) ? parsed : [];
         } catch (e) {
             console.log('⚠️ JSON 복구 시도...');
         }
 
-        // 복구 시도: 불완전한 JSON 수정
-        // 1. 끝 쉼표 제거
-        jsonStr = jsonStr.replace(/,\s*]/g, ']').replace(/,\s*}/g, '}');
-        
-        // 2. 완전한 객체만 추출
+        // 정규식으로 추출
         const completeObjects = [];
-        const objectRegex = /\{\s*"line"\s*:\s*(\d+|-|"-")\s*,\s*"type"\s*:\s*"([^"]*)"\s*,\s*"original"\s*:\s*"([^"]*)"\s*,\s*"corrected"\s*:\s*"([^"]*)"\s*,\s*"reason"\s*:\s*"([^"]*)"\s*\}/g;
-        
+        const regex = /\{\s*"line"\s*:\s*(\d+|"-?")\s*,\s*"type"\s*:\s*"([^"]*)"\s*,\s*"original"\s*:\s*"([^"]*)"\s*,\s*"corrected"\s*:\s*"([^"]*)"\s*,\s*"reason"\s*:\s*"([^"]*)"\s*\}/g;
         let match;
-        while ((match = objectRegex.exec(response)) !== null) {
+        while ((match = regex.exec(response)) !== null) {
             completeObjects.push({
-                line: match[1] === '-' || match[1] === '"-"' ? '-' : parseInt(match[1]),
-                type: match[2],
-                original: match[3],
-                corrected: match[4],
-                reason: match[5]
+                line: isNaN(parseInt(match[1])) ? '-' : parseInt(match[1]),
+                type: match[2], original: match[3], corrected: match[4], reason: match[5]
             });
         }
-
         if (completeObjects.length > 0) {
-            console.log('✅ 정규식으로 ' + completeObjects.length + '개 오류 추출');
+            console.log('✅ 정규식 추출:', completeObjects.length + '개');
             return completeObjects;
         }
-
-        // 3. 부분 복구: 괄호 맞추기
-        const openBrackets = (jsonStr.match(/\[/g) || []).length;
-        const closeBrackets = (jsonStr.match(/\]/g) || []).length;
-        const openBraces = (jsonStr.match(/\{/g) || []).length;
-        const closeBraces = (jsonStr.match(/\}/g) || []).length;
-
-        // 누락된 닫는 괄호 추가
-        for (let i = 0; i < openBraces - closeBraces; i++) jsonStr += '}';
-        for (let i = 0; i < openBrackets - closeBrackets; i++) jsonStr += ']';
-        
-        // 불완전한 마지막 객체 제거
-        jsonStr = jsonStr.replace(/,\s*\{[^}]*$/g, '');
-        jsonStr = jsonStr.replace(/,\s*]/g, ']');
-
-        try {
-            const parsed = JSON.parse(jsonStr);
-            console.log('✅ 복구 성공:', (Array.isArray(parsed) ? parsed.length : 0) + '개 오류');
-            return Array.isArray(parsed) ? parsed : [];
-        } catch (e2) {
-            console.log('❌ 복구 실패, 빈 배열 반환');
-            return [];
-        }
-
+        console.log('❌ 파싱 실패');
+        return [];
     } catch (error) {
         console.error('❌ 파싱 오류:', error);
         return [];
@@ -744,95 +609,147 @@ function parseAnalysisResponse(response) {
 
 // ===================== 수정 적용 =====================
 function applyAllCorrections(script, aiErrors) {
-    if (!aiErrors || aiErrors.length === 0) {
-        console.log('📝 AI 수정 사항 없음');
-        return script;
-    }
-
+    if (!aiErrors || aiErrors.length === 0) { console.log('📝 AI 수정 없음'); return script; }
     let result = script;
-    let appliedCount = 0;
-
-    for (const error of aiErrors) {
-        if (error.original && error.corrected && error.original !== error.corrected) {
-            if (result.includes(error.original)) {
-                result = result.replace(error.original, error.corrected);
-                appliedCount++;
-                console.log(`   ✏️ "${error.original}" → "${error.corrected}"`);
-            }
+    let count = 0;
+    for (const e of aiErrors) {
+        if (e.original && e.corrected && e.original !== e.corrected && result.includes(e.original)) {
+            result = result.replace(e.original, e.corrected);
+            count++;
+            console.log(`   ✏️ "${e.original}" → "${e.corrected}"`);
         }
     }
-
-    console.log(`📝 수정 적용: ${appliedCount}/${aiErrors.length}건`);
+    console.log(`📝 수정 적용: ${count}/${aiErrors.length}건`);
     return result;
 }
 
-// ===================== 결과 렌더링 =====================
+// ===================== 분석 결과 렌더링 (클릭 가능) =====================
 function renderAnalysisResult(stage, allErrors) {
     const container = document.getElementById(`analysis-${stage}`);
-
     if (!allErrors || allErrors.length === 0) {
         container.innerHTML = '<div class="analysis-result"><p class="no-issues">✅ 발견된 오류가 없습니다.</p></div>';
         return;
     }
 
     let html = '<div class="analysis-result">';
-    html += `<h4>📋 검수 결과 (총 ${allErrors.length}건)</h4>`;
-    html += '<table class="result-table"><thead><tr>';
-    html += '<th>줄</th><th>유형</th><th>원본</th><th>수정</th><th>사유</th>';
-    html += '</tr></thead><tbody>';
+    html += `<h4>📋 검수 결과 (총 ${allErrors.length}건) <small style="color:#888;">- 클릭하면 해당 위치로 이동</small></h4>`;
+    html += '<div class="error-list-container" style="max-height:400px;overflow-y:auto;">';
 
     for (const e of allErrors) {
-        html += `<tr>
-            <td>${e.line}</td>
-            <td>${escapeHtml(e.type)}</td>
-            <td><span class="error-text">${escapeHtml(e.original)}</span></td>
-            <td><span class="corrected-text">${escapeHtml(e.corrected)}</span></td>
-            <td>${escapeHtml(e.reason)}</td>
-        </tr>`;
+        html += `<div class="error-item" data-stage="${stage}" data-index="${e.index}" data-corrected="${escapeHtml(e.corrected)}" 
+            style="padding:10px;margin:5px 0;border:1px solid #444;border-radius:5px;cursor:pointer;transition:background 0.2s;"
+            onmouseover="this.style.background='#2a2a2a'" onmouseout="this.style.background='transparent'">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <span style="background:#666;padding:2px 8px;border-radius:3px;font-size:12px;">${e.line}</span>
+                <span style="background:#1976D2;padding:2px 8px;border-radius:3px;font-size:12px;color:white;">${escapeHtml(e.type)}</span>
+            </div>
+            <div style="margin-top:8px;">
+                <span style="color:#ff6b6b;text-decoration:line-through;">${escapeHtml(e.original)}</span>
+                <span style="margin:0 8px;">→</span>
+                <span style="color:#51cf66;font-weight:bold;">${escapeHtml(e.corrected)}</span>
+            </div>
+            <div style="margin-top:5px;font-size:12px;color:#888;">${escapeHtml(e.reason)}</div>
+        </div>`;
     }
 
-    html += '</tbody></table></div>';
+    html += '</div></div>';
     container.innerHTML = html;
+
+    // 클릭 이벤트 추가
+    container.querySelectorAll('.error-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const stg = item.dataset.stage;
+            const idx = parseInt(item.dataset.index);
+            const corrected = item.dataset.corrected;
+            scrollToErrorInRevised(stg, idx, corrected);
+        });
+    });
 }
 
-function renderRevisedScript(stage, allErrors) {
-    const container = document.getElementById(`revised-${stage}`);
-    const s = state[stage];
+// ===================== 수정본 렌더링 (마커 포함) =====================
+function renderRevisedWithMarkers(script, allErrors, container, stage) {
+    if (!script) { container.innerHTML = '<p class="placeholder">내용이 없습니다.</p>'; return; }
 
-    renderFullScriptWithHighlight(s.revisedScript, allErrors, container);
+    // 수정된 텍스트에 마커 추가
+    let markedScript = script;
+    const markers = [];
 
-    const countEl = document.getElementById(`revision-count-${stage}`);
-    if (countEl) countEl.textContent = `수정: ${allErrors.length}건`;
-
-    const btnBefore = document.getElementById(`btn-revert-before-${stage}`);
-    const btnAfter = document.getElementById(`btn-revert-after-${stage}`);
-    if (btnBefore) { btnBefore.disabled = false; btnBefore.style.opacity = '1'; }
-    if (btnAfter) { btnAfter.disabled = false; btnAfter.style.opacity = '0.5'; }
-}
-
-function renderFullScriptWithHighlight(script, allErrors, container) {
-    if (!script) {
-        container.innerHTML = '<p class="placeholder">내용이 없습니다.</p>';
-        return;
-    }
-
-    const lines = script.split('\n');
-    const errorLines = new Set();
-    
-    if (allErrors) {
-        for (const e of allErrors) {
-            if (e.line && e.line !== '-') errorLines.add(parseInt(e.line));
+    for (const e of allErrors) {
+        if (e.corrected && e.corrected !== '(대체어 없음)' && markedScript.includes(e.corrected)) {
+            const marker = `<mark class="correction-marker" data-index="${e.index}" id="marker-${stage}-${e.index}" style="background:transparent;transition:background 0.3s;">${escapeHtml(e.corrected)}</mark>`;
+            markedScript = markedScript.replace(e.corrected, `%%MARKER${e.index}%%`);
+            markers.push({ index: e.index, marker });
         }
     }
 
-    let html = '<div class="script-scroll-wrapper"><div class="revised-script">';
-    lines.forEach((line, idx) => {
-        const lineNum = idx + 1;
-        const cls = errorLines.has(lineNum) ? 'line-modified' : 'line-unchanged';
-        html += `<p class="${cls}">${escapeHtml(line) || '&nbsp;'}</p>`;
+    // 마커 치환
+    for (const m of markers) {
+        markedScript = markedScript.replace(`%%MARKER${m.index}%%`, m.marker);
+    }
+
+    let html = '<div class="script-scroll-wrapper" id="scroll-wrapper-' + stage + '"><div class="revised-script">';
+    markedScript.split('\n').forEach((line, idx) => {
+        html += `<p class="line-unchanged" data-line="${idx + 1}">${line || '&nbsp;'}</p>`;
     });
     html += '</div></div>';
     container.innerHTML = html;
+}
+
+// ===================== 클릭 시 해당 위치로 이동 + 하이라이트 =====================
+function scrollToErrorInRevised(stage, index, correctedText) {
+    console.log(`🎯 이동: ${stage}, index=${index}, text="${correctedText}"`);
+
+    const scrollWrapper = document.getElementById(`scroll-wrapper-${stage}`);
+    const marker = document.getElementById(`marker-${stage}-${index}`);
+
+    // 기존 하이라이트 제거
+    document.querySelectorAll('.correction-marker').forEach(m => {
+        m.style.background = 'transparent';
+    });
+
+    if (marker && scrollWrapper) {
+        // 하이라이트 적용
+        marker.style.background = '#a8e6cf';
+        marker.style.padding = '2px 4px';
+        marker.style.borderRadius = '3px';
+
+        // 스크롤 이동
+        const markerRect = marker.getBoundingClientRect();
+        const wrapperRect = scrollWrapper.getBoundingClientRect();
+        const scrollTop = scrollWrapper.scrollTop + (markerRect.top - wrapperRect.top) - (wrapperRect.height / 2);
+        
+        scrollWrapper.scrollTo({
+            top: scrollTop,
+            behavior: 'smooth'
+        });
+
+        // 3초 후 하이라이트 제거
+        setTimeout(() => {
+            marker.style.background = 'transparent';
+        }, 3000);
+    } else {
+        // 마커가 없으면 텍스트 검색으로 찾기
+        const revisedContainer = document.getElementById(`revised-${stage}`);
+        const paragraphs = revisedContainer.querySelectorAll('p');
+        
+        for (const p of paragraphs) {
+            if (p.textContent.includes(correctedText)) {
+                // 해당 문단 하이라이트
+                const originalBg = p.style.background;
+                p.style.background = '#a8e6cf';
+                p.style.transition = 'background 0.3s';
+                
+                // 스크롤 이동
+                p.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // 3초 후 원복
+                setTimeout(() => {
+                    p.style.background = originalBg || 'transparent';
+                }, 3000);
+                break;
+            }
+        }
+    }
 }
 
 // ===================== 유틸리티 =====================
@@ -853,13 +770,9 @@ function escapeHtml(text) {
 
 // ===================== 다운로드 =====================
 function initDownloadButton() {
-    const btn = document.getElementById('btn-download');
-    btn.addEventListener('click', () => {
+    document.getElementById('btn-download').addEventListener('click', () => {
         const script = state.stage2.revisedScript || state.stage1.revisedScript;
-        if (!script) {
-            alert('다운로드할 수정본이 없습니다.');
-            return;
-        }
+        if (!script) return alert('다운로드할 수정본이 없습니다.');
         const blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
