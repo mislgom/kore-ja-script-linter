@@ -1,11 +1,11 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.35 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.35: 테이블 레이아웃 수정, 마커 유지 개선
+ * main.js v4.36 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.36: temperature 0.1로 변경 (더 일관된 결과)
  */
 
-console.log('🚀 main.js v4.35 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
-console.log('📌 v4.35 업데이트: 테이블 레이아웃 수정 + 마커 유지 개선');
+console.log('🚀 main.js v4.36 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
+console.log('📌 v4.36 업데이트: temperature 0.1로 변경');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -216,7 +216,7 @@ function initApp() {
     console.log('✅ 고증 DB 로드됨: ' + getTotalHistoricalRules() + '개 규칙');
     console.log('✅ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('✅ 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.35 초기화 완료');
+    console.log('✅ main.js v4.36 초기화 완료');
 }
 
 function ensureScoreSection() {
@@ -476,7 +476,6 @@ function addRevertButton(container, stage) {
     parent.appendChild(wrapper);
 }
 
-// v4.35: 수정 전/후 토글 시 마커 유지
 function toggleView(stage, viewType) {
     var container = document.getElementById('revised-' + stage);
     var s = state[stage];
@@ -493,7 +492,6 @@ function toggleView(stage, viewType) {
     
     if (viewType === 'original') {
         s.showingOriginal = true;
-        // v4.35: 원본에도 마커 표시 (주황색)
         displayOriginalWithMarkers(stage);
         if (btnBefore) btnBefore.style.opacity = '0.5';
         if (btnAfter) btnAfter.style.opacity = '1';
@@ -507,7 +505,6 @@ function toggleView(stage, viewType) {
     container.scrollTop = currentScroll;
 }
 
-// v4.35: 원본 대본에도 마커 표시
 function displayOriginalWithMarkers(stage) {
     var container = document.getElementById('revised-' + stage);
     if (!container) return;
@@ -516,7 +513,6 @@ function displayOriginalWithMarkers(stage) {
     var text = s.originalScript;
     var errors = s.allErrors || [];
     
-    // 원본 텍스트에 마커 삽입 (원문 기준)
     errors.forEach(function(err) {
         var markerId = err.id;
         
@@ -528,7 +524,6 @@ function displayOriginalWithMarkers(stage) {
     
     container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + text + '</div>';
     
-    // 마커 클릭 이벤트
     container.querySelectorAll('.correction-marker').forEach(function(marker) {
         marker.addEventListener('click', function() {
             var markerId = this.getAttribute('data-marker-id');
@@ -739,7 +734,7 @@ async function startAnalysis(stage) {
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
                 generationConfig: {
-                    temperature: 0.3,
+                    temperature: 0.1,  // v4.36: 0.3에서 0.1로 변경
                     maxOutputTokens: API_CONFIG.MAX_OUTPUT_TOKENS
                 }
             }),
@@ -823,7 +818,6 @@ function displayResults(stage, result) {
     s.allErrors = errors;
     s.revisedScript = result.revisedScript || s.originalScript;
     
-    // v4.35: 테이블 레이아웃 수정 (상태 선택 열 제거)
     displayAnalysisTable(stage, s.allErrors);
     displayRevisedWithMarkers(stage);
     
@@ -844,7 +838,6 @@ function displayResults(stage, result) {
     }
 }
 
-// v4.35: 테이블 레이아웃 수정 - 유형 | 원문 | 수정안 | 이유
 function displayAnalysisTable(stage, errors) {
     var container = document.getElementById('analysis-' + stage);
     if (!container) return;
@@ -876,7 +869,6 @@ function displayAnalysisTable(stage, errors) {
     html += '</tbody></table>';
     container.innerHTML = html;
     
-    // 행 클릭 시 해당 마커로 이동
     container.querySelectorAll('.error-row').forEach(function(row) {
         row.addEventListener('click', function() {
             var markerId = this.getAttribute('data-marker-id');
@@ -996,7 +988,7 @@ async function generateAndDisplayScores() {
             body: JSON.stringify({
                 contents: [{ parts: [{ text: scorePrompt }] }],
                 generationConfig: {
-                    temperature: 0.3,
+                    temperature: 0.1,  // v4.36: 점수 분석도 0.1로 변경
                     maxOutputTokens: 4096
                 }
             })
