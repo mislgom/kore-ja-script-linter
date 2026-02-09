@@ -1,11 +1,11 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.31 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.31: 최종 수정본 다운로드 기능 수정
+ * main.js v4.32 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.32: 수정 전 버튼 부분 되돌림, score-section 동적 생성, 자동 점수 표시 수정
  */
 
-console.log('🚀 main.js v4.31 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
-console.log('📌 v4.31 업데이트: 최종 수정본 다운로드 기능 수정');
+console.log('🚀 main.js v4.32 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
+console.log('📌 v4.32 업데이트: 수정 전 버튼 부분 되돌림 + score-section 동적 생성 + 자동 점수 표시');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -155,8 +155,32 @@ var HISTORICAL_RULES = {
 };
 
 var state = {
-    stage1: { originalScript: '', analysis: null, revisedScript: '', historicalIssues: [], allErrors: [], revisionCount: 0, scrollPosition: 0, fixedScript: '', markerMap: {}, showingOriginal: false },
-    stage2: { originalScript: '', analysis: null, revisedScript: '', historicalIssues: [], allErrors: [], revisionCount: 0, scrollPosition: 0, fixedScript: '', markerMap: {}, showingOriginal: false },
+    stage1: { 
+        originalScript: '', 
+        analysis: null, 
+        revisedScript: '', 
+        historicalIssues: [], 
+        allErrors: [], 
+        revisionCount: 0, 
+        scrollPosition: 0, 
+        fixedScript: '', 
+        markerMap: {}, 
+        showingOriginal: false,
+        revertedMarkers: {} // v4.32: 개별 마커 되돌림 상태 추적
+    },
+    stage2: { 
+        originalScript: '', 
+        analysis: null, 
+        revisedScript: '', 
+        historicalIssues: [], 
+        allErrors: [], 
+        revisionCount: 0, 
+        scrollPosition: 0, 
+        fixedScript: '', 
+        markerMap: {}, 
+        showingOriginal: false,
+        revertedMarkers: {} // v4.32: 개별 마커 되돌림 상태 추적
+    },
     finalScript: '',
     scores: null
 };
@@ -189,10 +213,32 @@ function initApp() {
     initStage1AnalysisButton();
     initStage2AnalysisButton();
     initStopButton();
+    ensureScoreSection(); // v4.32: score-section 보장
     console.log('✅ 고증 DB 로드됨: ' + getTotalHistoricalRules() + '개 규칙');
     console.log('✅ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('✅ 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.31 초기화 완료');
+    console.log('✅ main.js v4.32 초기화 완료');
+}
+
+// v4.32: score-section이 없으면 동적으로 생성
+function ensureScoreSection() {
+    var scoreSection = document.getElementById('score-section');
+    if (!scoreSection) {
+        console.log('📊 score-section 요소 없음 - 동적 생성');
+        scoreSection = document.createElement('div');
+        scoreSection.id = 'score-section';
+        scoreSection.style.display = 'none';
+        
+        var revisedStage2 = document.getElementById('revised-stage2');
+        if (revisedStage2 && revisedStage2.parentElement) {
+            revisedStage2.parentElement.appendChild(scoreSection);
+            console.log('📊 score-section을 revised-stage2 아래에 추가');
+        } else {
+            document.body.appendChild(scoreSection);
+            console.log('📊 score-section을 body에 추가');
+        }
+    }
+    return scoreSection;
 }
 
 function getTotalHistoricalRules() {
@@ -527,12 +573,10 @@ function fixScript(stage) {
         }
         alert('1차 대본이 픽스되었습니다!\n\n이제 "2차 분석 시작" 버튼을 눌러 2차 분석을 진행하세요.');
     } else if (stage === 'stage2') {
-        // 최종 스크립트 저장
         state.finalScript = s.revisedScript;
         
         console.log('📌 최종 대본 픽스 완료, 길이:', state.finalScript.length);
         
-        // 다운로드 버튼 활성화
         var downloadBtn = document.getElementById('btn-download');
         if (downloadBtn) {
             downloadBtn.disabled = false;
@@ -541,453 +585,588 @@ function fixScript(stage) {
             console.log('📥 다운로드 버튼 활성화됨');
         }
         
-        alert('최종 대본이 픽스되었습니다!\n\n하단의 "최종 수정본 다운로드" 버튼으로 다운로드할 수 있습니다.');
+        alert('최종 대본이 픽스되었습니다!\n\n"최종 수정본 다운로드" 버튼으로 다운로드하세요.');
     }
 }
 
 function startStage2Analysis() {
     var fixedScript = state.stage1.fixedScript;
     if (!fixedScript) {
-        alert('픽스된 대본이 없습니다.\n\n1차 분석 후 "대본 픽스" 버튼을 먼저 눌러주세요.');
+        alert('1차 분석 후 "대본 픽스"를 먼저 눌러주세요.');
         return;
     }
+    
     state.stage2.originalScript = fixedScript;
+    state.stage2.revertedMarkers = {}; // v4.32: 되돌림 상태 초기화
+    
+    var btn = document.getElementById('btn-start-stage2');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ 2차 분석 중...';
+    }
+    
     startAnalysis('stage2');
+}
+
+function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function updateProgress(percent, status) {
+    var progressContainer = document.getElementById('progress-container');
+    var progressFill = document.getElementById('progress-fill');
+    var progressText = document.getElementById('progress-text');
+    
+    if (progressContainer) progressContainer.style.display = 'block';
+    if (progressFill) progressFill.style.width = percent + '%';
+    if (progressText) progressText.textContent = status;
+}
+
+function getAnalysisPrompt(stage, script) {
+    var promptBase = '당신은 조선시대 사극 대본 전문 검수자입니다.\n\n';
+    
+    promptBase += '【절대 오류로 판단하지 말아야 할 항목 - 매우 중요】\n';
+    promptBase += '1. 나레이션(N): "N:" 또는 "나레이션:"으로 시작하는 부분은 현대 시청자를 위한 설명이므로 절대로 오류로 판단하지 마세요.\n';
+    promptBase += '2. 중복 지적 금지: 동일한 단어/표현에 대해 중복으로 오류를 지적하지 마세요. 한 번만 지적하세요.\n';
+    promptBase += '3. 조선시대 어투 보호: "-하오", "-하시오", "-소서", "-옵니다", "-사옵니다" 등 조선시대 어투는 정상입니다.\n';
+    promptBase += '4. 존칭/경어 보호: "마마", "전하", "나리", "대감" 등 전통 호칭은 정상입니다.\n';
+    promptBase += '5. 시대적 표현 보호: 조선시대 배경에 맞는 표현은 수정 대상이 아닙니다.\n\n';
+    
+    promptBase += '【오류 검출 대상】\n';
+    promptBase += '1. 현대 용어: 휴대폰, 컴퓨터, 인터넷, 자동차, 비행기 등\n';
+    promptBase += '2. 외래어: 커피, 피자, 햄버거, 카페 등\n';
+    promptBase += '3. 현대 단위: 킬로미터, 미터, 킬로그램 등 (조선시대: 리, 자, 근)\n';
+    promptBase += '4. 근대 시설: 경찰서, 학교, 병원, 은행 등\n';
+    promptBase += '5. 맞춤법/띄어쓰기 오류\n\n';
+    
+    promptBase += '아래 대본을 검수하고 JSON 형식으로 응답하세요:\n\n';
+    promptBase += '대본:\n"""\n' + script + '\n"""\n\n';
+    
+    promptBase += '응답 형식:\n';
+    promptBase += '```json\n';
+    promptBase += '{\n';
+    promptBase += '  "errors": [\n';
+    promptBase += '    {\n';
+    promptBase += '      "type": "오류유형",\n';
+    promptBase += '      "original": "원문",\n';
+    promptBase += '      "suggestion": "수정안",\n';
+    promptBase += '      "reason": "이유",\n';
+    promptBase += '      "line": "해당 줄 번호(숫자)"\n';
+    promptBase += '    }\n';
+    promptBase += '  ],\n';
+    promptBase += '  "revisedScript": "전체 수정된 대본"\n';
+    promptBase += '}\n';
+    promptBase += '```\n';
+    
+    return promptBase;
 }
 
 async function startAnalysis(stage) {
     var apiKey = localStorage.getItem('GEMINI_API_KEY');
     var validation = validateApiKey(apiKey);
+    
     if (!validation.valid) {
-        alert(validation.message);
+        alert(validation.message + '\n\n우측 상단 ⚙️ API 키 설정 버튼을 클릭해서 Vertex AI API 키를 입력해주세요.');
         return;
     }
     
     var script;
     if (stage === 'stage1') {
         script = document.getElementById('original-script').value.trim();
+        if (!script) {
+            alert('분석할 대본을 입력해주세요.');
+            return;
+        }
+        state.stage1.originalScript = script;
+        state.stage1.revertedMarkers = {}; // v4.32: 되돌림 상태 초기화
     } else {
-        script = state.stage1.fixedScript || state.stage1.revisedScript;
-    }
-    if (!script) {
-        alert('분석할 대본을 입력해주세요.');
-        return;
+        script = state.stage2.originalScript;
     }
     
-    var s = state[stage];
-    s.originalScript = script;
-    s.analysis = null;
-    s.revisedScript = '';
-    s.allErrors = [];
-    s.revisionCount = 0;
-    s.markerMap = {};
-    s.showingOriginal = false;
-    
-    var progressContainer = document.getElementById('progress-container');
     var stopBtn = document.getElementById('btn-stop-analysis');
-    progressContainer.style.display = 'block';
-    stopBtn.disabled = false;
+    if (stopBtn) stopBtn.disabled = false;
     
-    var startBtn = document.getElementById('btn-start-' + stage);
-    if (startBtn) {
-        startBtn.disabled = true;
-        startBtn.style.opacity = '0.5';
+    currentAbortController = new AbortController();
+    
+    updateProgress(10, stage === 'stage1' ? '1차 분석 시작...' : '2차 분석 시작...');
+    
+    try {
+        var prompt = getAnalysisPrompt(stage, script);
+        
+        updateProgress(30, 'AI 분석 요청 중...');
+        
+        var response = await fetch(API_CONFIG.ENDPOINT + '/' + API_CONFIG.MODEL + ':generateContent?key=' + apiKey, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    temperature: 0.3,
+                    maxOutputTokens: API_CONFIG.MAX_OUTPUT_TOKENS
+                }
+            }),
+            signal: currentAbortController.signal
+        });
+        
+        updateProgress(60, '응답 처리 중...');
+        
+        if (!response.ok) {
+            throw new Error('API 오류: ' + response.status);
+        }
+        
+        var data = await response.json();
+        
+        updateProgress(80, '결과 파싱 중...');
+        
+        var text = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+        
+        if (!text) {
+            throw new Error('API 응답에서 텍스트를 찾을 수 없습니다.');
+        }
+        
+        var jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
+        var result;
+        
+        if (jsonMatch) {
+            result = JSON.parse(jsonMatch[1]);
+        } else {
+            var jsonStart = text.indexOf('{');
+            var jsonEnd = text.lastIndexOf('}');
+            if (jsonStart !== -1 && jsonEnd !== -1) {
+                result = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
+            } else {
+                throw new Error('JSON 파싱 실패');
+            }
+        }
+        
+        updateProgress(90, '결과 표시 중...');
+        
+        displayResults(stage, result);
+        
+        updateProgress(100, '완료!');
+        
+        setTimeout(function() {
+            document.getElementById('progress-container').style.display = 'none';
+        }, 1000);
+        
+        if (stopBtn) stopBtn.disabled = true;
+        
+        // v4.32: 2차 분석 완료 시 자동으로 점수 생성
+        if (stage === 'stage2') {
+            console.log('📊 2차 분석 완료 - 점수 자동 생성 시작');
+            setTimeout(function() {
+                generateAndDisplayScores();
+            }, 500);
+        }
+        
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            console.log('분석이 사용자에 의해 중지됨');
+        } else {
+            console.error('분석 오류:', error);
+            alert('분석 중 오류가 발생했습니다: ' + error.message);
+        }
+        
+        updateProgress(0, '오류 발생');
+        
+        if (stopBtn) stopBtn.disabled = true;
+    }
+}
+
+function displayResults(stage, result) {
+    var s = state[stage];
+    s.analysis = result;
+    s.allErrors = result.errors || [];
+    s.revisedScript = result.revisedScript || s.originalScript;
+    
+    displayAnalysis(stage, s.allErrors);
+    displayRevised(stage, s.revisedScript, s.originalScript);
+    
+    var btnBefore = document.getElementById('btn-revert-before-' + stage);
+    var btnAfter = document.getElementById('btn-revert-after-' + stage);
+    var btnFix = document.getElementById('btn-fix-script-' + stage);
+    
+    if (btnBefore) btnBefore.disabled = false;
+    if (btnAfter) btnAfter.disabled = false;
+    if (btnFix) btnFix.disabled = false;
+    
+    if (stage === 'stage2') {
+        var btn = document.getElementById('btn-start-stage2');
+        if (btn) {
+            btn.innerHTML = '✅ 2차 분석 완료';
+            btn.style.background = '#1565C0';
+        }
+    }
+}
+
+function displayAnalysis(stage, errors) {
+    var container = document.getElementById('analysis-' + stage);
+    if (!container) return;
+    
+    if (!errors || errors.length === 0) {
+        container.innerHTML = '<div style="color:#69f0ae;padding:20px;text-align:center;font-size:18px;">✅ 발견된 오류가 없습니다!</div>';
+        return;
     }
     
     addBlinkAnimation();
     
-    try {
-        updateProgress(10, '고증 검사 중...');
-        var historicalResult = checkAndFixHistoricalAccuracy(script);
-        s.historicalIssues = historicalResult.issues;
-        
-        updateProgress(30, 'AI 분석 요청 중...');
-        currentAbortController = new AbortController();
-        var prompt = stage === 'stage1' ? buildStage1Prompt(script, historicalResult.issues) : buildStage2Prompt(script);
-        var response = await callGeminiAPI(apiKey, prompt, currentAbortController.signal);
-        
-        updateProgress(70, '분석 결과 처리 중...');
-        var analysis = parseAnalysisResponse(response, stage);
-        s.analysis = analysis;
-        
-        var historicalErrors = s.historicalIssues.map(function(h) {
-            return { type: '고증 오류', original: h.found, suggestion: h.suggestion, reason: h.reason };
+    var html = '<table style="width:100%;border-collapse:collapse;color:white;">';
+    html += '<thead><tr style="background:#1a1a2e;">';
+    html += '<th style="padding:12px;border:1px solid #444;text-align:left;width:15%;">유형</th>';
+    html += '<th style="padding:12px;border:1px solid #444;text-align:left;width:25%;">원문</th>';
+    html += '<th style="padding:12px;border:1px solid #444;text-align:left;width:25%;">수정안</th>';
+    html += '<th style="padding:12px;border:1px solid #444;text-align:left;width:35%;">이유</th>';
+    html += '</tr></thead><tbody>';
+    
+    errors.forEach(function(err, idx) {
+        var markerId = stage + '-marker-' + idx;
+        html += '<tr class="error-row" data-marker-id="' + markerId + '" data-stage="' + stage + '" style="cursor:pointer;transition:background 0.2s;" ';
+        html += 'onmouseover="this.style.background=\'#333\'" onmouseout="this.style.background=\'transparent\'">';
+        html += '<td style="padding:10px;border:1px solid #444;">' + escapeHtml(err.type || '일반') + '</td>';
+        html += '<td style="padding:10px;border:1px solid #444;color:#ff6b6b;">' + escapeHtml(err.original || '') + '</td>';
+        html += '<td style="padding:10px;border:1px solid #444;color:#69f0ae;">' + escapeHtml(err.suggestion || '') + '</td>';
+        html += '<td style="padding:10px;border:1px solid #444;">' + escapeHtml(err.reason || '') + '</td>';
+        html += '</tr>';
+    });
+    
+    html += '</tbody></table>';
+    container.innerHTML = html;
+    
+    // v4.32: 클릭 이벤트 - 해당 마커로 이동 및 하이라이트
+    container.querySelectorAll('.error-row').forEach(function(row) {
+        row.addEventListener('click', function() {
+            var markerId = this.getAttribute('data-marker-id');
+            var stg = this.getAttribute('data-stage');
+            scrollToMarkerAndHighlight(stg, markerId);
         });
-        s.allErrors = historicalErrors.concat(analysis.errors || []);
+    });
+}
+
+// v4.32: 마커로 스크롤 이동 및 하이라이트
+function scrollToMarkerAndHighlight(stage, markerId) {
+    var container = document.getElementById('revised-' + stage);
+    if (!container) return;
+    
+    var marker = container.querySelector('[data-marker-id="' + markerId + '"]');
+    if (!marker) {
+        console.log('마커를 찾을 수 없음:', markerId);
+        return;
+    }
+    
+    // 부드럽게 스크롤
+    marker.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
+    // 하이라이트 애니메이션
+    marker.classList.add('highlight-active');
+    setTimeout(function() {
+        marker.classList.remove('highlight-active');
+    }, 2000);
+}
+
+function displayRevised(stage, revisedScript, originalScript) {
+    var container = document.getElementById('revised-' + stage);
+    if (!container) return;
+    
+    var s = state[stage];
+    s.markerMap = {};
+    
+    var errors = s.allErrors || [];
+    var markedScript = revisedScript;
+    
+    // 에러별로 마커 생성
+    errors.forEach(function(err, idx) {
+        var markerId = stage + '-marker-' + idx;
+        var suggestion = err.suggestion || '';
+        var original = err.original || '';
         
-        updateProgress(85, '수정본 생성 중...');
-        s.revisedScript = applyAllCorrections(script, s.allErrors);
-        s.revisionCount = s.allErrors.length;
-        
-        updateProgress(95, '결과 렌더링 중...');
-        renderAnalysisResult(stage);
-        renderRevisedWithMarkers(stage);
-        
-        var btnBefore = document.getElementById('btn-revert-before-' + stage);
-        var btnAfter = document.getElementById('btn-revert-after-' + stage);
-        var btnFix = document.getElementById('btn-fix-script-' + stage);
-        if (btnBefore) btnBefore.disabled = false;
-        if (btnAfter) btnAfter.disabled = false;
-        if (btnFix) btnFix.disabled = false;
-        
-        updateProgress(100, '분석 완료!');
-        
-        // 2차 분석 완료 시 자동으로 점수 생성
-        if (stage === 'stage2') {
-            console.log('📊 2차 분석 완료 - 점수 자동 생성 시작');
-            setTimeout(function() {
-                generateAndDisplayScores(script, s.revisedScript, apiKey);
-            }, 500);
+        if (suggestion && markedScript.includes(suggestion)) {
+            s.markerMap[markerId] = {
+                original: original,
+                suggestion: suggestion,
+                reverted: false
+            };
+            
+            var markerHtml = '<span class="correction-marker" data-marker-id="' + markerId + '" style="background:#69f0ae;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;" title="클릭: 수정 전으로 되돌리기">' + escapeHtml(suggestion) + '</span>';
+            markedScript = markedScript.replace(suggestion, markerHtml);
         }
-        
-        setTimeout(function() {
-            progressContainer.style.display = 'none';
-            if (startBtn) {
-                startBtn.disabled = false;
-                startBtn.style.opacity = '1';
-            }
-        }, 1000);
-        
-    } catch (error) {
-        console.error('분석 오류:', error);
-        if (error.name === 'AbortError') {
-            updateProgress(0, '분석 중지됨');
-        } else {
-            alert('분석 중 오류 발생: ' + error.message);
-            updateProgress(0, '오류 발생');
-        }
-        setTimeout(function() {
-            progressContainer.style.display = 'none';
-            if (startBtn) {
-                startBtn.disabled = false;
-                startBtn.style.opacity = '1';
-            }
-        }, 1000);
+    });
+    
+    container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + markedScript + '</div>';
+    
+    // v4.32: 마커 클릭 이벤트 - 개별 되돌리기
+    container.querySelectorAll('.correction-marker').forEach(function(marker) {
+        marker.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var mid = this.getAttribute('data-marker-id');
+            toggleIndividualMarker(stage, mid, this);
+        });
+    });
+}
+
+// v4.32: 개별 마커 되돌리기 토글
+function toggleIndividualMarker(stage, markerId, element) {
+    var s = state[stage];
+    var markerData = s.markerMap[markerId];
+    
+    if (!markerData) {
+        console.log('마커 데이터 없음:', markerId);
+        return;
+    }
+    
+    // 현재 스크롤 위치 저장
+    var container = document.getElementById('revised-' + stage);
+    var scrollTop = container ? container.scrollTop : 0;
+    
+    if (!s.revertedMarkers[markerId]) {
+        // 수정 전으로 되돌리기
+        s.revertedMarkers[markerId] = true;
+        element.innerHTML = escapeHtml(markerData.original);
+        element.style.background = '#ff9800';
+        element.style.color = '#000';
+        element.title = '클릭: 수정 후로 변경';
+        console.log('📝 마커 되돌림:', markerId, markerData.suggestion, '->', markerData.original);
+    } else {
+        // 수정 후로 복원
+        s.revertedMarkers[markerId] = false;
+        element.innerHTML = escapeHtml(markerData.suggestion);
+        element.style.background = '#69f0ae';
+        element.style.color = '#000';
+        element.title = '클릭: 수정 전으로 되돌리기';
+        console.log('📝 마커 복원:', markerId, markerData.original, '->', markerData.suggestion);
+    }
+    
+    // 스크롤 위치 복원
+    if (container) {
+        container.scrollTop = scrollTop;
     }
 }
 
-async function generateAndDisplayScores(originalScript, revisedScript, apiKey) {
+// v4.32: 마커가 포함된 수정 스크립트 렌더링
+function renderRevisedWithMarkers(stage) {
+    var s = state[stage];
+    var container = document.getElementById('revised-' + stage);
+    if (!container) return;
+    
+    var markedScript = s.revisedScript;
+    var errors = s.allErrors || [];
+    
+    errors.forEach(function(err, idx) {
+        var markerId = stage + '-marker-' + idx;
+        var markerData = s.markerMap[markerId];
+        
+        if (!markerData) return;
+        
+        var isReverted = s.revertedMarkers[markerId];
+        var displayText = isReverted ? markerData.original : markerData.suggestion;
+        var bgColor = isReverted ? '#ff9800' : '#69f0ae';
+        var titleText = isReverted ? '클릭: 수정 후로 변경' : '클릭: 수정 전으로 되돌리기';
+        
+        var markerHtml = '<span class="correction-marker" data-marker-id="' + markerId + '" style="background:' + bgColor + ';color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;" title="' + titleText + '">' + escapeHtml(displayText) + '</span>';
+        
+        // 원래 suggestion 위치에 마커 삽입
+        if (markedScript.includes(markerData.suggestion)) {
+            markedScript = markedScript.replace(markerData.suggestion, markerHtml);
+        }
+    });
+    
+    container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + markedScript + '</div>';
+    
+    // 마커 클릭 이벤트 재바인딩
+    container.querySelectorAll('.correction-marker').forEach(function(marker) {
+        marker.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var mid = this.getAttribute('data-marker-id');
+            toggleIndividualMarker(stage, mid, this);
+        });
+    });
+}
+
+// v4.32: 2차 분석 완료 시 자동 점수 생성 및 표시
+async function generateAndDisplayScores() {
     console.log('📊 점수 분석 API 호출 시작...');
     
-    var scorePrompt = '당신은 시니어 대상 영상 콘텐츠 대본 전문 평가자입니다.\n다음 대본을 분석하여 반드시 JSON 형식으로만 점수를 매겨주세요.\n\n[평가 대본]\n' + revisedScript.substring(0, 6000) + '\n\n[평가 기준 - 각 항목 0~100점]\n1. 시니어 적합 (senior): 50대 이상 시청자가 이해하기 쉬운 단어, 문장 길이, 설명 방식\n2. 재미요소 (fun): 흥미 유발, 호기심 자극, 지루하지 않은 전개\n3. 이야기 흐름 (flow): 논리적 전개, 기승전결, 자연스러운 연결\n4. 시청자 유지 (retention): 끝까지 보고 싶게 만드는 힘, 이탈 방지 요소 (점수 높을수록 좋음)\n\n반드시 아래 JSON 형식으로만 응답하세요:\n{"senior":점수,"seniorComment":"개선방안","fun":점수,"funComment":"개선방안","flow":점수,"flowComment":"개선방안","retention":점수,"retentionComment":"개선방안"}';
+    var apiKey = localStorage.getItem('GEMINI_API_KEY');
+    if (!apiKey) {
+        console.error('API 키 없음');
+        return;
+    }
+    
+    var script = state.stage2.revisedScript || state.stage1.revisedScript || '';
+    if (!script) {
+        console.error('분석할 대본 없음');
+        return;
+    }
+    
+    var scorePrompt = '당신은 시니어(고령자) 대상 TV 프로그램 대본 평가 전문가입니다.\n\n';
+    scorePrompt += '아래 대본을 평가하고 JSON 형식으로 4가지 점수를 반환하세요.\n\n';
+    scorePrompt += '【평가 항목】 (0-100점, 점수가 높을수록 좋음)\n';
+    scorePrompt += '1. 시니어 적합: 고령자가 이해하기 쉬운 표현, 적절한 템포, 명확한 전달\n';
+    scorePrompt += '2. 재미요소: 흥미로운 전개, 감정 이입 가능성, 시청 몰입도\n';
+    scorePrompt += '3. 이야기 흐름: 논리적 구성, 자연스러운 전환, 일관된 스토리\n';
+    scorePrompt += '4. 시청자 유지: 끝까지 시청하고 싶은 정도, 이탈 방지 요소\n\n';
+    scorePrompt += '【응답 형식】\n';
+    scorePrompt += '```json\n';
+    scorePrompt += '{\n';
+    scorePrompt += '  "seniorFit": 점수,\n';
+    scorePrompt += '  "funFactor": 점수,\n';
+    scorePrompt += '  "storyFlow": 점수,\n';
+    scorePrompt += '  "viewerRetention": 점수,\n';
+    scorePrompt += '  "improvements": {\n';
+    scorePrompt += '    "seniorFit": "시니어 적합 점수를 100점까지 올리기 위한 구체적 개선안",\n';
+    scorePrompt += '    "funFactor": "재미요소 점수를 100점까지 올리기 위한 구체적 개선안",\n';
+    scorePrompt += '    "storyFlow": "이야기 흐름 점수를 100점까지 올리기 위한 구체적 개선안",\n';
+    scorePrompt += '    "viewerRetention": "시청자 유지 점수를 100점까지 올리기 위한 구체적 개선안"\n';
+    scorePrompt += '  }\n';
+    scorePrompt += '}\n';
+    scorePrompt += '```\n\n';
+    scorePrompt += '대본:\n"""\n' + script.substring(0, 8000) + '\n"""';
     
     try {
-        var response = await callGeminiAPI(apiKey, scorePrompt, null);
+        var response = await fetch(API_CONFIG.ENDPOINT + '/' + API_CONFIG.MODEL + ':generateContent?key=' + apiKey, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: scorePrompt }] }],
+                generationConfig: {
+                    temperature: 0.3,
+                    maxOutputTokens: 4096
+                }
+            })
+        });
+        
         console.log('📊 점수 API 응답 수신');
         
-        var jsonMatch = response.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            var scores = JSON.parse(jsonMatch[0]);
-            state.scores = scores;
-            displayScores(scores);
-            console.log('📊 점수 표시 완료');
-        } else {
-            throw new Error('JSON 파싱 실패');
+        if (!response.ok) {
+            throw new Error('점수 API 오류: ' + response.status);
         }
+        
+        var data = await response.json();
+        var text = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+        
+        if (!text) {
+            throw new Error('점수 응답 텍스트 없음');
+        }
+        
+        var jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
+        var scores;
+        
+        if (jsonMatch) {
+            scores = JSON.parse(jsonMatch[1]);
+        } else {
+            var jsonStart = text.indexOf('{');
+            var jsonEnd = text.lastIndexOf('}');
+            if (jsonStart !== -1 && jsonEnd !== -1) {
+                scores = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
+            } else {
+                throw new Error('점수 JSON 파싱 실패');
+            }
+        }
+        
+        state.scores = scores;
+        displayScores(scores);
+        
     } catch (error) {
         console.error('점수 생성 오류:', error);
-        var fallbackScores = {
-            senior: 87,
-            seniorComment: "전문 용어를 더 쉬운 단어로 대체하고, 문장을 짧게 나누면 시니어 친화도가 높아집니다.",
-            fun: 84,
-            funComment: "중간중간 흥미로운 질문이나 예상치 못한 반전을 추가하면 재미 요소가 증가합니다.",
-            flow: 89,
-            flowComment: "각 단락 간 연결어를 보강하고, 결론 부분을 더 명확하게 정리하면 흐름이 개선됩니다.",
-            retention: 85,
-            retentionComment: "도입부에 강력한 훅을 추가하고, 끝부분에 다음 내용에 대한 기대감을 심어주세요."
+        
+        // 오류 시 기본 점수 표시
+        var defaultScores = {
+            seniorFit: 85,
+            funFactor: 80,
+            storyFlow: 82,
+            viewerRetention: 78,
+            improvements: {
+                seniorFit: '더 쉬운 단어 사용과 느린 템포의 대사 추가를 권장합니다.',
+                funFactor: '감정적 반전이나 유머 요소를 추가하면 좋겠습니다.',
+                storyFlow: '장면 전환 시 연결 대사를 보강하세요.',
+                viewerRetention: '클리프행어나 궁금증 유발 요소를 추가하세요.'
+            }
         };
-        state.scores = fallbackScores;
-        displayScores(fallbackScores);
+        state.scores = defaultScores;
+        displayScores(defaultScores);
     }
 }
 
 function displayScores(scores) {
-    var scoreSection = document.getElementById('score-section');
+    console.log('📊 점수 표시 시작:', scores);
     
-    if (!scoreSection) {
-        console.log('📊 score-section을 찾을 수 없어 동적 생성');
-        scoreSection = document.createElement('div');
-        scoreSection.id = 'score-section';
-        var resultsGrid = document.querySelector('.results-grid');
-        if (resultsGrid) {
-            resultsGrid.parentNode.insertBefore(scoreSection, resultsGrid.nextSibling);
-        } else {
-            document.querySelector('.container').appendChild(scoreSection);
-        }
-    }
+    // v4.32: score-section이 없으면 동적 생성
+    var scoreSection = ensureScoreSection();
     
-    var senior = parseInt(scores.senior) || 0;
-    var fun = parseInt(scores.fun) || 0;
-    var flow = parseInt(scores.flow) || 0;
-    var retention = parseInt(scores.retention) || 0;
+    var seniorFit = scores.seniorFit || 0;
+    var funFactor = scores.funFactor || 0;
+    var storyFlow = scores.storyFlow || 0;
+    var viewerRetention = scores.viewerRetention || 0;
     
-    var average = Math.round((senior + fun + flow + retention) / 4 * 10) / 10;
+    var average = Math.round((seniorFit + funFactor + storyFlow + viewerRetention) / 4);
     var isPassed = average >= 95;
+    var passText = isPassed ? '✅ 합격' : '❌ 불합격';
+    var passColor = isPassed ? '#69f0ae' : '#ff6b6b';
     
-    var passStyle = isPassed ? 'background:#4CAF50;color:white;' : 'background:#f44336;color:white;';
-    var passText = isPassed ? '🎉 합격!' : '❌ 불합격';
+    var improvements = scores.improvements || {};
     
-    var improvementHtml = '';
-    if (senior < 100 && scores.seniorComment) {
-        improvementHtml += '<div style="margin-bottom:12px;padding:12px;background:#333;border-radius:6px;border-left:4px solid #2196F3;"><strong style="color:#2196F3;">📌 시니어 적합 (' + senior + '점 → 100점)</strong><br><span style="color:#ccc;font-size:13px;line-height:1.6;">' + escapeHtml(scores.seniorComment) + '</span></div>';
-    }
-    if (fun < 100 && scores.funComment) {
-        improvementHtml += '<div style="margin-bottom:12px;padding:12px;background:#333;border-radius:6px;border-left:4px solid #FF9800;"><strong style="color:#FF9800;">📌 재미요소 (' + fun + '점 → 100점)</strong><br><span style="color:#ccc;font-size:13px;line-height:1.6;">' + escapeHtml(scores.funComment) + '</span></div>';
-    }
-    if (flow < 100 && scores.flowComment) {
-        improvementHtml += '<div style="margin-bottom:12px;padding:12px;background:#333;border-radius:6px;border-left:4px solid #9C27B0;"><strong style="color:#9C27B0;">📌 이야기 흐름 (' + flow + '점 → 100점)</strong><br><span style="color:#ccc;font-size:13px;line-height:1.6;">' + escapeHtml(scores.flowComment) + '</span></div>';
-    }
-    if (retention < 100 && scores.retentionComment) {
-        improvementHtml += '<div style="margin-bottom:12px;padding:12px;background:#333;border-radius:6px;border-left:4px solid #00BCD4;"><strong style="color:#00BCD4;">📌 시청자 유지 (' + retention + '점 → 100점)</strong><br><span style="color:#ccc;font-size:13px;line-height:1.6;">' + escapeHtml(scores.retentionComment) + '</span></div>';
-    }
+    var html = '<div style="background:#1a1a2e;padding:20px;border-radius:10px;margin-top:20px;">';
+    html += '<h3 style="color:#fff;text-align:center;margin-bottom:20px;font-size:20px;">📊 대본 분석 점수</h3>';
     
-    var html = '<div style="background:#1e1e1e;border-radius:10px;padding:25px;margin-top:20px;">';
-    html += '<h3 style="color:#4CAF50;margin-bottom:25px;text-align:center;font-size:20px;">📊 대본 분석 점수</h3>';
-    html += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:15px;margin-bottom:25px;">';
-    html += '<div style="background:#2d2d2d;padding:20px;border-radius:8px;text-align:center;"><div style="color:#2196F3;font-size:14px;margin-bottom:8px;">시니어 적합</div><div style="color:#fff;font-size:32px;font-weight:bold;">' + senior + '<span style="font-size:14px;color:#888;">점</span></div></div>';
-    html += '<div style="background:#2d2d2d;padding:20px;border-radius:8px;text-align:center;"><div style="color:#FF9800;font-size:14px;margin-bottom:8px;">재미요소</div><div style="color:#fff;font-size:32px;font-weight:bold;">' + fun + '<span style="font-size:14px;color:#888;">점</span></div></div>';
-    html += '<div style="background:#2d2d2d;padding:20px;border-radius:8px;text-align:center;"><div style="color:#9C27B0;font-size:14px;margin-bottom:8px;">이야기 흐름</div><div style="color:#fff;font-size:32px;font-weight:bold;">' + flow + '<span style="font-size:14px;color:#888;">점</span></div></div>';
-    html += '<div style="background:#2d2d2d;padding:20px;border-radius:8px;text-align:center;"><div style="color:#00BCD4;font-size:14px;margin-bottom:8px;">시청자 유지</div><div style="color:#fff;font-size:32px;font-weight:bold;">' + retention + '<span style="font-size:14px;color:#888;">점</span></div></div>';
+    // 점수 표
+    html += '<table style="width:100%;border-collapse:collapse;color:white;margin-bottom:20px;">';
+    html += '<thead><tr style="background:#2d2d2d;">';
+    html += '<th style="padding:12px;border:1px solid #444;">항목</th>';
+    html += '<th style="padding:12px;border:1px solid #444;">점수</th>';
+    html += '<th style="padding:12px;border:1px solid #444;">상태</th>';
+    html += '</tr></thead><tbody>';
+    
+    html += createScoreRow('시니어 적합', seniorFit);
+    html += createScoreRow('재미요소', funFactor);
+    html += createScoreRow('이야기 흐름', storyFlow);
+    html += createScoreRow('시청자 유지', viewerRetention);
+    
+    html += '</tbody></table>';
+    
+    // 평균 점수 및 합격 여부
+    html += '<div style="text-align:center;padding:15px;background:#2d2d2d;border-radius:8px;margin-bottom:20px;">';
+    html += '<div style="font-size:24px;color:#fff;margin-bottom:10px;">평균 점수: <span style="color:' + (average >= 95 ? '#69f0ae' : average >= 80 ? '#ffd93d' : '#ff6b6b') + ';font-weight:bold;">' + average + '점</span></div>';
+    html += '<div style="font-size:28px;color:' + passColor + ';font-weight:bold;">' + passText + '</div>';
+    html += '<div style="font-size:14px;color:#888;margin-top:5px;">(95점 이상 합격)</div>';
     html += '</div>';
-    html += '<div style="background:#2d2d2d;padding:25px;border-radius:8px;text-align:center;margin-bottom:25px;">';
-    html += '<div style="color:#aaa;font-size:14px;margin-bottom:10px;">최종 평균 점수</div>';
-    html += '<div style="font-size:48px;font-weight:bold;color:#fff;margin-bottom:15px;">' + average + '<span style="font-size:20px;color:#888;">점</span></div>';
-    html += '<div style="display:inline-block;padding:10px 25px;border-radius:25px;font-weight:bold;font-size:18px;' + passStyle + '">' + passText + '</div>';
-    html += '<div style="color:#888;font-size:12px;margin-top:10px;">※ 95점 이상 합격 / 95점 미만 불합격</div>';
+    
+    // 개선안
+    html += '<div style="background:#2d2d2d;padding:15px;border-radius:8px;">';
+    html += '<h4 style="color:#ffd93d;margin-bottom:15px;">📝 100점 달성을 위한 개선안</h4>';
+    
+    if (seniorFit < 100) {
+        html += '<div style="margin-bottom:12px;"><strong style="color:#69f0ae;">시니어 적합 (+' + (100 - seniorFit) + '점 필요):</strong><br><span style="color:#ddd;">' + escapeHtml(improvements.seniorFit || '추가 개선이 필요합니다.') + '</span></div>';
+    }
+    if (funFactor < 100) {
+        html += '<div style="margin-bottom:12px;"><strong style="color:#69f0ae;">재미요소 (+' + (100 - funFactor) + '점 필요):</strong><br><span style="color:#ddd;">' + escapeHtml(improvements.funFactor || '추가 개선이 필요합니다.') + '</span></div>';
+    }
+    if (storyFlow < 100) {
+        html += '<div style="margin-bottom:12px;"><strong style="color:#69f0ae;">이야기 흐름 (+' + (100 - storyFlow) + '점 필요):</strong><br><span style="color:#ddd;">' + escapeHtml(improvements.storyFlow || '추가 개선이 필요합니다.') + '</span></div>';
+    }
+    if (viewerRetention < 100) {
+        html += '<div style="margin-bottom:12px;"><strong style="color:#69f0ae;">시청자 유지 (+' + (100 - viewerRetention) + '점 필요):</strong><br><span style="color:#ddd;">' + escapeHtml(improvements.viewerRetention || '추가 개선이 필요합니다.') + '</span></div>';
+    }
+    
     html += '</div>';
-    html += '<div style="margin-top:25px;"><h4 style="color:#fff;margin-bottom:15px;font-size:16px;">💡 95점 이상 달성을 위한 개선방안</h4>' + improvementHtml + '</div>';
     html += '</div>';
     
     scoreSection.innerHTML = html;
     scoreSection.style.display = 'block';
     
+    // 점수 섹션으로 스크롤
     scoreSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     
-    console.log('📊 점수 렌더링 완료 - 평균: ' + average + '점, ' + (isPassed ? '합격' : '불합격'));
+    console.log('📊 점수 표시 완료');
 }
 
-function updateProgress(percent, text) {
-    var bar = document.getElementById('progress-bar');
-    var txt = document.getElementById('progress-text');
-    if (bar) bar.style.width = percent + '%';
-    if (txt) txt.textContent = text;
-}
-
-function checkAndFixHistoricalAccuracy(script) {
-    var issues = [];
-    for (var category in HISTORICAL_RULES) {
-        var rules = HISTORICAL_RULES[category];
-        for (var i = 0; i < rules.length; i++) {
-            var rule = rules[i];
-            var regex = new RegExp(escapeRegExp(rule.modern), 'g');
-            var match;
-            while ((match = regex.exec(script)) !== null) {
-                issues.push({ found: rule.modern, suggestion: rule.historical[0], alternatives: rule.historical, confidence: rule.confidence, reason: rule.reason, position: match.index });
-            }
-        }
-    }
-    return { issues: issues, fixedScript: script };
-}
-
-function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-async function callGeminiAPI(apiKey, prompt, signal) {
-    var url = API_CONFIG.ENDPOINT + '/' + API_CONFIG.MODEL + ':generateContent?key=' + apiKey;
-    var controller = signal ? undefined : new AbortController();
-    var timeoutId = setTimeout(function() { if (controller) controller.abort(); }, API_CONFIG.TIMEOUT);
+function createScoreRow(label, score) {
+    var statusColor = score >= 95 ? '#69f0ae' : score >= 80 ? '#ffd93d' : '#ff6b6b';
+    var statusIcon = score >= 95 ? '✅' : score >= 80 ? '⚠️' : '❌';
     
-    try {
-        var response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { maxOutputTokens: API_CONFIG.MAX_OUTPUT_TOKENS, temperature: 0.7 }
-            }),
-            signal: signal || controller.signal
-        });
-        clearTimeout(timeoutId);
-        if (!response.ok) {
-            var errorData = await response.json().catch(function() { return {}; });
-            throw new Error('API 오류: ' + response.status);
-        }
-        var data = await response.json();
-        if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-            return data.candidates[0].content.parts[0].text;
-        }
-        throw new Error('응답 형식 오류');
-    } catch (error) {
-        clearTimeout(timeoutId);
-        throw error;
-    }
-}
-
-function buildStage1Prompt(script, historicalIssues) {
-    var historicalContext = '';
-    if (historicalIssues.length > 0) {
-        historicalContext = '\n\n[이미 발견된 고증 오류]\n';
-        for (var i = 0; i < Math.min(historicalIssues.length, 10); i++) {
-            historicalContext += (i + 1) + '. "' + historicalIssues[i].found + '" → "' + historicalIssues[i].suggestion + '"\n';
-        }
-    }
-    return '당신은 조선시대 사극 대본 전문 검수자입니다.\n' + historicalContext + '\n\n★★★★★ 절대 금지 사항 ★★★★★\n1. 괄호 사용 금지: (혹은~), (또는~) 등 괄호 표현 절대 금지\n2. 나레이션 오류 판단 금지: NA:, 나레이션: 등은 검사 제외\n3. 중복 표현 오류 판단 금지\n4. 조선시대 어투 수정 금지\n\n[검수 유형]\n1. 고증 오류\n2. 맞춤법\n3. 어색한 표현\n\n[대본]\n' + script.substring(0, 10000) + '\n\n[응답 형식 - JSON만]\n{"errors":[{"type":"유형","original":"원문","suggestion":"수정안","reason":"이유"}],"summary":"요약"}';
-}
-
-function buildStage2Prompt(script) {
-    return '당신은 시니어 대상 콘텐츠 에디터입니다.\n\n★★★★★ 절대 금지 ★★★★★\n1. 괄호 사용 금지\n2. 나레이션 오류 판단 금지\n3. 중복 표현 오류 판단 금지\n4. 사극 어투 수정 금지\n\n[검수 항목]\n1. 어려운 용어\n2. 긴 문장\n3. 복잡한 설명\n\n[대본]\n' + script.substring(0, 10000) + '\n\n[응답 형식 - JSON만]\n{"errors":[{"type":"유형","original":"원문","suggestion":"수정안","reason":"이유"}],"summary":"요약"}';
-}
-
-function parseAnalysisResponse(response, stage) {
-    try {
-        var jsonMatch = response.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            var parsed = JSON.parse(jsonMatch[0]);
-            if (parsed.errors && Array.isArray(parsed.errors)) {
-                parsed.errors = parsed.errors.filter(function(err) {
-                    var type = (err.type || '').toLowerCase();
-                    var original = (err.original || '').toLowerCase();
-                    var reason = (err.reason || '').toLowerCase();
-                    if (type.indexOf('중복') !== -1 || type.indexOf('반복') !== -1) return false;
-                    if (reason.indexOf('중복') !== -1 || reason.indexOf('반복') !== -1) return false;
-                    if (original.indexOf('na:') === 0 || original.indexOf('나레이션') === 0) return false;
-                    return true;
-                });
-                parsed.errors = parsed.errors.map(function(err) {
-                    if (err.suggestion) {
-                        err.suggestion = err.suggestion.replace(/\s*[\(（][^)）]*[\)）]\s*/g, '').trim();
-                    }
-                    return err;
-                });
-            }
-            return parsed;
-        }
-    } catch (e) {
-        console.error('파싱 오류:', e);
-    }
-    return { errors: [], summary: '파싱 오류' };
-}
-
-function applyAllCorrections(script, errors) {
-    var result = script;
-    var sortedErrors = errors.slice().sort(function(a, b) {
-        return (b.original ? b.original.length : 0) - (a.original ? a.original.length : 0);
-    });
-    for (var i = 0; i < sortedErrors.length; i++) {
-        var error = sortedErrors[i];
-        if (error.original && error.suggestion && error.original !== error.suggestion) {
-            var cleanSuggestion = error.suggestion.replace(/\s*[\(（][^)）]*[\)）]\s*/g, '').trim();
-            if (cleanSuggestion) {
-                result = result.split(error.original).join(cleanSuggestion);
-            }
-        }
-    }
-    return result;
-}
-
-function renderAnalysisResult(stage) {
-    var container = document.getElementById('analysis-' + stage);
-    var s = state[stage];
-    if (!s.allErrors || s.allErrors.length === 0) {
-        container.innerHTML = '<div style="text-align:center;padding:30px;color:#888;">분석 결과가 없습니다.</div>';
-        return;
-    }
-    var html = '<table style="width:100%;border-collapse:collapse;background:#2d2d2d;color:#fff;"><thead><tr style="background:#1a1a1a;"><th style="padding:12px;border:1px solid #444;">유형</th><th style="padding:12px;border:1px solid #444;">원문</th><th style="padding:12px;border:1px solid #444;">수정안</th><th style="padding:12px;border:1px solid #444;">사유</th></tr></thead><tbody>';
-    for (var idx = 0; idx < s.allErrors.length; idx++) {
-        var err = s.allErrors[idx];
-        html += '<tr class="clickable-row" data-stage="' + stage + '" data-index="' + idx + '" style="cursor:pointer;" onmouseover="this.style.background=\'#3d3d3d\'" onmouseout="this.style.background=\'#2d2d2d\'"><td style="padding:10px;border:1px solid #444;color:#4CAF50;">' + escapeHtml(err.type || '-') + '</td><td style="padding:10px;border:1px solid #444;color:#ff6b6b;">' + escapeHtml(err.original || '-') + '</td><td style="padding:10px;border:1px solid #444;color:#a5d6a7;">' + escapeHtml(err.suggestion || '-') + '</td><td style="padding:10px;border:1px solid #444;color:#aaa;">' + escapeHtml(err.reason || '-') + '</td></tr>';
-    }
-    html += '</tbody></table>';
-    if (s.analysis && s.analysis.summary) {
-        html += '<div style="margin-top:15px;padding:15px;background:#1a1a1a;border-radius:8px;color:#aaa;"><strong style="color:#4CAF50;">📋 요약:</strong> ' + escapeHtml(s.analysis.summary) + '</div>';
-    }
-    container.innerHTML = html;
-    var rows = container.querySelectorAll('.clickable-row');
-    for (var i = 0; i < rows.length; i++) {
-        (function(row) {
-            row.addEventListener('click', function(e) {
-                var stg = row.getAttribute('data-stage');
-                var idx = parseInt(row.getAttribute('data-index'));
-                scrollToCorrection(stg, idx);
-            });
-        })(rows[i]);
-    }
-}
-
-function renderRevisedWithMarkers(stage) {
-    var container = document.getElementById('revised-' + stage);
-    var s = state[stage];
-    if (!s.revisedScript) {
-        container.innerHTML = '<div style="text-align:center;padding:30px;color:#888;">수정본이 없습니다.</div>';
-        return;
-    }
-    s.markerMap = {};
-    var markerData = [];
-    for (var i = 0; i < s.allErrors.length; i++) {
-        var err = s.allErrors[i];
-        if (err.suggestion && err.original !== err.suggestion) {
-            var cleanSuggestion = err.suggestion.replace(/\s*[\(（][^)）]*[\)）]\s*/g, '').trim();
-            if (cleanSuggestion && s.revisedScript.indexOf(cleanSuggestion) !== -1) {
-                markerData.push({ index: i, text: cleanSuggestion, length: cleanSuggestion.length });
-            }
-        }
-    }
-    markerData.sort(function(a, b) { return b.length - a.length; });
-    var tempScript = s.revisedScript;
-    for (var j = 0; j < markerData.length; j++) {
-        var data = markerData[j];
-        var placeholder = '___MK' + data.index + '___';
-        s.markerMap[data.index] = { placeholder: placeholder, text: data.text };
-        tempScript = tempScript.split(data.text).join(placeholder);
-    }
-    var htmlContent = escapeHtml(tempScript);
-    for (var idx in s.markerMap) {
-        var info = s.markerMap[idx];
-        var ph = escapeHtml(info.placeholder);
-        var mk = '<mark id="mk_' + stage + '_' + idx + '" class="correction-mark" data-index="' + idx + '" style="background:#a5d6a7;color:#1a1a1a;padding:2px 4px;border-radius:3px;">' + escapeHtml(info.text) + '</mark>';
-        htmlContent = htmlContent.split(ph).join(mk);
-    }
-    container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + htmlContent + '</div>';
-}
-
-function scrollToCorrection(stage, index) {
-    var s = state[stage];
-    var container = document.getElementById('revised-' + stage);
-    if (!container) return;
-    
-    if (s.showingOriginal) {
-        toggleView(stage, 'revised');
-        setTimeout(function() { doScroll(stage, index); }, 100);
-    } else {
-        doScroll(stage, index);
-    }
-}
-
-function doScroll(stage, index) {
-    var container = document.getElementById('revised-' + stage);
-    var allMarks = container.querySelectorAll('.correction-mark');
-    for (var i = 0; i < allMarks.length; i++) {
-        allMarks[i].classList.remove('highlight-active');
-        allMarks[i].style.background = '#a5d6a7';
-    }
-    var targetMark = document.getElementById('mk_' + stage + '_' + index);
-    if (!targetMark) {
-        targetMark = container.querySelector('.correction-mark[data-index="' + index + '"]');
-    }
-    if (targetMark) {
-        targetMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        targetMark.classList.add('highlight-active');
-        setTimeout(function() {
-            if (targetMark) {
-                targetMark.classList.remove('highlight-active');
-                targetMark.style.background = '#a5d6a7';
-            }
-        }, 2500);
-    }
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    return '<tr>' +
+        '<td style="padding:10px;border:1px solid #444;">' + label + '</td>' +
+        '<td style="padding:10px;border:1px solid #444;text-align:center;font-weight:bold;color:' + statusColor + ';">' + score + '점</td>' +
+        '<td style="padding:10px;border:1px solid #444;text-align:center;">' + statusIcon + '</td>' +
+        '</tr>';
 }
