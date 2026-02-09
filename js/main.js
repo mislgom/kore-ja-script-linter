@@ -1,11 +1,11 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.26 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.26: 2차 분석 완료 후 자동 점수 표시 + 개선방안 + 다운로드 문제 해결
+ * main.js v4.27 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.27: 클릭 이동 강화 + 나레이션/중복 오류 판단 금지 강화
  */
 
-console.log('🚀 main.js v4.26 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
-console.log('📌 v4.26 업데이트: 2차 분석 후 자동 점수 + 합격/불합격 판정 + 개선방안 + 다운로드 수정');
+console.log('🚀 main.js v4.27 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
+console.log('📌 v4.27 업데이트: 클릭 이동 강화 + 나레이션/중복 오류 금지');
 
 // ===================== 조선시대 고증 DB =====================
 const HISTORICAL_RULES = {
@@ -157,8 +157,8 @@ const HISTORICAL_RULES = {
 
 // ===================== 전역 상태 =====================
 const state = {
-    stage1: { originalScript: '', analysis: null, revisedScript: '', historicalIssues: [], allErrors: [], revisionCount: 0, scrollPosition: 0, fixedScript: '' },
-    stage2: { originalScript: '', analysis: null, revisedScript: '', historicalIssues: [], allErrors: [], revisionCount: 0, scrollPosition: 0, fixedScript: '' },
+    stage1: { originalScript: '', analysis: null, revisedScript: '', historicalIssues: [], allErrors: [], revisionCount: 0, scrollPosition: 0, fixedScript: '', markerMap: {} },
+    stage2: { originalScript: '', analysis: null, revisedScript: '', historicalIssues: [], allErrors: [], revisionCount: 0, scrollPosition: 0, fixedScript: '', markerMap: {} },
     finalScript: '',
     scores: null
 };
@@ -194,16 +194,42 @@ function initApp() {
     initStage2AnalysisButton();
     initStopButton();
     initFinalDownloadSection();
+    addBlinkAnimation();
     console.log('✅ 고증 DB 로드됨: ' + getTotalHistoricalRules() + '개 규칙');
     console.log('✅ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('✅ 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.26 초기화 완료');
+    console.log('✅ main.js v4.27 초기화 완료');
 }
 
 function getTotalHistoricalRules() {
     let total = 0;
     for (const category in HISTORICAL_RULES) total += HISTORICAL_RULES[category].length;
     return total;
+}
+
+// ===================== CSS 애니메이션 추가 =====================
+function addBlinkAnimation() {
+    if (document.getElementById('blink-style')) return;
+    const style = document.createElement('style');
+    style.id = 'blink-style';
+    style.textContent = `
+        @keyframes blink {
+            0%, 100% { opacity: 1; background: #69f0ae; }
+            50% { opacity: 0.3; background: #ffeb3b; }
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(105, 240, 174, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(105, 240, 174, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(105, 240, 174, 0); }
+        }
+        .highlight-active {
+            animation: blink 0.4s ease-in-out 4, pulse 0.4s ease-in-out 4 !important;
+            background: #69f0ae !important;
+            color: #000 !important;
+            font-weight: bold !important;
+        }
+    `;
+    document.head.appendChild(style);
 }
 
 // ===================== 기존 분석 버튼 숨기기 =====================
@@ -337,7 +363,7 @@ function handleFile(file) {
     reader.readAsText(file);
 }
 
-// ===================== 다운로드 (기존) =====================
+// ===================== 다운로드 =====================
 function initDownloadButton() {
     const btn = document.getElementById('btn-download');
     if (btn) {
@@ -354,17 +380,25 @@ function downloadScript(script) {
         alert('다운로드할 내용이 없습니다.');
         return;
     }
-    const blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const today = new Date().toISOString().slice(0, 10);
-    a.download = '최종수정본_' + today + '.txt';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    console.log('📥 다운로드 완료: ' + script.length + '자');
+    try {
+        const blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const today = new Date().toISOString().slice(0, 10);
+        a.download = '최종수정본_' + today + '.txt';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
+        console.log('📥 다운로드 완료: ' + script.length + '자');
+    } catch (e) {
+        console.error('다운로드 오류:', e);
+        alert('다운로드 중 오류가 발생했습니다.');
+    }
 }
 
 // ===================== 최종 수정본 다운로드 섹션 =====================
@@ -608,6 +642,7 @@ async function startAnalysis(stage) {
     s.revisedScript = '';
     s.allErrors = [];
     s.revisionCount = 0;
+    s.markerMap = {};
     
     const progressContainer = document.getElementById('progress-container');
     const stopBtn = document.getElementById('btn-stop-analysis');
@@ -663,7 +698,6 @@ async function startAnalysis(stage) {
         
         updateProgress(100, '분석 완료!');
         
-        // 2차 분석 완료 시 자동 점수 표시
         if (stage === 'stage2') {
             await generateAndDisplayScores(script, s.revisedScript, apiKey);
         }
@@ -908,7 +942,7 @@ async function callGeminiAPI(apiKey, prompt, signal) {
     }
 }
 
-// ===================== 프롬프트 생성 =====================
+// ===================== 프롬프트 생성 (강화된 나레이션/중복 금지) =====================
 function buildStage1Prompt(script, historicalIssues) {
     let historicalContext = '';
     if (historicalIssues.length > 0) {
@@ -919,15 +953,30 @@ function buildStage1Prompt(script, historicalIssues) {
     }
     
     return `당신은 조선시대 사극 대본 전문 검수자입니다.
-다음 대본에서 아래 유형의 오류를 찾아 JSON 형식으로 응답해주세요.
+다음 대본에서 오류를 찾아 JSON 형식으로 응답해주세요.
 ${historicalContext}
 
-[검수 유형]
-1. 고증 오류: 시대에 맞지 않는 현대 용어, 물건, 제도
+★★★ 절대 금지 사항 (반드시 준수) ★★★
+1. 나레이션은 절대 오류로 판단하지 마세요!
+   - "NA:", "나레이션:", "내레이션:", "N:" 등으로 시작하는 문장
+   - 나레이션은 현대 시청자에게 설명하는 부분이므로 현대어 사용이 정상입니다
+   - 나레이션의 어투, 단어, 표현은 모두 정상으로 처리하세요
+   
+2. 중복 표현을 절대 오류로 판단하지 마세요!
+   - 같은 단어가 여러 번 나오는 것은 오류가 아닙니다
+   - 비슷한 표현이 반복되어도 오류가 아닙니다
+   - 강조를 위한 반복은 정상입니다
+   - "중복", "반복", "중복 표현" 유형으로 분류하지 마세요
+
+3. 조선시대 어투를 오류로 판단하지 마세요!
+   - "~하였사옵니다", "~이옵니다", "~소서" 등은 정상입니다
+   - 사극 대사의 고어체, 존댓말은 모두 정상입니다
+   - 시대극 특유의 말투는 수정 대상이 아닙니다
+
+[검수 유형 - 아래 항목만 검사]
+1. 고증 오류: 조선시대에 없는 현대 물건, 제도, 외래어 (나레이션 제외)
 2. 맞춤법: 띄어쓰기, 오탈자, 문법 오류
-3. 어색한 표현: 부자연스러운 문장, 어색한 어순
-4. 중복 표현: 같은 의미 반복, 불필요한 중복
-5. 문맥 오류: 앞뒤 내용 불일치, 논리적 오류
+3. 어색한 표현: 문맥상 부자연스러운 문장 (단, 조선시대 어투는 정상)
 
 [대본]
 ${script.substring(0, 12000)}
@@ -936,25 +985,40 @@ ${script.substring(0, 12000)}
 {
     "errors": [
         {
-            "type": "오류 유형",
-            "original": "원문",
+            "type": "오류 유형 (고증 오류/맞춤법/어색한 표현 중 하나만)",
+            "original": "원문 (정확히 대본에 있는 텍스트)",
             "suggestion": "수정안",
             "reason": "수정 이유"
         }
     ],
     "summary": "전체 요약 (1-2문장)"
-}`;
+}
+
+★ 주의: 나레이션과 중복 표현은 절대 errors 배열에 포함하지 마세요!`;
 }
 
 function buildStage2Prompt(script) {
     return `당신은 시니어 대상 영상 콘텐츠 전문 에디터입니다.
 다음 대본을 50대 이상 시청자가 이해하기 쉽도록 검수해주세요.
 
+★★★ 절대 금지 사항 (반드시 준수) ★★★
+1. 나레이션은 절대 오류로 판단하지 마세요!
+   - "NA:", "나레이션:", "내레이션:", "N:" 등으로 시작하는 문장은 검사 제외
+   - 나레이션은 이미 시청자용으로 작성되어 있으므로 수정 불필요
+
+2. 중복 표현을 절대 오류로 판단하지 마세요!
+   - 같은 단어 반복 = 정상
+   - 비슷한 표현 반복 = 정상
+   - 강조 표현 = 정상
+   - "중복" 유형 사용 금지
+
+3. 사극 대사의 어투는 수정하지 마세요!
+   - 고어체, 존칭어는 사극의 특성입니다
+
 [검수 항목]
-1. 어려운 용어: 전문용어, 외래어, 신조어를 쉬운 말로
+1. 어려운 용어: 전문용어, 외래어, 신조어를 쉬운 말로 (나레이션 제외)
 2. 긴 문장: 한 문장에 정보가 너무 많으면 나누기
 3. 복잡한 설명: 단계별로 풀어서 설명
-4. 청각 전달력: 귀로 들었을 때 이해하기 쉽게
 
 [대본]
 ${script.substring(0, 12000)}
@@ -970,7 +1034,9 @@ ${script.substring(0, 12000)}
         }
     ],
     "summary": "전체 요약 (1-2문장)"
-}`;
+}
+
+★ 주의: 나레이션과 중복 표현은 절대 errors 배열에 포함하지 마세요!`;
 }
 
 // ===================== 응답 파싱 =====================
@@ -984,6 +1050,26 @@ function parseAnalysisResponse(response, stage) {
         }
         
         const parsed = JSON.parse(jsonStr);
+        
+        // 중복/나레이션 오류 필터링
+        if (parsed.errors && Array.isArray(parsed.errors)) {
+            parsed.errors = parsed.errors.filter(err => {
+                const type = (err.type || '').toLowerCase();
+                const original = (err.original || '').toLowerCase();
+                const reason = (err.reason || '').toLowerCase();
+                
+                // 중복 관련 필터
+                if (type.includes('중복') || type.includes('반복')) return false;
+                if (reason.includes('중복') || reason.includes('반복')) return false;
+                
+                // 나레이션 관련 필터
+                if (original.startsWith('na:') || original.startsWith('나레이션') || 
+                    original.startsWith('내레이션') || original.startsWith('n:')) return false;
+                
+                return true;
+            });
+        }
+        
         return parsed;
         
     } catch (e) {
@@ -996,12 +1082,18 @@ function parseAnalysisResponse(response, stage) {
             if (line.includes('→') || line.includes('->')) {
                 const parts = line.split(/→|->/);
                 if (parts.length >= 2) {
-                    errors.push({
-                        type: '자동 감지',
-                        original: parts[0].replace(/^[\d\.\-\*\s]+/, '').trim(),
-                        suggestion: parts[1].trim(),
-                        reason: '자동 추출'
-                    });
+                    const original = parts[0].replace(/^[\d\.\-\*\s]+/, '').trim();
+                    // 중복/나레이션 필터
+                    if (!original.toLowerCase().startsWith('na:') && 
+                        !original.includes('나레이션') &&
+                        !line.includes('중복') && !line.includes('반복')) {
+                        errors.push({
+                            type: '자동 감지',
+                            original: original,
+                            suggestion: parts[1].trim(),
+                            reason: '자동 추출'
+                        });
+                    }
                 }
             }
         }
@@ -1017,7 +1109,7 @@ function applyAllCorrections(script, errors) {
     const sortedErrors = [...errors].sort((a, b) => (b.original?.length || 0) - (a.original?.length || 0));
     
     for (const error of sortedErrors) {
-        if (error.original && error.suggestion) {
+        if (error.original && error.suggestion && error.original !== error.suggestion) {
             const escaped = error.original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const regex = new RegExp(escaped, 'g');
             result = result.replace(regex, error.suggestion);
@@ -1046,9 +1138,11 @@ function renderAnalysisResult(stage) {
         '</tr></thead><tbody>';
     
     s.allErrors.forEach((err, idx) => {
-        html += '<tr class="analysis-row" data-stage="' + stage + '" data-index="' + idx + '" style="cursor:pointer;transition:background 0.2s;" ' +
+        const uniqueId = stage + '-error-' + idx;
+        html += '<tr class="analysis-row clickable-row" data-stage="' + stage + '" data-index="' + idx + '" data-unique-id="' + uniqueId + '" ' +
+            'style="cursor:pointer;transition:background 0.2s;" ' +
             'onmouseover="this.style.background=\'#3d3d3d\'" onmouseout="this.style.background=\'#2d2d2d\'">' +
-            '<td style="padding:10px;border:1px solid #444;color:#4CAF50;">' + (err.type || '-') + '</td>' +
+            '<td style="padding:10px;border:1px solid #444;color:#4CAF50;">' + escapeHtml(err.type || '-') + '</td>' +
             '<td style="padding:10px;border:1px solid #444;color:#ff6b6b;">' + escapeHtml(err.original || '-') + '</td>' +
             '<td style="padding:10px;border:1px solid #444;color:#a5d6a7;">' + escapeHtml(err.suggestion || '-') + '</td>' +
             '<td style="padding:10px;border:1px solid #444;color:#aaa;">' + escapeHtml(err.reason || '-') + '</td>' +
@@ -1059,23 +1153,28 @@ function renderAnalysisResult(stage) {
     
     if (s.analysis?.summary) {
         html += '<div style="margin-top:15px;padding:15px;background:#1a1a1a;border-radius:8px;color:#aaa;">' +
-            '<strong style="color:#4CAF50;">📋 요약:</strong> ' + s.analysis.summary + '</div>';
+            '<strong style="color:#4CAF50;">📋 요약:</strong> ' + escapeHtml(s.analysis.summary) + '</div>';
     }
     
     container.innerHTML = html;
     
-    container.querySelectorAll('.analysis-row').forEach(row => {
-        row.addEventListener('click', () => {
-            const idx = parseInt(row.dataset.index);
-            const stg = row.dataset.stage;
+    // 클릭 이벤트 바인딩 강화
+    const rows = container.querySelectorAll('.clickable-row');
+    rows.forEach(row => {
+        row.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const stg = this.getAttribute('data-stage');
+            const idx = parseInt(this.getAttribute('data-index'));
+            console.log('📍 클릭됨: stage=' + stg + ', index=' + idx);
             scrollToCorrection(stg, idx);
         });
     });
     
-    console.log('✅ 분석 결과 렌더링 완료: ' + s.allErrors.length + '개');
+    console.log('✅ 분석 결과 렌더링 완료: ' + s.allErrors.length + '개, 클릭 이벤트 ' + rows.length + '개 바인딩');
 }
 
-// ===================== 수정본 렌더링 =====================
+// ===================== 수정본 렌더링 (강화) =====================
 function renderRevisedWithMarkers(stage) {
     const container = document.getElementById('revised-' + stage);
     const s = state[stage];
@@ -1085,60 +1184,115 @@ function renderRevisedWithMarkers(stage) {
         return;
     }
     
-    let markedScript = escapeHtml(s.revisedScript);
+    let markedScript = s.revisedScript;
+    s.markerMap = {};
     
-    const sortedErrors = [...s.allErrors].sort((a, b) => (b.suggestion?.length || 0) - (a.suggestion?.length || 0));
+    // 수정된 부분에 마커 삽입
+    const sortedErrors = [...s.allErrors]
+        .map((err, idx) => ({ ...err, originalIndex: idx }))
+        .filter(err => err.suggestion && err.original !== err.suggestion)
+        .sort((a, b) => (b.suggestion?.length || 0) - (a.suggestion?.length || 0));
     
-    sortedErrors.forEach((err, idx) => {
-        if (err.suggestion) {
-            const escaped = escapeHtml(err.suggestion).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp(escaped, 'g');
-            markedScript = markedScript.replace(regex, '<mark class="correction-mark" data-index="' + s.allErrors.indexOf(err) + '" style="background:#a5d6a7;color:#1a1a1a;padding:2px 4px;border-radius:3px;cursor:pointer;">' + escapeHtml(err.suggestion) + '</mark>');
+    sortedErrors.forEach((err) => {
+        if (err.suggestion && markedScript.includes(err.suggestion)) {
+            const markerId = 'marker-' + stage + '-' + err.originalIndex;
+            s.markerMap[err.originalIndex] = markerId;
+            
+            const marker = '[[MARKER_START_' + markerId + ']]' + err.suggestion + '[[MARKER_END_' + markerId + ']]';
+            markedScript = markedScript.replace(err.suggestion, marker);
         }
     });
     
-    container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + markedScript + '</div>';
+    // HTML 변환
+    let htmlContent = escapeHtml(markedScript);
     
-    console.log('✅ 수정본 렌더링 완료');
+    // 마커를 실제 HTML로 변환
+    Object.keys(s.markerMap).forEach(idx => {
+        const markerId = s.markerMap[idx];
+        const startTag = escapeHtml('[[MARKER_START_' + markerId + ']]');
+        const endTag = escapeHtml('[[MARKER_END_' + markerId + ']]');
+        
+        htmlContent = htmlContent.replace(
+            new RegExp(startTag + '([\\s\\S]*?)' + endTag, 'g'),
+            '<mark id="' + markerId + '" class="correction-mark" data-index="' + idx + '" ' +
+            'style="background:#a5d6a7;color:#1a1a1a;padding:2px 4px;border-radius:3px;cursor:pointer;">$1</mark>'
+        );
+    });
+    
+    container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + htmlContent + '</div>';
+    
+    console.log('✅ 수정본 렌더링 완료: 마커 ' + Object.keys(s.markerMap).length + '개');
 }
 
-// ===================== 클릭 시 이동 =====================
+// ===================== 클릭 시 이동 (강화) =====================
 function scrollToCorrection(stage, index) {
+    const s = state[stage];
     const container = document.getElementById('revised-' + stage);
-    const marks = container.querySelectorAll('.correction-mark');
     
-    marks.forEach(m => {
+    if (!container) {
+        console.error('❌ 컨테이너를 찾을 수 없음: revised-' + stage);
+        return;
+    }
+    
+    // 모든 마커 초기화
+    const allMarks = container.querySelectorAll('.correction-mark');
+    allMarks.forEach(m => {
+        m.classList.remove('highlight-active');
         m.style.background = '#a5d6a7';
-        m.style.animation = '';
     });
     
-    for (const mark of marks) {
-        if (parseInt(mark.dataset.index) === index) {
-            mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            mark.style.background = '#69f0ae';
-            mark.style.animation = 'blink 0.5s 3';
-            
-            setTimeout(() => {
-                mark.style.background = '#a5d6a7';
-                mark.style.animation = '';
-            }, 2000);
-            
-            break;
+    // 해당 마커 찾기
+    const markerId = s.markerMap[index];
+    let targetMark = null;
+    
+    if (markerId) {
+        targetMark = document.getElementById(markerId);
+    }
+    
+    if (!targetMark) {
+        // data-index로 찾기
+        targetMark = container.querySelector('.correction-mark[data-index="' + index + '"]');
+    }
+    
+    if (!targetMark) {
+        // 텍스트로 찾기
+        const err = s.allErrors[index];
+        if (err && err.suggestion) {
+            allMarks.forEach(m => {
+                if (m.textContent.includes(err.suggestion)) {
+                    targetMark = m;
+                }
+            });
         }
+    }
+    
+    if (targetMark) {
+        // 스크롤 및 하이라이트
+        targetMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetMark.classList.add('highlight-active');
+        
+        setTimeout(() => {
+            targetMark.classList.remove('highlight-active');
+            targetMark.style.background = '#a5d6a7';
+        }, 2500);
+        
+        console.log('✅ 이동 완료: index=' + index);
+    } else {
+        console.warn('⚠️ 마커를 찾을 수 없음: index=' + index);
+        
+        // 대안: 수정본 영역으로 스크롤
+        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        alert('해당 수정 위치를 찾을 수 없습니다.\n수정본에서 직접 확인해주세요.');
     }
 }
 
 // ===================== 유틸리티 =====================
 function escapeHtml(str) {
     if (!str) return '';
-    return str.replace(/&/g, '&amp;')
-              .replace(/</g, '&lt;')
-              .replace(/>/g, '&gt;')
-              .replace(/"/g, '&quot;')
-              .replace(/'/g, '&#039;');
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
-
-// ===================== CSS 애니메이션 추가 =====================
-const style = document.createElement('style');
-style.textContent = '@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }';
-document.head.appendChild(style);
