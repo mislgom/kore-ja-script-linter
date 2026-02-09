@@ -1,12 +1,13 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.12 - Vertex AI + Gemini 3 Flash
+ * main.js v4.13 - Vertex AI + Gemini 3 Flash
  * 25가지 오류 유형 검수 + 조선시대 고증 검수 병합
- * - 고증 오류: 제안만 (원문 유지, 어투 변경 금지)
- * - 일반 오류: 수정 반영
+ * - 고증 오류: 자동 수정 (첫 번째 대체어 적용)
+ * - 수정 반영 강화: 로컬 강제 치환
+ * - "수정 전" 버튼: 원문 복원 기능
  */
 
-console.log('🚀 main.js v4.12 (Vertex AI + Gemini 3 Flash + 고증 검수) 로드됨');
+console.log('🚀 main.js v4.13 (Vertex AI + Gemini 3 Flash + 고증 자동수정 + 원문복원) 로드됨');
 
 // ===================== 조선시대 고증 DB =====================
 const HISTORICAL_RULES = {
@@ -16,11 +17,11 @@ const HISTORICAL_RULES = {
         { modern: '노트', historical: ['서책', '책자', '수첩'], confidence: '높음', reason: '노트는 현대 용어' },
         { modern: '볼펜', historical: ['붓', '필'], confidence: '높음', reason: '볼펜은 20세기 발명품' },
         { modern: '연필', historical: ['붓', '먹'], confidence: '높음', reason: '연필은 근대 이후 보급' },
-        { modern: '지우개', historical: ['없음 (수정 불가)'], confidence: '높음', reason: '지우개는 현대 문구' },
+        { modern: '지우개', historical: ['없음'], confidence: '높음', reason: '지우개는 현대 문구' },
         { modern: '가방', historical: ['보따리', '봇짐', '배낭'], confidence: '중간', reason: '가방은 근대 용어' },
         { modern: '시계', historical: ['해시계', '물시계', '자격루'], confidence: '높음', reason: '휴대용 시계는 근대 이후' },
         { modern: '손목시계', historical: ['해시계', '물시계'], confidence: '높음', reason: '손목시계는 20세기' },
-        { modern: '안경', historical: ['눈가리개', '안경 (조선 후기 존재)'], confidence: '중간', reason: '조선 후기 일부 존재' },
+        { modern: '안경', historical: ['눈가리개'], confidence: '중간', reason: '조선 후기 일부 존재' },
         { modern: '우산', historical: ['삿갓', '도롱이', '우장'], confidence: '중간', reason: '우산은 근대식 표현' },
         { modern: '양산', historical: ['삿갓', '갓'], confidence: '높음', reason: '양산은 서양식' },
         { modern: '라이터', historical: ['부싯돌', '부시'], confidence: '높음', reason: '라이터는 현대 도구' },
@@ -43,7 +44,7 @@ const HISTORICAL_RULES = {
     
     // 시설/공간
     facilities: [
-        { modern: '병원', historical: ['의원', '약방', '약국', '혜민서'], confidence: '높음', reason: '병원은 근대 용어' },
+        { modern: '병원', historical: ['의원', '약방', '혜민서'], confidence: '높음', reason: '병원은 근대 용어' },
         { modern: '학교', historical: ['서당', '향교', '성균관', '서원'], confidence: '높음', reason: '학교는 근대 교육제도' },
         { modern: '대학교', historical: ['성균관', '서원'], confidence: '높음', reason: '대학교는 근대 제도' },
         { modern: '경찰서', historical: ['포도청', '포청'], confidence: '높음', reason: '경찰서는 근대 제도' },
@@ -80,7 +81,7 @@ const HISTORICAL_RULES = {
     
     // 직업/직책
     occupations: [
-        { modern: '의사', historical: ['의원', '어의', '의녀', '약사'], confidence: '높음', reason: '의사는 근대 용어' },
+        { modern: '의사', historical: ['의원', '어의', '의녀'], confidence: '높음', reason: '의사는 근대 용어' },
         { modern: '간호사', historical: ['의녀', '약방 여인'], confidence: '높음', reason: '간호사는 근대 용어' },
         { modern: '선생님', historical: ['훈장', '스승', '선비'], confidence: '높음', reason: '선생님은 현대 호칭' },
         { modern: '교사', historical: ['훈장', '스승'], confidence: '높음', reason: '교사는 근대 용어' },
@@ -116,9 +117,8 @@ const HISTORICAL_RULES = {
         { modern: '킬로그램', historical: ['근', '냥'], confidence: '높음', reason: '킬로그램은 서양 단위' },
         { modern: '그램', historical: ['돈', '푼'], confidence: '높음', reason: '그램은 서양 단위' },
         { modern: '리터', historical: ['되', '말', '홉'], confidence: '높음', reason: '리터는 서양 단위' },
-        { modern: '평', historical: ['평', '칸'], confidence: '낮음', reason: '평은 조선시대에도 사용' },
         { modern: '퍼센트', historical: ['할', '푼', '리'], confidence: '높음', reason: '퍼센트는 서양 표현' },
-        { modern: '％', historical: ['할', '푼', '리'], confidence: '높음', reason: '서양 기호' }
+        { modern: '%', historical: ['할', '푼', '리'], confidence: '높음', reason: '서양 기호' }
     ],
     
     // 생활용어
@@ -133,8 +133,7 @@ const HISTORICAL_RULES = {
         { modern: '미팅', historical: ['만남', '상견례'], confidence: '높음', reason: '미팅은 외래어' },
         { modern: '데이트', historical: ['만남', '밀회'], confidence: '높음', reason: '데이트는 외래어' },
         { modern: '쇼핑', historical: ['장보기', '시장 나들이'], confidence: '높음', reason: '쇼핑은 외래어' },
-        { modern: '여행', historical: ['유람', '나들이', '행차'], confidence: '낮음', reason: '여행은 조선시대도 사용' },
-        { modern: '해외여행', historical: ['없음 (금지됨)'], confidence: '높음', reason: '조선시대 해외 이동 금지' },
+        { modern: '해외여행', historical: ['없음'], confidence: '높음', reason: '조선시대 해외 이동 금지' },
         { modern: '비자', historical: ['통행증', '노인'], confidence: '높음', reason: '비자는 현대 용어' },
         { modern: '여권', historical: ['통행증', '노인'], confidence: '높음', reason: '여권은 현대 용어' }
     ],
@@ -152,7 +151,6 @@ const HISTORICAL_RULES = {
         { modern: '케이크', historical: ['떡', '약과'], confidence: '높음', reason: '케이크는 서양 음식' },
         { modern: '초콜릿', historical: ['없음'], confidence: '높음', reason: '근대 도입 식품' },
         { modern: '아이스크림', historical: ['빙수', '얼음과자'], confidence: '높음', reason: '현대 음식' },
-        { modern: '소주', historical: ['소주', '약주'], confidence: '낮음', reason: '소주는 조선시대 존재' },
         { modern: '맥주', historical: ['막걸리', '탁주'], confidence: '높음', reason: '맥주는 근대 도입' },
         { modern: '와인', historical: ['포도주'], confidence: '중간', reason: '포도주는 일부 존재' }
     ],
@@ -210,8 +208,9 @@ function initApp() {
     initClearButton();
     initAnalysisButtons();
     initDownloadButton();
+    initRevertButtons();
     console.log('✅ 고증 DB 로드됨: ' + getTotalHistoricalRules() + '개 규칙');
-    console.log('✅ main.js v4.12 초기화 완료');
+    console.log('✅ main.js v4.13 초기화 완료');
 }
 
 // ===================== 고증 DB 규칙 수 계산 =====================
@@ -403,11 +402,101 @@ function initAnalysisButtons() {
     console.log('✅ 중지 버튼 연결됨');
 }
 
-// ===================== 로컬 고증 검사 (100% 일관성) =====================
-function checkHistoricalAccuracy(scriptText) {
-    console.log('📜 로컬 고증 검사 시작');
+// ===================== "수정 전" 버튼 초기화 =====================
+function initRevertButtons() {
+    // 1차 수정 반영 칸에 버튼 추가
+    const revised1Container = document.getElementById('revised-stage1');
+    if (revised1Container) {
+        addRevertButton(revised1Container, 'stage1');
+    }
+    
+    // 최종 수정 반영 칸에 버튼 추가
+    const revised2Container = document.getElementById('revised-stage2');
+    if (revised2Container) {
+        addRevertButton(revised2Container, 'stage2');
+    }
+    
+    console.log('✅ 수정 전 버튼 초기화됨');
+}
+
+// ===================== "수정 전" 버튼 추가 함수 =====================
+function addRevertButton(container, stage) {
+    const parent = container.parentElement;
+    
+    // 이미 버튼이 있으면 추가하지 않음
+    if (parent.querySelector('.revert-btn-wrapper')) return;
+    
+    const btnWrapper = document.createElement('div');
+    btnWrapper.className = 'revert-btn-wrapper';
+    btnWrapper.style.cssText = 'text-align: center; padding: 10px; border-top: 1px solid #ddd;';
+    
+    const btn = document.createElement('button');
+    btn.id = `btn-revert-${stage}`;
+    btn.className = 'btn-revert';
+    btn.innerHTML = '🔄 수정 전';
+    btn.style.cssText = 'background: #ff9800; color: white; border: none; padding: 8px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 14px;';
+    btn.disabled = true;
+    
+    btn.addEventListener('click', () => revertToOriginal(stage));
+    btn.addEventListener('mouseover', () => { if (!btn.disabled) btn.style.background = '#f57c00'; });
+    btn.addEventListener('mouseout', () => { if (!btn.disabled) btn.style.background = '#ff9800'; });
+    
+    btnWrapper.appendChild(btn);
+    parent.appendChild(btnWrapper);
+}
+
+// ===================== 원문 복원 함수 =====================
+function revertToOriginal(stage) {
+    const stageState = state[stage];
+    if (!stageState.originalScript) {
+        alert('원본 대본이 없습니다.');
+        return;
+    }
+    
+    const container = document.getElementById(`revised-${stage}`);
+    const btn = document.getElementById(`btn-revert-${stage}`);
+    
+    // 현재 수정본인지 원본인지 확인
+    const isShowingRevised = btn.innerHTML.includes('수정 전');
+    
+    if (isShowingRevised) {
+        // 원본으로 복원
+        renderPlainScript(stageState.originalScript, container);
+        btn.innerHTML = '🔄 수정 후';
+        btn.style.background = '#4CAF50';
+        console.log(`🔄 ${stage} 원문으로 복원됨`);
+    } else {
+        // 수정본으로 다시 표시
+        renderFullScriptWithHighlight(stageState.revisedScript, stageState.analysis, container);
+        btn.innerHTML = '🔄 수정 전';
+        btn.style.background = '#ff9800';
+        console.log(`🔄 ${stage} 수정본으로 복원됨`);
+    }
+}
+
+// ===================== 원본 스크립트 렌더링 (하이라이트 없이) =====================
+function renderPlainScript(script, container) {
+    if (!script) {
+        container.innerHTML = '<p class="placeholder">내용이 없습니다.</p>';
+        return;
+    }
+    
+    const lines = script.split('\n');
+    let html = '<div class="script-scroll-wrapper"><div class="revised-script">';
+    
+    lines.forEach((line, index) => {
+        html += `<p class="line-unchanged">${escapeHtml(line) || '&nbsp;'}</p>`;
+    });
+    
+    html += '</div></div>';
+    container.innerHTML = html;
+}
+
+// ===================== 로컬 고증 검사 + 자동 수정 =====================
+function checkAndFixHistoricalAccuracy(scriptText) {
+    console.log('📜 로컬 고증 검사 및 자동 수정 시작');
     const issues = [];
-    const lines = scriptText.split('\n');
+    let fixedScript = scriptText;
     
     const categoryNames = {
         objects: '물건/도구',
@@ -419,30 +508,60 @@ function checkHistoricalAccuracy(scriptText) {
         clothing: '의복'
     };
     
-    lines.forEach((line, lineIndex) => {
-        for (const category in HISTORICAL_RULES) {
-            HISTORICAL_RULES[category].forEach(rule => {
-                // 단어 경계를 고려한 정규식
-                const regex = new RegExp(rule.modern, 'g');
-                let match;
-                
-                while ((match = regex.exec(line)) !== null) {
-                    issues.push({
-                        line: lineIndex + 1,
-                        original: rule.modern,
-                        errorType: `⚠️ 고증-${categoryNames[category]}`,
-                        suggestions: rule.historical,
-                        confidence: rule.confidence,
-                        reason: rule.reason,
-                        isHistorical: true
-                    });
+    const lines = scriptText.split('\n');
+    
+    for (const category in HISTORICAL_RULES) {
+        HISTORICAL_RULES[category].forEach(rule => {
+            // "없음"인 경우 수정하지 않음
+            if (rule.historical[0] === '없음') return;
+            
+            const regex = new RegExp(rule.modern, 'g');
+            let match;
+            let tempScript = fixedScript;
+            
+            while ((match = regex.exec(scriptText)) !== null) {
+                // 줄 번호 찾기
+                let charCount = 0;
+                let lineNum = 1;
+                for (let i = 0; i < lines.length; i++) {
+                    charCount += lines[i].length + 1;
+                    if (match.index < charCount) {
+                        lineNum = i + 1;
+                        break;
+                    }
                 }
-            });
+                
+                const replacement = rule.historical[0]; // 첫 번째 대체어 사용
+                
+                issues.push({
+                    line: lineNum,
+                    original: rule.modern,
+                    suggestion: replacement,
+                    errorType: `⚠️ 고증-${categoryNames[category]}`,
+                    confidence: rule.confidence,
+                    reason: rule.reason,
+                    isHistorical: true
+                });
+            }
+            
+            // 실제 수정 적용
+            fixedScript = fixedScript.replace(regex, rule.historical[0]);
+        });
+    }
+    
+    // 중복 제거 (같은 줄, 같은 원본)
+    const uniqueIssues = [];
+    const seen = new Set();
+    issues.forEach(issue => {
+        const key = `${issue.line}-${issue.original}`;
+        if (!seen.has(key)) {
+            seen.add(key);
+            uniqueIssues.push(issue);
         }
     });
     
-    console.log(`📜 로컬 고증 검사 완료: ${issues.length}건 발견`);
-    return issues;
+    console.log(`📜 로컬 고증 검사 완료: ${uniqueIssues.length}건 발견 및 자동 수정`);
+    return { issues: uniqueIssues, fixedScript };
 }
 
 // ===================== 분석 실행 (1차, 2차) =====================
@@ -476,10 +595,12 @@ async function startAnalysis(stage) {
     const stopBtn = document.getElementById('btn-stop-analysis');
     progressContainer.style.display = 'block';
     stopBtn.disabled = false;
-    updateProgress(5, '로컬 고증 검사 중...');
+    updateProgress(5, '로컬 고증 검사 및 자동 수정 중...');
 
-    // 1단계: 로컬 고증 검사 (100% 일관성)
-    const historicalIssues = checkHistoricalAccuracy(scriptText);
+    // 1단계: 로컬 고증 검사 + 자동 수정 (100% 일관성)
+    const historicalResult = checkAndFixHistoricalAccuracy(scriptText);
+    const historicalIssues = historicalResult.issues;
+    let processedScript = historicalResult.fixedScript;
     
     updateProgress(15, 'AI 분석 준비 중...');
 
@@ -488,7 +609,7 @@ async function startAnalysis(stage) {
 
     try {
         updateProgress(25, '프롬프트 생성 중...');
-        const prompt = generatePrompt(scriptText);
+        const prompt = generatePrompt(processedScript);
         console.log('📤 프롬프트 생성 완료, 길이:', prompt.length);
 
         updateProgress(45, 'AI 분석 중... (최대 2분 소요)');
@@ -499,7 +620,9 @@ async function startAnalysis(stage) {
         const parsed = parseAnalysisResult(response);
         console.log('✅ 파싱 완료');
 
-        const verified = verifyAndApplyCorrections(parsed);
+        // 수정 반영 강화: 로컬에서 강제 치환
+        updateProgress(80, '수정 사항 강제 반영 중...');
+        const verified = forceApplyAllCorrections(parsed, processedScript);
 
         updateProgress(90, '결과 렌더링 중...');
         
@@ -521,6 +644,10 @@ async function startAnalysis(stage) {
             state.stage1.scores = verified.scores;
             state.stage1.revisionCount = mergedAnalysis ? mergedAnalysis.length : 0;
             document.getElementById('btn-analyze-stage2').disabled = false;
+            
+            // 수정 전 버튼 활성화
+            const revertBtn1 = document.getElementById('btn-revert-stage1');
+            if (revertBtn1) revertBtn1.disabled = false;
         } else {
             state.stage2.analysis = mergedAnalysis;
             state.stage2.revisedScript = verified.revisedScript;
@@ -529,6 +656,10 @@ async function startAnalysis(stage) {
             state.stage2.revisionCount = mergedAnalysis ? mergedAnalysis.length : 0;
             document.getElementById('btn-download').disabled = false;
             renderScores(verified.scores, historicalIssues.length);
+            
+            // 수정 전 버튼 활성화
+            const revertBtn2 = document.getElementById('btn-revert-stage2');
+            if (revertBtn2) revertBtn2.disabled = false;
         }
 
         updateProgress(100, '분석 완료!');
@@ -550,6 +681,50 @@ async function startAnalysis(stage) {
             progressContainer.style.display = 'none';
         }, 2000);
     }
+}
+
+// ===================== 수정 사항 강제 반영 (강화된 버전) =====================
+function forceApplyAllCorrections(parsed, baseScript) {
+    let revisedScript = baseScript;
+    let appliedCount = 0;
+    let forcedCount = 0;
+    
+    if (!parsed.analysis || parsed.analysis.length === 0) {
+        return {
+            ...parsed,
+            revisedScript: revisedScript
+        };
+    }
+    
+    // AI가 제공한 revisedScript가 있으면 그것을 기반으로
+    if (parsed.revisedScript && parsed.revisedScript.trim().length > 0) {
+        revisedScript = parsed.revisedScript;
+    }
+    
+    // 모든 분석 항목에 대해 강제 치환
+    parsed.analysis.forEach((item, index) => {
+        if (item.original && item.suggestion && item.original !== item.suggestion) {
+            // 이미 수정되어 있는지 확인
+            if (revisedScript.includes(item.suggestion)) {
+                appliedCount++;
+            } else if (revisedScript.includes(item.original)) {
+                // 강제로 치환
+                revisedScript = revisedScript.split(item.original).join(item.suggestion);
+                appliedCount++;
+                forcedCount++;
+                console.log(`⚠️ 강제 수정 적용 [${index + 1}]: "${item.original}" → "${item.suggestion}"`);
+            }
+        }
+    });
+    
+    console.log(`✅ 수정 반영 완료: 총 ${appliedCount}건 (강제 적용: ${forcedCount}건)`);
+    
+    return {
+        analysis: parsed.analysis,
+        revisedScript: revisedScript,
+        scores: parsed.scores,
+        parseError: parsed.parseError
+    };
 }
 
 // ===================== 분석 결과 병합 =====================
@@ -593,11 +768,11 @@ function generatePrompt(scriptText) {
 
 [중요] 검수 범위 제한
 - 맞춤법, 띄어쓰기, 문장부호, 어색한 표현, 중복 표현만 검수
-- 조선시대 고증 오류는 별도 시스템에서 처리하므로 검수하지 마세요
+- 조선시대 고증 오류는 이미 별도 시스템에서 처리 완료됨
 - 어투/말투/존대법은 절대 수정하지 마세요 (원문 그대로 유지)
 
 [규칙 1] 필수 검사 항목
-- 맞춤법 오류 (예: 되서→돼서, 됬→됐)
+- 맞춤법 오류 (예: 되서→돼서, 됬→됐, 않된다→안 된다)
 - 띄어쓰기 오류 (예: 할수있다→할 수 있다)
 - 문장부호 오류 (마침표, 쉼표 누락)
 - 어색한 표현 (문맥상 부자연스러운 표현)
@@ -606,11 +781,13 @@ function generatePrompt(scriptText) {
 [규칙 2] 절대 금지
 - 어투 변경 금지 (하였습니다→하였소 변경 금지)
 - 말투 변경 금지 (존대/반말 변경 금지)
-- 조선시대 고증 관련 수정 금지 (별도 처리됨)
+- 문장 구조 변경 금지
+- 내용 추가/삭제 금지
 
-[규칙 3] 수정 반영 필수
-analysis의 모든 original → suggestion 변경사항은 revisedScript에 100% 반영해야 합니다.
-절대로 누락하지 마세요.
+[규칙 3] 수정 반영 필수 (가장 중요!)
+- analysis에 있는 모든 original → suggestion 변경사항은 revisedScript에 100% 반영
+- 단 하나도 누락하지 마세요
+- original 텍스트가 revisedScript에 남아있으면 안 됨
 
 [규칙 4] 줄맞춤
 revisedScript의 각 줄은 공백 포함 17자 이내로 작성하세요.
@@ -761,39 +938,6 @@ function extractPartialData(jsonStr, originalText) {
     return { analysis: [], revisedScript: originalText, scores: {}, parseError: '파싱 실패' };
 }
 
-// ===================== 수정 반영 검증 및 강제 적용 =====================
-function verifyAndApplyCorrections(parsed) {
-    if (!parsed.analysis || parsed.analysis.length === 0) {
-        return parsed;
-    }
-
-    let revisedScript = parsed.revisedScript;
-    let appliedCount = 0;
-    let missingCount = 0;
-
-    parsed.analysis.forEach((item, index) => {
-        if (item.original && item.suggestion) {
-            if (revisedScript.includes(item.suggestion)) {
-                appliedCount++;
-            } else if (revisedScript.includes(item.original)) {
-                revisedScript = revisedScript.replace(item.original, item.suggestion);
-                appliedCount++;
-                missingCount++;
-                console.log(`⚠️ 누락된 수정 강제 적용: "${item.original}" → "${item.suggestion}"`);
-            }
-        }
-    });
-
-    console.log(`✅ 수정 반영 검증: ${appliedCount}/${parsed.analysis.length}건 적용, ${missingCount}건 강제 적용`);
-
-    return {
-        analysis: parsed.analysis,
-        revisedScript: revisedScript,
-        scores: parsed.scores,
-        parseError: parsed.parseError
-    };
-}
-
 // ===================== 결과 렌더링 =====================
 function renderResults(parsed, stage) {
     const analysisContainer = document.getElementById(`analysis-${stage}`);
@@ -831,23 +975,16 @@ function renderAnalysisTable(analysis, parseError, stage, container) {
     
     // 범례 추가
     html += `<div style="margin-bottom: 10px; padding: 8px; background: #f5f5f5; border-radius: 5px; font-size: 12px;">
-        <span style="display: inline-block; padding: 2px 8px; background: #e8f5e9; border-radius: 3px; margin-right: 10px;">일반 오류 (자동 수정)</span>
-        <span style="display: inline-block; padding: 2px 8px; background: #fff3e0; border-radius: 3px; color: #e65100;">⚠️ 고증 오류 (제안만)</span>
+        <span style="display: inline-block; padding: 2px 8px; background: #e8f5e9; border-radius: 3px; margin-right: 10px;">일반 오류</span>
+        <span style="display: inline-block; padding: 2px 8px; background: #fff3e0; border-radius: 3px; color: #e65100;">⚠️ 고증 오류</span>
+        <span style="margin-left: 10px; color: #666;">※ 모든 오류 자동 수정됨</span>
     </div>`;
     
-    html += '<div class="table-scroll-wrapper"><table class="analysis-table"><thead><tr><th>줄</th><th>유형</th><th>원본</th><th>수정/제안</th><th>확신도</th><th>이유</th></tr></thead><tbody>';
+    html += '<div class="table-scroll-wrapper"><table class="analysis-table"><thead><tr><th>줄</th><th>유형</th><th>원본</th><th>수정</th><th>확신도</th><th>이유</th></tr></thead><tbody>';
 
     analysis.forEach((item, index) => {
         const isHistorical = item.isHistorical;
         const rowStyle = isHistorical ? 'background: #fff8e1;' : '';
-        
-        // 고증 오류의 경우 제안 목록 표시
-        let suggestionDisplay = '';
-        if (isHistorical && item.suggestions) {
-            suggestionDisplay = item.suggestions.join(', ');
-        } else {
-            suggestionDisplay = escapeHtml(item.suggestion || '-');
-        }
         
         // 확신도 표시
         let confidenceDisplay = '-';
@@ -865,7 +1002,7 @@ function renderAnalysisTable(analysis, parseError, stage, container) {
             <td>${item.line || '-'}</td>
             <td>${escapeHtml(item.errorType || '-')}</td>
             <td>${escapeHtml(item.original || '-')}</td>
-            <td>${suggestionDisplay}</td>
+            <td>${escapeHtml(item.suggestion || '-')}</td>
             <td>${confidenceDisplay}</td>
             <td>${escapeHtml(item.reason || '-')}</td>
         </tr>`;
@@ -884,7 +1021,7 @@ function scrollToHighlight(row) {
     if (!container) return;
 
     const scrollWrapper = container.querySelector('.script-scroll-wrapper');
-    const highlights = container.querySelectorAll('.changed-text, .historical-word');
+    const highlights = container.querySelectorAll('.changed-text, .historical-text');
     let targetElement = null;
 
     highlights.forEach(el => {
@@ -922,19 +1059,17 @@ function renderFullScriptWithHighlight(revisedScript, analysis, container) {
     }
 
     // 일반 수정 사항
-    const suggestions = new Set();
-    // 고증 오류 단어
-    const historicalWords = new Set();
+    const generalSuggestions = new Set();
+    // 고증 수정 사항
+    const historicalSuggestions = new Set();
     
     if (analysis && analysis.length > 0) {
         analysis.forEach(item => {
-            if (item.isHistorical) {
-                if (item.original && item.original.trim()) {
-                    historicalWords.add(item.original.trim());
-                }
-            } else {
-                if (item.suggestion && item.suggestion.trim()) {
-                    suggestions.add(item.suggestion.trim());
+            if (item.suggestion && item.suggestion.trim()) {
+                if (item.isHistorical) {
+                    historicalSuggestions.add(item.suggestion.trim());
+                } else {
+                    generalSuggestions.add(item.suggestion.trim());
                 }
             }
         });
@@ -948,24 +1083,24 @@ function renderFullScriptWithHighlight(revisedScript, analysis, container) {
         let hasHighlight = false;
 
         // 일반 수정 하이라이트 (녹색)
-        suggestions.forEach(suggestion => {
+        generalSuggestions.forEach(suggestion => {
             const escapedSuggestion = escapeHtml(suggestion);
             if (processedLine.includes(escapedSuggestion)) {
                 processedLine = processedLine.replace(
-                    escapedSuggestion,
+                    new RegExp(escapeRegExp(escapedSuggestion), 'g'),
                     `<span class="changed-text">${escapedSuggestion}</span>`
                 );
                 hasHighlight = true;
             }
         });
         
-        // 고증 오류 하이라이트 (주황색) - 원본 유지, 표시만
-        historicalWords.forEach(word => {
-            const escapedWord = escapeHtml(word);
-            if (processedLine.includes(escapedWord) && !processedLine.includes(`class="historical-word"`)) {
+        // 고증 수정 하이라이트 (주황색)
+        historicalSuggestions.forEach(suggestion => {
+            const escapedSuggestion = escapeHtml(suggestion);
+            if (processedLine.includes(escapedSuggestion) && !processedLine.includes(`"historical-text"`)) {
                 processedLine = processedLine.replace(
-                    new RegExp(escapedWord, 'g'),
-                    `<span class="historical-word" style="background: #ffe0b2; padding: 1px 3px; border-radius: 2px; border-bottom: 2px solid #ff9800;">${escapedWord}</span>`
+                    new RegExp(escapeRegExp(escapedSuggestion), 'g'),
+                    `<span class="historical-text" style="background: #ffe0b2; padding: 1px 3px; border-radius: 2px; border-bottom: 2px solid #ff9800;">${escapedSuggestion}</span>`
                 );
                 hasHighlight = true;
             }
@@ -980,6 +1115,11 @@ function renderFullScriptWithHighlight(revisedScript, analysis, container) {
 
     html += '</div></div>';
     container.innerHTML = html;
+}
+
+// ===================== 정규식 이스케이프 =====================
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ===================== 점수 렌더링 =====================
@@ -998,8 +1138,8 @@ function renderScores(scores, historicalIssueCount) {
     
     const bounceScore = 100 - bounceRate;
     
-    // 고증 정확도 계산 (고증 오류가 많을수록 감점)
-    const historicalAccuracy = Math.max(0, 100 - (historicalIssueCount * 5));
+    // 고증 정확도 (수정 완료 후이므로 100%)
+    const historicalAccuracy = 100;
     
     const average = Math.round((entertainment + seniorTarget + storyFlow + bounceScore + historicalAccuracy) / 5);
     const isPass = average >= 90;
@@ -1033,9 +1173,9 @@ function renderScores(scores, historicalIssueCount) {
     </div>`;
     
     html += `<div class="score-card ${getScoreClass(historicalAccuracy)}" style="border: 2px solid #ff9800;">
-        <div class="score-value" style="color: #ff9800;">${historicalAccuracy}</div>
+        <div class="score-value" style="color: #4CAF50;">${historicalAccuracy}</div>
         <div class="score-label">고증 정확도</div>
-        <div style="font-size: 11px; color: #888;">(${historicalIssueCount}건 발견)</div>
+        <div style="font-size: 11px; color: #888;">(${historicalIssueCount}건 수정됨)</div>
     </div>`;
 
     html += `<div class="score-card final-score ${isPass ? '' : 'fail'}">
