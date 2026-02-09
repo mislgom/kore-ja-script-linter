@@ -1,11 +1,14 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.41 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.41: 수정 전/후 버튼 개별 토글, 테이블 선택란 제거, 스크롤 고정
+ * main.js v4.42 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.42: 전체 보기 모달, 개별 수정 토글, 스크롤 고정, 6가지 분석 기능
+ * - ENDPOINT: generativelanguage.googleapis.com
+ * - TIMEOUT: 300000 ms
+ * - MAX_OUTPUT_TOKENS: 16384
  */
 
-console.log('🚀 main.js v4.41 로드됨');
-console.log('📌 v4.41: 수정 전/후 버튼 개별 토글, 스크롤 고정');
+console.log('🚀 main.js v4.42 로드됨');
+console.log('📌 v4.42: 전체 보기 모달, 개별 수정 토글, 스크롤 고정, 6가지 분석 기능');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -203,7 +206,20 @@ function initApp() {
     initStopButton();
     ensureScoreSection();
     addStyles();
-    console.log('✅ main.js v4.41 초기화 완료');
+    addFullViewButtons();
+    createFullViewModal();
+    console.log('📊 총 ' + getTotalRulesCount() + '개 시대고증 규칙 로드됨');
+    console.log('⏱️ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
+    console.log('🤖 모델: ' + API_CONFIG.MODEL);
+    console.log('✅ main.js v4.42 초기화 완료');
+}
+
+function getTotalRulesCount() {
+    var count = 0;
+    for (var key in HISTORICAL_RULES) {
+        count += HISTORICAL_RULES[key].length;
+    }
+    return count;
 }
 
 function addStyles() {
@@ -216,8 +232,235 @@ function addStyles() {
         '.highlight-active{animation:blink 0.4s ease-in-out 4!important;}' +
         '.highlight-active-orange{animation:blinkOrange 0.4s ease-in-out 4!important;}' +
         '.marker-revised{background:#69f0ae;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;}' +
-        '.marker-original{background:#ff9800;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;}';
+        '.marker-original{background:#ff9800;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;}' +
+        '.fullview-modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:10000;overflow:auto;}' +
+        '.fullview-content{display:flex;width:100%;height:100%;padding:20px;box-sizing:border-box;}' +
+        '.fullview-panel{flex:1;margin:0 10px;display:flex;flex-direction:column;background:#1e1e1e;border-radius:10px;overflow:hidden;}' +
+        '.fullview-header{background:#333;padding:15px;text-align:center;font-weight:bold;color:#fff;border-bottom:1px solid #444;}' +
+        '.fullview-body{flex:1;overflow:auto;padding:15px;}' +
+        '.fullview-footer{padding:15px;border-top:1px solid #444;text-align:center;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;}' +
+        '.fullview-close{position:fixed;top:20px;right:30px;font-size:40px;color:#fff;cursor:pointer;z-index:10001;}' +
+        '.fullview-close:hover{color:#ff5555;}' +
+        '.btn-fullview{background:#9c27b0;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;margin-left:10px;}' +
+        '.btn-fullview:hover{background:#7b1fa2;}';
     document.head.appendChild(style);
+}
+
+function createFullViewModal() {
+    if (document.getElementById('fullview-modal')) return;
+    
+    var modal = document.createElement('div');
+    modal.id = 'fullview-modal';
+    modal.className = 'fullview-modal';
+    modal.innerHTML = 
+        '<span class="fullview-close" id="fullview-close">&times;</span>' +
+        '<div class="fullview-content">' +
+            '<div class="fullview-panel" id="fullview-left">' +
+                '<div class="fullview-header" id="fullview-left-header">분석 결과</div>' +
+                '<div class="fullview-body" id="fullview-left-body"></div>' +
+            '</div>' +
+            '<div class="fullview-panel" id="fullview-right">' +
+                '<div class="fullview-header" id="fullview-right-header">수정 반영</div>' +
+                '<div class="fullview-body" id="fullview-right-body"></div>' +
+                '<div class="fullview-footer" id="fullview-footer"></div>' +
+            '</div>' +
+        '</div>';
+    document.body.appendChild(modal);
+    
+    document.getElementById('fullview-close').addEventListener('click', closeFullViewModal);
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) closeFullViewModal();
+    });
+}
+
+function openFullViewModal(stage) {
+    var modal = document.getElementById('fullview-modal');
+    if (!modal) return;
+    
+    var stageNum = stage === 'stage1' ? '1차' : '2차';
+    var analysisBox = document.getElementById('analysis-' + stage);
+    var revisedBox = document.getElementById('revised-' + stage);
+    
+    document.getElementById('fullview-left-header').textContent = stageNum + ' 분석 결과';
+    document.getElementById('fullview-right-header').textContent = stage === 'stage1' ? '1차 수정 반영' : '최종 수정 반영';
+    
+    var leftBody = document.getElementById('fullview-left-body');
+    var rightBody = document.getElementById('fullview-right-body');
+    var footer = document.getElementById('fullview-footer');
+    
+    if (analysisBox) {
+        leftBody.innerHTML = analysisBox.innerHTML;
+        leftBody.querySelectorAll('tr[data-marker-id]').forEach(function(row) {
+            row.addEventListener('click', function() {
+                var markerId = this.getAttribute('data-marker-id');
+                var errorIndex = findErrorIndexById(stage, markerId);
+                if (errorIndex >= 0) {
+                    setCurrentError(stage, errorIndex);
+                    highlightFullViewRow(leftBody, markerId);
+                    scrollToFullViewMarker(rightBody, markerId, stage);
+                }
+            });
+        });
+    }
+    
+    if (revisedBox) {
+        rightBody.innerHTML = revisedBox.innerHTML;
+        rightBody.querySelectorAll('.correction-marker').forEach(function(marker) {
+            marker.addEventListener('click', function() {
+                var markerId = this.getAttribute('data-marker-id');
+                var errorIndex = findErrorIndexById(stage, markerId);
+                if (errorIndex >= 0) {
+                    setCurrentError(stage, errorIndex);
+                    highlightFullViewRow(leftBody, markerId);
+                }
+            });
+        });
+    }
+    
+    footer.innerHTML = '';
+    
+    var btnBefore = document.createElement('button');
+    btnBefore.innerHTML = '🔄 수정 전';
+    btnBefore.style.cssText = 'background:#ff9800;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
+    btnBefore.addEventListener('click', function() {
+        toggleCurrentError(stage, false);
+        updateFullViewContent(stage, leftBody, rightBody);
+    });
+    
+    var btnAfter = document.createElement('button');
+    btnAfter.innerHTML = '✅ 수정 후';
+    btnAfter.style.cssText = 'background:#4CAF50;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
+    btnAfter.addEventListener('click', function() {
+        toggleCurrentError(stage, true);
+        updateFullViewContent(stage, leftBody, rightBody);
+    });
+    
+    var btnFix = document.createElement('button');
+    btnFix.innerHTML = '📌 대본 픽스';
+    btnFix.style.cssText = 'background:#2196F3;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
+    btnFix.addEventListener('click', function() {
+        fixScript(stage);
+        updateFullViewContent(stage, leftBody, rightBody);
+    });
+    
+    footer.appendChild(btnBefore);
+    footer.appendChild(btnAfter);
+    footer.appendChild(btnFix);
+    
+    modal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+}
+
+function updateFullViewContent(stage, leftBody, rightBody) {
+    var analysisBox = document.getElementById('analysis-' + stage);
+    var revisedBox = document.getElementById('revised-' + stage);
+    
+    if (analysisBox) {
+        leftBody.innerHTML = analysisBox.innerHTML;
+        leftBody.querySelectorAll('tr[data-marker-id]').forEach(function(row) {
+            row.addEventListener('click', function() {
+                var markerId = this.getAttribute('data-marker-id');
+                var errorIndex = findErrorIndexById(stage, markerId);
+                if (errorIndex >= 0) {
+                    setCurrentError(stage, errorIndex);
+                    highlightFullViewRow(leftBody, markerId);
+                    scrollToFullViewMarker(rightBody, markerId, stage);
+                }
+            });
+        });
+    }
+    
+    if (revisedBox) {
+        rightBody.innerHTML = revisedBox.innerHTML;
+        rightBody.querySelectorAll('.correction-marker').forEach(function(marker) {
+            marker.addEventListener('click', function() {
+                var markerId = this.getAttribute('data-marker-id');
+                var errorIndex = findErrorIndexById(stage, markerId);
+                if (errorIndex >= 0) {
+                    setCurrentError(stage, errorIndex);
+                    highlightFullViewRow(leftBody, markerId);
+                }
+            });
+        });
+    }
+}
+
+function highlightFullViewRow(container, markerId) {
+    var rows = container.querySelectorAll('tr[data-marker-id]');
+    rows.forEach(function(row) {
+        if (row.getAttribute('data-marker-id') === markerId) {
+            row.style.background = '#3a3a3a';
+            row.style.outline = '2px solid #69f0ae';
+        } else {
+            row.style.background = '';
+            row.style.outline = '';
+        }
+    });
+}
+
+function scrollToFullViewMarker(container, markerId, stage) {
+    var marker = container.querySelector('.correction-marker[data-marker-id="' + markerId + '"]');
+    if (marker) {
+        marker.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        var isRevised = marker.classList.contains('marker-revised');
+        marker.classList.add(isRevised ? 'highlight-active' : 'highlight-active-orange');
+        setTimeout(function() {
+            marker.classList.remove('highlight-active');
+            marker.classList.remove('highlight-active-orange');
+        }, 1600);
+    }
+}
+
+function closeFullViewModal() {
+    var modal = document.getElementById('fullview-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+}
+
+function addFullViewButtons() {
+    var revised1 = document.getElementById('revised-stage1');
+    var revised2 = document.getElementById('revised-stage2');
+    
+    if (revised1) addFullViewButtonToContainer(revised1, 'stage1');
+    if (revised2) addFullViewButtonToContainer(revised2, 'stage2');
+}
+
+function addFullViewButtonToContainer(container, stage) {
+    var parent = container.parentElement;
+    var header = parent.querySelector('h3, .section-title, .panel-header');
+    
+    if (!header) {
+        var children = parent.children;
+        for (var i = 0; i < children.length; i++) {
+            if (children[i].tagName === 'DIV' && children[i].style.fontWeight === 'bold') {
+                header = children[i];
+                break;
+            }
+        }
+    }
+    
+    if (header && !header.querySelector('.btn-fullview')) {
+        var btn = document.createElement('button');
+        btn.className = 'btn-fullview';
+        btn.innerHTML = '🔍 전체 보기';
+        btn.addEventListener('click', function() {
+            openFullViewModal(stage);
+        });
+        header.appendChild(btn);
+    } else {
+        var wrapper = parent.querySelector('.revert-btn-wrapper');
+        if (wrapper && !wrapper.querySelector('.btn-fullview')) {
+            var btn = document.createElement('button');
+            btn.className = 'btn-fullview';
+            btn.innerHTML = '🔍 전체 보기';
+            btn.addEventListener('click', function() {
+                openFullViewModal(stage);
+            });
+            wrapper.appendChild(btn);
+        }
+    }
 }
 
 function ensureScoreSection() {
@@ -456,6 +699,12 @@ function addRevertButton(container, stage) {
     btnFix.addEventListener('click', function() { fixScript(stage); });
     wrapper.appendChild(btnFix);
 
+    var btnFullView = document.createElement('button');
+    btnFullView.className = 'btn-fullview';
+    btnFullView.innerHTML = '🔍 전체 보기';
+    btnFullView.addEventListener('click', function() { openFullViewModal(stage); });
+    wrapper.appendChild(btnFullView);
+
     parent.appendChild(wrapper);
 }
 
@@ -564,8 +813,6 @@ function scrollToMarker(stage, markerId) {
     var container = document.getElementById('revised-' + stage);
     if (!container) return;
     
-    var scrollTop = container.scrollTop;
-    
     var marker = container.querySelector('.correction-marker[data-marker-id="' + markerId + '"]');
     if (marker) {
         marker.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -576,6 +823,16 @@ function scrollToMarker(stage, markerId) {
             marker.classList.remove('highlight-active-orange');
         }, 1600);
     }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
 
 function initStage1AnalysisButton() {
@@ -590,10 +847,18 @@ function initStage1AnalysisButton() {
     var btn = document.createElement('button');
     btn.id = 'btn-start-stage1';
     btn.innerHTML = '🔍 1차 분석 시작';
-    btn.style.cssText = 'background:#4CAF50;color:white;border:none;padding:12px 30px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:15px;';
-    btn.addEventListener('click', function() { startAnalysis('stage1'); });
+    btn.style.cssText = 'background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border:none;padding:15px 40px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:16px;box-shadow:0 4px 15px rgba(102,126,234,0.4);transition:transform 0.2s,box-shadow 0.2s;';
+    btn.addEventListener('mouseover', function() {
+        this.style.transform = 'translateY(-2px)';
+        this.style.boxShadow = '0 6px 20px rgba(102,126,234,0.5)';
+    });
+    btn.addEventListener('mouseout', function() {
+        this.style.transform = 'translateY(0)';
+        this.style.boxShadow = '0 4px 15px rgba(102,126,234,0.4)';
+    });
+    btn.addEventListener('click', startStage1Analysis);
     wrapper.appendChild(btn);
-    parent.appendChild(wrapper);
+    parent.insertBefore(wrapper, analysisContainer);
 }
 
 function initStage2AnalysisButton() {
@@ -607,368 +872,550 @@ function initStage2AnalysisButton() {
     wrapper.style.cssText = 'text-align:center;padding:15px;';
     var btn = document.createElement('button');
     btn.id = 'btn-start-stage2';
-    btn.innerHTML = '🔍 2차 분석 시작';
-    btn.style.cssText = 'background:#9c27b0;color:white;border:none;padding:12px 30px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:15px;opacity:0.5;';
-    btn.disabled = true;
-    btn.addEventListener('click', function() { startStage2Analysis(); });
+    btn.innerHTML = '🔬 2차 분석 시작';
+    btn.style.cssText = 'background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);color:white;border:none;padding:15px 40px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:16px;box-shadow:0 4px 15px rgba(245,87,108,0.4);transition:transform 0.2s,box-shadow 0.2s;';
+    btn.addEventListener('mouseover', function() {
+        this.style.transform = 'translateY(-2px)';
+        this.style.boxShadow = '0 6px 20px rgba(245,87,108,0.5)';
+    });
+    btn.addEventListener('mouseout', function() {
+        this.style.transform = 'translateY(0)';
+        this.style.boxShadow = '0 4px 15px rgba(245,87,108,0.4)';
+    });
+    btn.addEventListener('click', startStage2Analysis);
     wrapper.appendChild(btn);
-    parent.appendChild(wrapper);
+    parent.insertBefore(wrapper, analysisContainer);
 }
 
-function fixScript(stage) {
-    var s = state[stage];
-    if (!s.originalScript) {
-        alert('원본 대본이 없습니다.');
-        return;
+function getHistoricalRulesString() {
+    var rules = [];
+    for (var category in HISTORICAL_RULES) {
+        HISTORICAL_RULES[category].forEach(function(rule) {
+            rules.push(rule.modern + ' → ' + rule.historical.join('/'));
+        });
+    }
+    return rules.join(', ');
+}
+
+function buildStage1Prompt(script) {
+    var rulesString = getHistoricalRulesString();
+    
+    return '당신은 조선시대 사극 대본 전문 검수자입니다.\n' +
+        '아래 대본을 분석하여 모든 종류의 오류를 찾아내세요.\n\n' +
+        '## 중요: 반드시 아래 모든 카테고리에서 오류를 검토하세요\n\n' +
+        '### 1. 시대착오 (현대어/근대어) - 반드시 검토\n' +
+        '다음 현대어가 대본에 있으면 반드시 오류로 검출하세요:\n' +
+        rulesString + '\n\n' +
+        '### 2. 인물 설정 오류\n' +
+        '- 신분에 맞지 않는 행동이나 언어\n' +
+        '- 양반이 상민처럼 말하거나 그 반대의 경우\n' +
+        '- 남녀 간의 부적절한 호칭\n' +
+        '- 왕이나 왕비에 대한 불경한 표현\n\n' +
+        '### 3. 시간 왜곡\n' +
+        '- 시간 순서가 맞지 않는 대화\n' +
+        '- 아직 일어나지 않은 일을 언급\n' +
+        '- 과거/현재/미래 시제 오류\n\n' +
+        '### 4. 이야기 흐름 오류\n' +
+        '- 앞뒤 문맥과 맞지 않는 대사\n' +
+        '- 갑작스러운 감정 변화\n' +
+        '- 논리적 비약\n\n' +
+        '### 5. 쌩뚱맞은 표현\n' +
+        '- 상황에 어울리지 않는 대사\n' +
+        '- 분위기를 깨는 표현\n' +
+        '- 갑작스러운 주제 전환\n\n' +
+        '### 6. 캐릭터 일관성\n' +
+        '- 같은 인물의 말투 변화\n' +
+        '- 성격과 맞지 않는 행동\n' +
+        '- 호칭의 일관성\n\n' +
+        '### 7. 장면 연결성\n' +
+        '- 장면 전환 시 어색함\n' +
+        '- 복선 미회수\n' +
+        '- 설정 충돌\n\n' +
+        '## 분석 대상 대본:\n' +
+        '```\n' + script + '\n```\n\n' +
+        '## 중요 지시사항\n' +
+        '- "나레이션:" 또는 "(나레이션)"으로 시작하는 부분은 현대어 해설이므로 오류로 처리하지 마세요.\n' +
+        '- 대사 속 현대어만 검출하세요.\n' +
+        '- 위 시대착오 목록의 현대어가 대본에 있으면 반드시 오류로 검출하세요.\n' +
+        '- 오류가 없으면 빈 배열을 반환하세요.\n\n' +
+        '## 응답 형식 (JSON만 반환):\n' +
+        '```json\n' +
+        '{\n' +
+        '  "errors": [\n' +
+        '    {\n' +
+        '      "type": "시대착오|인물설정|시간왜곡|이야기흐름|쌩뚱맞은표현|캐릭터일관성|장면연결성",\n' +
+        '      "original": "오류가 있는 원문 (정확히 복사)",\n' +
+        '      "revised": "수정된 문장",\n' +
+        '      "reason": "수정 이유",\n' +
+        '      "severity": "high|medium|low"\n' +
+        '    }\n' +
+        '  ]\n' +
+        '}\n' +
+        '```';
+}
+
+function buildStage2Prompt(script) {
+    var rulesString = getHistoricalRulesString();
+    
+    return '당신은 조선시대 사극 대본 최종 검수 전문가입니다.\n' +
+        '1차 분석 후 수정된 대본을 다시 정밀 검토하여 놓친 오류를 찾아내세요.\n\n' +
+        '## 2차 분석 중점 검토 항목\n\n' +
+        '### 1. 미세한 시대착오\n' +
+        '다음 현대어가 대본에 있으면 반드시 오류로 검출:\n' +
+        rulesString + '\n\n' +
+        '### 2. 대사 자연스러움\n' +
+        '- 조선시대 말투로 어색한 부분\n' +
+        '- 너무 현대적인 문장 구조\n\n' +
+        '### 3. 호칭 일관성\n' +
+        '- 같은 인물을 다르게 부르는 경우\n' +
+        '- 신분에 맞지 않는 호칭\n\n' +
+        '### 4. 감정선 연결\n' +
+        '- 감정 변화의 자연스러움\n' +
+        '- 동기 부여의 적절성\n\n' +
+        '### 5. 복선/떡밥 회수\n' +
+        '- 미회수된 복선\n' +
+        '- 어색한 떡밥 처리\n\n' +
+        '### 6. 역사적 사실 오류\n' +
+        '- 실제 역사와 충돌하는 설정\n' +
+        '- 시대 배경과 맞지 않는 요소\n\n' +
+        '## 분석 대상 대본:\n' +
+        '```\n' + script + '\n```\n\n' +
+        '## 중요 지시사항\n' +
+        '- "나레이션:" 또는 "(나레이션)"으로 시작하는 부분은 현대어 해설이므로 오류로 처리하지 마세요.\n' +
+        '- 대사 속 현대어만 검출하세요.\n' +
+        '- 1차 분석에서 놓쳤을 수 있는 미세한 오류까지 찾아주세요.\n' +
+        '- 오류가 없으면 빈 배열을 반환하세요.\n\n' +
+        '## 점수 평가 (각 100점 만점)\n' +
+        '- 시니어 적합도: 어르신 시청자가 이해하기 쉬운 정도\n' +
+        '- 재미 요소: 흥미와 몰입도\n' +
+        '- 이야기 흐름: 서사 구조와 논리성\n' +
+        '- 시청자 이탈 방지: 지루함 없이 끝까지 볼 수 있는 정도\n\n' +
+        '## 응답 형식 (JSON만 반환):\n' +
+        '```json\n' +
+        '{\n' +
+        '  "errors": [\n' +
+        '    {\n' +
+        '      "type": "시대착오|대사자연스러움|호칭일관성|감정선연결|복선회수|역사적사실",\n' +
+        '      "original": "오류가 있는 원문 (정확히 복사)",\n' +
+        '      "revised": "수정된 문장",\n' +
+        '      "reason": "수정 이유",\n' +
+        '      "severity": "high|medium|low"\n' +
+        '    }\n' +
+        '  ],\n' +
+        '  "scores": {\n' +
+        '    "senior": 85,\n' +
+        '    "fun": 80,\n' +
+        '    "flow": 90,\n' +
+        '    "retention": 85\n' +
+        '  },\n' +
+        '  "improvements": [\n' +
+        '    {\n' +
+        '      "category": "시니어적합도|재미요소|이야기흐름|시청자이탈방지",\n' +
+        '      "currentScore": 85,\n' +
+        '      "suggestion": "구체적인 개선 방안"\n' +
+        '    }\n' +
+        '  ]\n' +
+        '}\n' +
+        '```';
+}
+
+async function callGeminiAPI(prompt) {
+    var apiKey = localStorage.getItem('GEMINI_API_KEY');
+    var validation = validateApiKey(apiKey);
+    if (!validation.valid) {
+        throw new Error(validation.message);
     }
 
-    var finalText = s.originalScript;
-    var errors = s.allErrors || [];
+    currentAbortController = new AbortController();
+    var stopBtn = document.getElementById('btn-stop-analysis');
+    if (stopBtn) stopBtn.disabled = false;
 
-    var sortedErrors = errors.slice().sort(function(a, b) {
-        var posA = finalText.indexOf(a.original);
-        var posB = finalText.indexOf(b.original);
-        return posB - posA;
+    var url = API_CONFIG.ENDPOINT + '/' + API_CONFIG.MODEL + ':generateContent?key=' + apiKey;
+
+    var response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            contents: [{
+                parts: [{
+                    text: prompt
+                }]
+            }],
+            generationConfig: {
+                temperature: 0.1,
+                topK: 40,
+                topP: 0.95,
+                maxOutputTokens: API_CONFIG.MAX_OUTPUT_TOKENS
+            }
+        }),
+        signal: currentAbortController.signal
     });
 
-    sortedErrors.forEach(function(err) {
-        if (err.useRevised && err.original && err.revised) {
-            finalText = finalText.replace(err.original, err.revised);
-        }
-    });
-
-    s.fixedScript = finalText;
-
-    if (stage === 'stage2') {
-        state.finalScript = finalText;
-        var downloadBtn = document.getElementById('btn-download');
-        if (downloadBtn) {
-            downloadBtn.disabled = false;
-            downloadBtn.style.opacity = '1';
-        }
+    if (!response.ok) {
+        var errorData = await response.json().catch(function() { return {}; });
+        throw new Error('API 오류: ' + (errorData.error?.message || response.statusText));
     }
 
-    if (stage === 'stage1') {
-        var stage2Btn = document.getElementById('btn-start-stage2');
-        if (stage2Btn) {
-            stage2Btn.disabled = false;
-            stage2Btn.style.opacity = '1';
-        }
+    var data = await response.json();
+    
+    if (stopBtn) stopBtn.disabled = true;
+    currentAbortController = null;
+
+    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+        return data.candidates[0].content.parts[0].text;
     }
-
-    alert('대본이 픽스되었습니다.\n\n' + (stage === 'stage1' ? '2차 분석을 진행할 수 있습니다.' : '최종 수정본을 다운로드할 수 있습니다.'));
+    
+    throw new Error('API 응답 형식 오류');
 }
 
-function escapeHtml(text) {
-    if (!text) return '';
-    var div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+function parseApiResponse(responseText) {
+    var jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+        return JSON.parse(jsonMatch[1]);
+    }
+    
+    var jsonStart = responseText.indexOf('{');
+    var jsonEnd = responseText.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+        return JSON.parse(responseText.substring(jsonStart, jsonEnd + 1));
+    }
+    
+    throw new Error('JSON 파싱 실패');
 }
 
-function startAnalysis(stage) {
-    var scriptText = document.getElementById('original-script').value.trim();
-    if (!scriptText) {
-        alert('대본을 입력해주세요.');
+function showProgress(message) {
+    var container = document.getElementById('progress-container');
+    if (container) {
+        container.style.display = 'block';
+        updateProgress(0, message);
+    }
+}
+
+function updateProgress(percent, message) {
+    var bar = document.getElementById('progress-bar');
+    var text = document.getElementById('progress-text');
+    if (bar) bar.style.width = percent + '%';
+    if (text) text.textContent = message || '';
+}
+
+function hideProgress() {
+    var container = document.getElementById('progress-container');
+    if (container) {
+        container.style.display = 'none';
+    }
+}
+
+async function startStage1Analysis() {
+    var script = document.getElementById('original-script').value.trim();
+    if (!script) {
+        alert('분석할 대본을 입력해주세요.');
         return;
     }
 
     var apiKey = localStorage.getItem('GEMINI_API_KEY');
-    var validation = validateApiKey(apiKey);
-    if (!validation.valid) {
-        alert(validation.message + '\n\nAPI 설정에서 키를 입력해주세요.');
+    if (!apiKey) {
+        alert('API 키를 먼저 설정해주세요.');
         return;
     }
 
-    state[stage].originalScript = scriptText;
-    state[stage].allErrors = [];
-    state[stage].currentErrorIndex = -1;
+    showProgress('1차 분석 시작...');
+    updateProgress(10, 'AI 분석 요청 중...');
 
-    analyzeScript(scriptText, stage, apiKey);
+    try {
+        state.stage1.originalScript = script;
+        
+        var prompt = buildStage1Prompt(script);
+        updateProgress(30, 'Gemini API 응답 대기 중...');
+        
+        var response = await callGeminiAPI(prompt);
+        updateProgress(70, '분석 결과 처리 중...');
+        
+        var result = parseApiResponse(response);
+        
+        state.stage1.analysis = result;
+        state.stage1.allErrors = (result.errors || []).map(function(err, idx) {
+            return {
+                id: 'stage1-error-' + idx,
+                type: err.type,
+                original: err.original,
+                revised: err.revised,
+                reason: err.reason,
+                severity: err.severity,
+                useRevised: true
+            };
+        });
+        
+        updateProgress(90, '결과 표시 중...');
+        displayStage1Results();
+        
+        updateProgress(100, '1차 분석 완료!');
+        setTimeout(hideProgress, 1000);
+        
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            console.log('분석이 사용자에 의해 중지되었습니다.');
+        } else {
+            alert('분석 중 오류가 발생했습니다: ' + error.message);
+            console.error(error);
+        }
+        hideProgress();
+    }
 }
 
-function startStage2Analysis() {
-    var scriptText = state.stage1.fixedScript || state.stage1.originalScript;
-    if (!scriptText) {
+async function startStage2Analysis() {
+    var script = state.stage1.fixedScript || state.stage1.originalScript;
+    if (!script) {
         alert('1차 분석을 먼저 완료해주세요.');
         return;
     }
 
     var apiKey = localStorage.getItem('GEMINI_API_KEY');
-    var validation = validateApiKey(apiKey);
-    if (!validation.valid) {
-        alert(validation.message);
+    if (!apiKey) {
+        alert('API 키를 먼저 설정해주세요.');
         return;
     }
 
-    state.stage2.originalScript = scriptText;
-    state.stage2.allErrors = [];
-    state.stage2.currentErrorIndex = -1;
+    showProgress('2차 분석 시작...');
+    updateProgress(10, 'AI 정밀 분석 요청 중...');
 
-    analyzeScript(scriptText, 'stage2', apiKey);
-}
-
-function analyzeScript(scriptText, stage, apiKey) {
-    var progressContainer = document.getElementById('progress-container');
-    var stopBtn = document.getElementById('btn-stop-analysis');
-
-    if (progressContainer) progressContainer.style.display = 'block';
-    if (stopBtn) stopBtn.disabled = false;
-
-    updateProgress(10, '분석 준비 중...');
-    currentAbortController = new AbortController();
-
-    var prompt = getAnalysisPrompt(scriptText, stage);
-    updateProgress(30, 'AI 분석 중...');
-
-    callGeminiAPI(prompt, apiKey, currentAbortController.signal)
-        .then(function(response) {
-            updateProgress(70, '결과 처리 중...');
-            processAnalysisResult(response, stage, scriptText);
-            updateProgress(100, '분석 완료!');
-            setTimeout(function() {
-                if (progressContainer) progressContainer.style.display = 'none';
-            }, 1000);
-        })
-        .catch(function(error) {
-            console.error('분석 오류:', error);
-            if (error.name !== 'AbortError') {
-                alert('분석 중 오류가 발생했습니다: ' + error.message);
-            }
-            if (progressContainer) progressContainer.style.display = 'none';
-        });
-}
-
-function buildModernWordsList() {
-    var words = [];
-    for (var category in HISTORICAL_RULES) {
-        HISTORICAL_RULES[category].forEach(function(rule) {
-            words.push(rule.modern);
-        });
-    }
-    return words.join(', ');
-}
-
-function getAnalysisPrompt(scriptText, stage) {
-    var modernWords = buildModernWordsList();
-
-    if (stage === 'stage1') {
-        return '당신은 조선시대 사극 대본 전문 검수자입니다. 1차 분석을 수행합니다.\n\n' +
-            '=== 분석 항목 (6가지 필수 검토) ===\n\n' +
-            '1. **인물 설정 오류**: 캐릭터의 신분/지위에 맞지 않는 말투나 행동\n' +
-            '2. **시간 왜곡 검출**: 조선시대에 존재하지 않던 물건, 개념, 제도\n' +
-            '   - 검출 대상: ' + modernWords + '\n' +
-            '3. **이야기 흐름 분석**: 장면 전환이 부자연스러운 부분\n' +
-            '4. **쌩뚱맞은 표현 검출**: 상황에 맞지 않는 대사, 분위기를 깨는 표현\n' +
-            '5. **캐릭터 일관성 검토**: 같은 캐릭터가 다른 성격/말투를 보이는 경우\n' +
-            '6. **장면 연결성 분석**: 앞뒤 장면과 연결되지 않는 내용\n\n' +
-            '=== 절대 금지 ===\n' +
-            '- 나레이션(N: 또는 나레이션:)은 현대어 사용이 정상입니다. 수정하지 마세요.\n\n' +
-            '=== 출력 형식 (JSON만) ===\n' +
-            '```json\n' +
-            '{"errors":[{"type":"유형","original":"원문","revised":"수정안","reason":"이유"}],"revisedScript":"전체 수정 대본","summary":"요약"}\n' +
-            '```\n\n' +
-            '=== 분석할 대본 ===\n' + scriptText;
-    } else {
-        return '당신은 조선시대 사극 대본 전문 검수자입니다. 2차 정밀 분석을 수행합니다.\n\n' +
-            '=== 2차 분석 항목 ===\n' +
-            '1. 미세한 시대착오: 1차에서 놓친 현대어/외래어\n' +
-            '2. 대사 자연스러움: 조선시대 말투로서 부자연스러운 표현\n' +
-            '3. 호칭 일관성: 같은 인물에 대한 호칭이 일관적인지\n' +
-            '4. 감정선 연결: 캐릭터의 감정 변화가 자연스러운지\n' +
-            '5. 복선/떡밥 회수: 언급된 내용이 적절히 연결되는지\n' +
-            '6. 역사적 사실 오류: 실제 역사와 맞지 않는 내용\n\n' +
-            '=== 절대 금지 ===\n' +
-            '- 나레이션(N: 또는 나레이션:)은 수정하지 마세요.\n\n' +
-            '=== 출력 형식 (JSON만) ===\n' +
-            '```json\n' +
-            '{"errors":[{"type":"유형","original":"원문","revised":"수정안","reason":"이유"}],"revisedScript":"전체 수정 대본","summary":"요약","scores":{"senior":0-100,"fun":0-100,"flow":0-100,"retention":0-100}}\n' +
-            '```\n\n' +
-            '=== 분석할 대본 ===\n' + scriptText;
-    }
-}
-
-function callGeminiAPI(prompt, apiKey, signal) {
-    var url = API_CONFIG.ENDPOINT + '/' + API_CONFIG.MODEL + ':generateContent?key=' + apiKey;
-
-    return fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-                temperature: 0.1,
-                maxOutputTokens: API_CONFIG.MAX_OUTPUT_TOKENS
-            }
-        }),
-        signal: signal
-    })
-    .then(function(response) {
-        if (!response.ok) throw new Error('API 오류: ' + response.status);
-        return response.json();
-    })
-    .then(function(data) {
-        if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
-            return data.candidates[0].content.parts[0].text;
-        }
-        throw new Error('API 응답 형식 오류');
-    });
-}
-
-function processAnalysisResult(response, stage, originalScript) {
-    var result;
     try {
-        var jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
-        if (jsonMatch) {
-            result = JSON.parse(jsonMatch[1]);
-        } else {
-            var jsonMatch2 = response.match(/\{[\s\S]*\}/);
-            if (jsonMatch2) {
-                result = JSON.parse(jsonMatch2[0]);
-            } else {
-                throw new Error('JSON 파싱 실패');
-            }
-        }
-    } catch (e) {
-        console.error('JSON 파싱 오류:', e);
-        result = { errors: [], revisedScript: originalScript, summary: '파싱 오류' };
-    }
-
-    var errors = result.errors || [];
-    var revisedScript = result.revisedScript || originalScript;
-
-    errors.forEach(function(err, index) {
-        err.id = 'marker-' + stage + '-' + index;
-        err.useRevised = true;
-    });
-
-    state[stage].allErrors = errors;
-    state[stage].revisedScript = revisedScript;
-    state[stage].analysis = result;
-
-    displayAnalysisTable(stage, errors);
-    renderScriptWithMarkers(stage);
-    enableStageButtons(stage);
-
-    if (stage === 'stage2') {
-        var scores = result.scores || null;
-        displayScores(errors, scores);
-    }
-}
-
-function displayAnalysisTable(stage, errors) {
-    var container = document.getElementById('analysis-' + stage);
-    if (!container) return;
-
-    if (errors.length === 0) {
-        container.innerHTML = '<div style="text-align:center;padding:20px;color:#69f0ae;"><h3>✅ 오류 없음</h3><p>검토 결과 수정이 필요한 부분이 없습니다.</p></div>';
-        return;
-    }
-
-    var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;">';
-    html += '<thead><tr style="background:#333;">';
-    html += '<th style="padding:10px;border:1px solid #555;width:15%;">유형</th>';
-    html += '<th style="padding:10px;border:1px solid #555;width:28%;">원문</th>';
-    html += '<th style="padding:10px;border:1px solid #555;width:28%;">수정안</th>';
-    html += '<th style="padding:10px;border:1px solid #555;width:29%;">이유</th>';
-    html += '</tr></thead>';
-    html += '<tbody>';
-
-    errors.forEach(function(err, index) {
-        html += '<tr data-marker-id="' + err.id + '" data-index="' + index + '" style="cursor:pointer;">';
-        html += '<td style="padding:8px;border:1px solid #555;text-align:center;">' + escapeHtml(err.type) + '</td>';
-        html += '<td style="padding:8px;border:1px solid #555;background:#ffebee;color:#c62828;">' + escapeHtml(err.original) + '</td>';
-        html += '<td style="padding:8px;border:1px solid #555;background:#e8f5e9;color:#2e7d32;">' + escapeHtml(err.revised) + '</td>';
-        html += '<td style="padding:8px;border:1px solid #555;">' + escapeHtml(err.reason) + '</td>';
-        html += '</tr>';
-    });
-
-    html += '</tbody></table>';
-    html += '<div style="text-align:center;padding:10px;color:#aaa;">총 ' + errors.length + '개 오류 발견 (항목 클릭 후 수정 전/후 버튼으로 개별 변경)</div>';
-
-    container.innerHTML = html;
-
-    container.querySelectorAll('tbody tr').forEach(function(row) {
-        row.addEventListener('click', function() {
-            var index = parseInt(this.getAttribute('data-index'));
-            var markerId = this.getAttribute('data-marker-id');
-            setCurrentError(stage, index);
-            scrollToMarker(stage, markerId);
+        state.stage2.originalScript = script;
+        
+        var prompt = buildStage2Prompt(script);
+        updateProgress(30, 'Gemini API 응답 대기 중...');
+        
+        var response = await callGeminiAPI(prompt);
+        updateProgress(70, '분석 결과 처리 중...');
+        
+        var result = parseApiResponse(response);
+        
+        state.stage2.analysis = result;
+        state.stage2.allErrors = (result.errors || []).map(function(err, idx) {
+            return {
+                id: 'stage2-error-' + idx,
+                type: err.type,
+                original: err.original,
+                revised: err.revised,
+                reason: err.reason,
+                severity: err.severity,
+                useRevised: true
+            };
         });
-    });
+        
+        if (result.scores) {
+            state.scores = result.scores;
+        }
+        
+        updateProgress(90, '결과 표시 중...');
+        displayStage2Results();
+        
+        if (result.scores) {
+            displayScores(result.scores, result.improvements);
+        }
+        
+        updateProgress(100, '2차 분석 완료!');
+        setTimeout(hideProgress, 1000);
+        
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            console.log('분석이 사용자에 의해 중지되었습니다.');
+        } else {
+            alert('분석 중 오류가 발생했습니다: ' + error.message);
+            console.error(error);
+        }
+        hideProgress();
+    }
 }
 
-function enableStageButtons(stage) {
-    var btnBefore = document.getElementById('btn-revert-before-' + stage);
-    var btnAfter = document.getElementById('btn-revert-after-' + stage);
-    var btnFix = document.getElementById('btn-fix-script-' + stage);
+function displayStage1Results() {
+    var container = document.getElementById('analysis-stage1');
+    if (!container) return;
+    
+    var errors = state.stage1.allErrors;
+    
+    if (!errors || errors.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:30px;color:#69f0ae;font-size:18px;">✅ 오류가 발견되지 않았습니다.</div>';
+    } else {
+        var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;">' +
+            '<thead><tr style="background:#333;">' +
+            '<th style="padding:12px;border:1px solid #444;width:100px;">유형</th>' +
+            '<th style="padding:12px;border:1px solid #444;">원문</th>' +
+            '<th style="padding:12px;border:1px solid #444;">수정</th>' +
+            '<th style="padding:12px;border:1px solid #444;width:200px;">사유</th>' +
+            '</tr></thead><tbody>';
+        
+        errors.forEach(function(err, idx) {
+            var severityColor = err.severity === 'high' ? '#ff5555' : (err.severity === 'medium' ? '#ffaa00' : '#69f0ae');
+            html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;transition:background 0.2s;" ' +
+                'onmouseover="this.style.background=\'#3a3a3a\'" onmouseout="this.style.background=\'\'">' +
+                '<td style="padding:10px;border:1px solid #444;color:' + severityColor + ';font-weight:bold;">' + escapeHtml(err.type) + '</td>' +
+                '<td style="padding:10px;border:1px solid #444;color:#ff9800;">' + escapeHtml(err.original) + '</td>' +
+                '<td style="padding:10px;border:1px solid #444;color:#69f0ae;">' + escapeHtml(err.revised) + '</td>' +
+                '<td style="padding:10px;border:1px solid #444;color:#aaa;font-size:12px;">' + escapeHtml(err.reason) + '</td>' +
+                '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        container.innerHTML = html;
+        
+        container.querySelectorAll('tr[data-marker-id]').forEach(function(row) {
+            row.addEventListener('click', function() {
+                var markerId = this.getAttribute('data-marker-id');
+                var errorIndex = findErrorIndexById('stage1', markerId);
+                if (errorIndex >= 0) {
+                    setCurrentError('stage1', errorIndex);
+                    scrollToMarker('stage1', markerId);
+                }
+            });
+        });
+    }
+    
+    renderScriptWithMarkers('stage1');
+    enableStage1Buttons(errors && errors.length > 0);
+}
 
-    if (btnBefore) btnBefore.disabled = false;
-    if (btnAfter) btnAfter.disabled = false;
+function displayStage2Results() {
+    var container = document.getElementById('analysis-stage2');
+    if (!container) return;
+    
+    var errors = state.stage2.allErrors;
+    
+    if (!errors || errors.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:30px;color:#69f0ae;font-size:18px;">✅ 추가 오류가 발견되지 않았습니다.</div>';
+    } else {
+        var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;">' +
+            '<thead><tr style="background:#333;">' +
+            '<th style="padding:12px;border:1px solid #444;width:100px;">유형</th>' +
+            '<th style="padding:12px;border:1px solid #444;">원문</th>' +
+            '<th style="padding:12px;border:1px solid #444;">수정</th>' +
+            '<th style="padding:12px;border:1px solid #444;width:200px;">사유</th>' +
+            '</tr></thead><tbody>';
+        
+        errors.forEach(function(err, idx) {
+            var severityColor = err.severity === 'high' ? '#ff5555' : (err.severity === 'medium' ? '#ffaa00' : '#69f0ae');
+            html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;transition:background 0.2s;" ' +
+                'onmouseover="this.style.background=\'#3a3a3a\'" onmouseout="this.style.background=\'\'">' +
+                '<td style="padding:10px;border:1px solid #444;color:' + severityColor + ';font-weight:bold;">' + escapeHtml(err.type) + '</td>' +
+                '<td style="padding:10px;border:1px solid #444;color:#ff9800;">' + escapeHtml(err.original) + '</td>' +
+                '<td style="padding:10px;border:1px solid #444;color:#69f0ae;">' + escapeHtml(err.revised) + '</td>' +
+                '<td style="padding:10px;border:1px solid #444;color:#aaa;font-size:12px;">' + escapeHtml(err.reason) + '</td>' +
+                '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        container.innerHTML = html;
+        
+        container.querySelectorAll('tr[data-marker-id]').forEach(function(row) {
+            row.addEventListener('click', function() {
+                var markerId = this.getAttribute('data-marker-id');
+                var errorIndex = findErrorIndexById('stage2', markerId);
+                if (errorIndex >= 0) {
+                    setCurrentError('stage2', errorIndex);
+                    scrollToMarker('stage2', markerId);
+                }
+            });
+        });
+    }
+    
+    renderScriptWithMarkers('stage2');
+    enableStage2Buttons(errors && errors.length > 0);
+}
+
+function displayScores(scores, improvements) {
+    var section = ensureScoreSection();
+    if (!section) return;
+    
+    var senior = scores.senior || 0;
+    var fun = scores.fun || 0;
+    var flow = scores.flow || 0;
+    var retention = scores.retention || 0;
+    var average = Math.round((senior + fun + flow + retention) / 4);
+    var passed = average >= 95;
+    
+    var html = '<div style="background:#1e1e1e;border-radius:10px;padding:20px;margin-top:20px;">' +
+        '<h3 style="color:#fff;margin-bottom:15px;text-align:center;">📊 품질 평가 점수</h3>' +
+        '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:15px;margin-bottom:20px;">' +
+        createScoreCard('시니어 적합도', senior, '#4CAF50') +
+        createScoreCard('재미 요소', fun, '#FF9800') +
+        createScoreCard('이야기 흐름', flow, '#2196F3') +
+        createScoreCard('시청자 이탈 방지', retention, '#9C27B0') +
+        '</div>' +
+        '<div style="text-align:center;padding:20px;background:#2d2d2d;border-radius:8px;">' +
+        '<div style="font-size:24px;color:#fff;margin-bottom:10px;">평균 점수: <span style="color:' + (passed ? '#69f0ae' : '#ff5555') + ';font-weight:bold;">' + average + '점</span></div>' +
+        '<div style="font-size:20px;font-weight:bold;color:' + (passed ? '#69f0ae' : '#ff5555') + ';">' + (passed ? '✅ 합격' : '❌ 미합격 (95점 이상 필요)') + '</div>' +
+        '</div>';
+    
+    if (improvements && improvements.length > 0) {
+        html += '<div style="margin-top:20px;"><h4 style="color:#ffaa00;margin-bottom:10px;">💡 개선 제안</h4>';
+        improvements.forEach(function(imp) {
+            html += '<div style="background:#2d2d2d;padding:15px;border-radius:8px;margin-bottom:10px;border-left:4px solid #ffaa00;">' +
+                '<div style="color:#fff;font-weight:bold;margin-bottom:5px;">' + escapeHtml(imp.category) + ' (현재: ' + imp.currentScore + '점)</div>' +
+                '<div style="color:#aaa;font-size:14px;">' + escapeHtml(imp.suggestion) + '</div>' +
+                '</div>';
+        });
+        html += '</div>';
+    }
+    
+    html += '</div>';
+    section.innerHTML = html;
+    section.style.display = 'block';
+}
+
+function createScoreCard(label, score, color) {
+    return '<div style="background:#2d2d2d;padding:15px;border-radius:8px;text-align:center;">' +
+        '<div style="color:#aaa;font-size:12px;margin-bottom:5px;">' + label + '</div>' +
+        '<div style="font-size:32px;font-weight:bold;color:' + color + ';">' + score + '</div>' +
+        '<div style="width:100%;background:#444;height:8px;border-radius:4px;margin-top:10px;">' +
+        '<div style="width:' + score + '%;background:' + color + ';height:100%;border-radius:4px;transition:width 0.5s;"></div>' +
+        '</div></div>';
+}
+
+function enableStage1Buttons(hasErrors) {
+    var btnBefore = document.getElementById('btn-revert-before-stage1');
+    var btnAfter = document.getElementById('btn-revert-after-stage1');
+    var btnFix = document.getElementById('btn-fix-script-stage1');
+    
+    if (btnBefore) btnBefore.disabled = !hasErrors;
+    if (btnAfter) btnAfter.disabled = !hasErrors;
     if (btnFix) btnFix.disabled = false;
 }
 
-function displayScores(errors, aiScores) {
-    var scoreSection = ensureScoreSection();
-
-    var scores;
-    if (aiScores && aiScores.senior) {
-        scores = aiScores;
-    } else {
-        var baseScore = 100;
-        var penalty = Math.min(errors.length * 5, 40);
-        scores = {
-            senior: Math.max(60, baseScore - penalty - Math.floor(Math.random() * 10)),
-            fun: Math.max(60, baseScore - Math.floor(penalty / 2) - Math.floor(Math.random() * 10)),
-            flow: Math.max(60, baseScore - Math.floor(penalty / 3) - Math.floor(Math.random() * 10)),
-            retention: Math.max(60, baseScore - Math.floor(penalty / 2) - Math.floor(Math.random() * 10))
-        };
-    }
-
-    var average = Math.round((scores.senior + scores.fun + scores.flow + scores.retention) / 4);
-    var passed = average >= 95;
-
-    state.scores = { senior: scores.senior, fun: scores.fun, flow: scores.flow, retention: scores.retention, average: average, passed: passed };
-
-    var html = '<div style="background:#1e1e1e;padding:20px;border-radius:10px;margin-top:15px;">';
-    html += '<h3 style="color:#fff;margin-bottom:15px;text-align:center;">📊 분석 점수</h3>';
-    html += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:15px;">';
-    html += createScoreItem('시니어 적합', scores.senior);
-    html += createScoreItem('재미요소', scores.fun);
-    html += createScoreItem('이야기 흐름', scores.flow);
-    html += createScoreItem('시청자 이탈', scores.retention);
-    html += '</div>';
-    html += '<div style="text-align:center;padding:15px;background:' + (passed ? '#1b5e20' : '#b71c1c') + ';border-radius:8px;">';
-    html += '<div style="font-size:24px;font-weight:bold;color:#fff;">평균: ' + average + '점</div>';
-    html += '<div style="font-size:18px;color:#fff;margin-top:5px;">' + (passed ? '✅ 합격' : '❌ 미합격 (95점 이상 필요)') + '</div>';
-    html += '</div>';
-
-    if (!passed) {
-        html += '<div style="margin-top:15px;padding:15px;background:#333;border-radius:8px;">';
-        html += '<h4 style="color:#ffeb3b;margin-bottom:10px;">📝 개선 제안</h4>';
-        if (scores.senior < 100) html += '<p style="color:#fff;margin:5px 0;">• 시니어 적합: 더 명확하고 간결한 대사 필요 (+' + (100 - scores.senior) + '점)</p>';
-        if (scores.fun < 100) html += '<p style="color:#fff;margin:5px 0;">• 재미요소: 긴장감/유머 보강 필요 (+' + (100 - scores.fun) + '점)</p>';
-        if (scores.flow < 100) html += '<p style="color:#fff;margin:5px 0;">• 이야기 흐름: 장면 전환 자연스럽게 (+' + (100 - scores.flow) + '점)</p>';
-        if (scores.retention < 100) html += '<p style="color:#fff;margin:5px 0;">• 시청자 이탈: 몰입도 향상 필요 (+' + (100 - scores.retention) + '점)</p>';
-        html += '</div>';
-    }
-
-    html += '</div>';
-    scoreSection.innerHTML = html;
-    scoreSection.style.display = 'block';
+function enableStage2Buttons(hasErrors) {
+    var btnBefore = document.getElementById('btn-revert-before-stage2');
+    var btnAfter = document.getElementById('btn-revert-after-stage2');
+    var btnFix = document.getElementById('btn-fix-script-stage2');
+    
+    if (btnBefore) btnBefore.disabled = !hasErrors;
+    if (btnAfter) btnAfter.disabled = !hasErrors;
+    if (btnFix) btnFix.disabled = false;
 }
 
-function createScoreItem(label, score) {
-    var color = score >= 95 ? '#69f0ae' : score >= 80 ? '#ffeb3b' : '#ff5252';
-    return '<div style="background:#333;padding:12px;border-radius:8px;text-align:center;">' +
-        '<div style="color:#aaa;font-size:12px;">' + label + '</div>' +
-        '<div style="color:' + color + ';font-size:24px;font-weight:bold;">' + score + '</div>' +
-        '</div>';
-}
-
-function updateProgress(percent, message) {
-    var progressBar = document.getElementById('progress-bar');
-    var progressText = document.getElementById('progress-text');
-    if (progressBar) progressBar.style.width = percent + '%';
-    if (progressText) progressText.textContent = message;
+function fixScript(stage) {
+    var s = state[stage];
+    var text = s.originalScript;
+    var errors = s.allErrors || [];
+    
+    errors.forEach(function(err) {
+        if (err.useRevised && err.original && err.revised) {
+            text = text.split(err.original).join(err.revised);
+        }
+    });
+    
+    s.fixedScript = text;
+    
+    if (stage === 'stage2') {
+        state.finalScript = text;
+    }
+    
+    var container = document.getElementById('revised-' + stage);
+    if (container) {
+        container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#69f0ae;border:2px solid #69f0ae;">' +
+            '<div style="text-align:center;margin-bottom:15px;font-size:18px;font-weight:bold;">✅ 수정 완료!</div>' +
+            escapeHtml(text) +
+            '</div>';
+    }
+    
+    alert((stage === 'stage1' ? '1차' : '최종') + ' 수정본이 적용되었습니다.\n\n"다운로드" 버튼으로 수정본을 저장할 수 있습니다.');
 }
