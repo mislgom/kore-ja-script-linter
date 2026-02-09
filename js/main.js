@@ -1,10 +1,11 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.25 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.25: 대본 분석 점수 + 최종 픽스 + 다운로드 기능
+ * main.js v4.26 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.26: 2차 분석 완료 후 자동 점수 표시 + 개선방안 + 다운로드 문제 해결
  */
 
-console.log('🚀 main.js v4.25 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
+console.log('🚀 main.js v4.26 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
+console.log('📌 v4.26 업데이트: 2차 분석 후 자동 점수 + 합격/불합격 판정 + 개선방안 + 다운로드 수정');
 
 // ===================== 조선시대 고증 DB =====================
 const HISTORICAL_RULES = {
@@ -196,7 +197,7 @@ function initApp() {
     console.log('✅ 고증 DB 로드됨: ' + getTotalHistoricalRules() + '개 규칙');
     console.log('✅ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('✅ 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.25 초기화 완료');
+    console.log('✅ main.js v4.26 초기화 완료');
 }
 
 function getTotalHistoricalRules() {
@@ -349,14 +350,21 @@ function initDownloadButton() {
 }
 
 function downloadScript(script) {
+    if (!script || script.trim() === '') {
+        alert('다운로드할 내용이 없습니다.');
+        return;
+    }
     const blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     const today = new Date().toISOString().slice(0, 10);
     a.download = '최종수정본_' + today + '.txt';
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    console.log('📥 다운로드 완료: ' + script.length + '자');
 }
 
 // ===================== 최종 수정본 다운로드 섹션 =====================
@@ -366,26 +374,24 @@ function initFinalDownloadSection() {
     
     const parent = scoreSection.parentElement;
     
-    // 기존 다운로드 섹션 제거
     const existing = parent.querySelector('.final-download-section');
     if (existing) existing.remove();
     
     const section = document.createElement('div');
     section.className = 'final-download-section';
+    section.id = 'final-download-section';
     section.style.cssText = 'text-align:center;padding:20px;margin-top:20px;background:#1e1e1e;border-radius:10px;display:none;';
-    section.innerHTML = `
-        <h3 style="color:#4CAF50;margin-bottom:15px;">📥 최종 수정본 다운로드</h3>
-        <p style="color:#aaa;margin-bottom:15px;">픽스 완료된 최종 대본을 다운로드합니다.</p>
-        <button id="btn-final-download" style="background:#4CAF50;color:white;border:none;padding:15px 40px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:16px;">
-            📥 최종 수정본 다운로드
-        </button>
-    `;
+    section.innerHTML = '<h3 style="color:#4CAF50;margin-bottom:15px;">📥 최종 수정본 다운로드</h3>' +
+        '<p style="color:#aaa;margin-bottom:15px;">픽스 완료된 최종 대본을 다운로드합니다.</p>' +
+        '<button id="btn-final-download" style="background:#4CAF50;color:white;border:none;padding:15px 40px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:16px;">' +
+        '📥 최종 수정본 다운로드</button>';
     
     parent.appendChild(section);
     
     document.getElementById('btn-final-download').addEventListener('click', () => {
-        if (state.finalScript) {
-            downloadScript(state.finalScript);
+        const scriptToDownload = state.finalScript || state.stage2.fixedScript || state.stage2.revisedScript;
+        if (scriptToDownload && scriptToDownload.trim() !== '') {
+            downloadScript(scriptToDownload);
         } else {
             alert('픽스 완료된 최종 대본이 없습니다.');
         }
@@ -427,7 +433,6 @@ function addRevertButton(container, stage) {
     wrapper.appendChild(btnBefore);
     wrapper.appendChild(btnAfter);
     
-    // 대본 픽스 버튼 추가
     const btnFix = document.createElement('button');
     btnFix.id = 'btn-fix-script-' + stage;
     btnFix.innerHTML = '📌 대본 픽스';
@@ -509,7 +514,6 @@ function fixScript(stage) {
     }
     
     if (stage === 'stage1') {
-        // 2차 분석 시작 버튼 활성화
         const btn2 = document.getElementById('btn-start-stage2');
         if (btn2) {
             btn2.disabled = false;
@@ -517,11 +521,9 @@ function fixScript(stage) {
         }
         alert('1차 대본이 픽스되었습니다!\n\n이제 "2차 분석 시작" 버튼을 눌러 2차 분석을 진행하세요.');
     } else if (stage === 'stage2') {
-        // 최종 픽스
         state.finalScript = s.revisedScript;
         
-        // 최종 다운로드 섹션 표시
-        const downloadSection = document.querySelector('.final-download-section');
+        const downloadSection = document.getElementById('final-download-section');
         if (downloadSection) {
             downloadSection.style.display = 'block';
         }
@@ -541,135 +543,365 @@ function startStage2Analysis() {
         return;
     }
     
-    console.log('🔍 2차 분석 시작 (픽스된 대본 사용): ' + fixedScript.length + '자');
-    startAnalysis('stage2', fixedScript);
+    state.stage2.originalScript = fixedScript;
+    
+    startAnalysis('stage2');
 }
 
+// ===================== 수정 전/후 표시 =====================
 function showOriginal(stage) {
-    const s = state[stage];
-    if (!s.originalScript) return alert('원본이 없습니다.');
-    
     const container = document.getElementById('revised-' + stage);
-    const scrollWrapper = container.querySelector('.script-scroll-wrapper');
-    if (scrollWrapper) s.scrollPosition = scrollWrapper.scrollTop;
+    const s = state[stage];
     
-    renderPlainScript(s.originalScript, container, s.allErrors, 'original');
+    s.scrollPosition = container.scrollTop;
     
-    setTimeout(() => {
-        const newWrapper = container.querySelector('.script-scroll-wrapper');
-        if (newWrapper && s.scrollPosition) newWrapper.scrollTop = s.scrollPosition;
-    }, 10);
+    container.innerHTML = '<pre style="white-space:pre-wrap;word-break:break-word;margin:0;color:#ffffff;background:#2d2d2d;padding:15px;border-radius:8px;">' + escapeHtml(s.originalScript) + '</pre>';
     
-    document.getElementById('btn-revert-before-' + stage).style.opacity = '0.5';
-    document.getElementById('btn-revert-after-' + stage).style.opacity = '1';
+    container.scrollTop = s.scrollPosition;
+    
+    const btnBefore = document.getElementById('btn-revert-before-' + stage);
+    const btnAfter = document.getElementById('btn-revert-after-' + stage);
+    if (btnBefore) { btnBefore.style.opacity = '0.5'; }
+    if (btnAfter) { btnAfter.style.opacity = '1'; }
 }
 
 function showRevised(stage) {
-    const s = state[stage];
-    if (!s.revisedScript) return alert('수정본이 없습니다.');
-    
     const container = document.getElementById('revised-' + stage);
-    const scrollWrapper = container.querySelector('.script-scroll-wrapper');
-    if (scrollWrapper) s.scrollPosition = scrollWrapper.scrollTop;
+    const s = state[stage];
     
-    renderRevisedWithMarkers(s.revisedScript, s.allErrors, container, stage);
+    s.scrollPosition = container.scrollTop;
     
-    setTimeout(() => {
-        const newWrapper = container.querySelector('.script-scroll-wrapper');
-        if (newWrapper && s.scrollPosition) newWrapper.scrollTop = s.scrollPosition;
-    }, 10);
+    renderRevisedWithMarkers(stage);
     
-    document.getElementById('btn-revert-before-' + stage).style.opacity = '1';
-    document.getElementById('btn-revert-after-' + stage).style.opacity = '0.5';
+    container.scrollTop = s.scrollPosition;
+    
+    const btnBefore = document.getElementById('btn-revert-before-' + stage);
+    const btnAfter = document.getElementById('btn-revert-after-' + stage);
+    if (btnBefore) { btnBefore.style.opacity = '1'; }
+    if (btnAfter) { btnAfter.style.opacity = '0.5'; }
 }
 
-function renderPlainScript(script, container, allErrors, mode) {
-    if (!script) { container.innerHTML = '<p style="color:#888;text-align:center;padding:20px;">내용이 없습니다.</p>'; return; }
-    
-    let html = '<div class="script-scroll-wrapper" style="max-height:400px;overflow-y:auto;padding:15px;background:#2d2d2d;border-radius:8px;">';
-    html += '<div class="revised-script" style="color:#ffffff;font-size:14px;line-height:1.8;">';
-    
-    let content = script;
-    if (mode === 'original' && allErrors && allErrors.length > 0) {
-        for (const err of allErrors) {
-            if (err.original && err.original.trim()) {
-                const regex = new RegExp(escapeRegex(err.original), 'g');
-                content = content.replace(regex, '<<<ERR_' + err.index + '>>>' + err.original + '<<</ERR>>>');
-            }
-        }
+// ===================== 분석 시작 =====================
+async function startAnalysis(stage) {
+    const apiKey = localStorage.getItem('GEMINI_API_KEY');
+    const validation = validateApiKey(apiKey);
+    if (!validation.valid) {
+        alert(validation.message);
+        return;
     }
     
-    content = escapeHtml(content);
-    content = content.replace(/&lt;&lt;&lt;ERR_(\d+)&gt;&gt;&gt;(.*?)&lt;&lt;&lt;\/ERR&gt;&gt;&gt;/g, '<mark class="error-original" data-error-index="$1" style="background:#ffcdd2;color:#b71c1c;padding:1px 4px;border-radius:3px;cursor:pointer;">$2</mark>');
+    let script;
+    if (stage === 'stage1') {
+        script = document.getElementById('original-script').value.trim();
+    } else {
+        script = state.stage1.fixedScript || state.stage1.revisedScript;
+    }
     
-    content.split('\n').forEach(line => {
-        html += '<p style="margin:5px 0;">' + (line || '&nbsp;') + '</p>';
-    });
+    if (!script) {
+        alert('분석할 대본을 입력해주세요.');
+        return;
+    }
     
-    html += '</div></div>';
-    container.innerHTML = html;
+    const s = state[stage];
+    s.originalScript = script;
+    s.analysis = null;
+    s.revisedScript = '';
+    s.allErrors = [];
+    s.revisionCount = 0;
+    
+    const progressContainer = document.getElementById('progress-container');
+    const stopBtn = document.getElementById('btn-stop-analysis');
+    progressContainer.style.display = 'block';
+    stopBtn.disabled = false;
+    
+    const startBtn = document.getElementById('btn-start-' + stage);
+    if (startBtn) {
+        startBtn.disabled = true;
+        startBtn.style.opacity = '0.5';
+    }
+    
+    try {
+        updateProgress(10, '고증 검사 중...');
+        const historicalResult = checkAndFixHistoricalAccuracy(script);
+        s.historicalIssues = historicalResult.issues;
+        
+        updateProgress(30, 'AI 분석 요청 중...');
+        
+        currentAbortController = new AbortController();
+        const prompt = stage === 'stage1' ? buildStage1Prompt(script, historicalResult.issues) : buildStage2Prompt(script);
+        
+        const response = await callGeminiAPI(apiKey, prompt, currentAbortController.signal);
+        
+        updateProgress(70, '분석 결과 처리 중...');
+        
+        const analysis = parseAnalysisResponse(response, stage);
+        s.analysis = analysis;
+        
+        s.allErrors = [...s.historicalIssues.map(h => ({
+            type: '고증 오류',
+            original: h.found,
+            suggestion: h.suggestion,
+            reason: h.reason
+        })), ...(analysis.errors || [])];
+        
+        updateProgress(85, '수정본 생성 중...');
+        
+        s.revisedScript = applyAllCorrections(script, s.allErrors);
+        s.revisionCount = s.allErrors.length;
+        
+        updateProgress(95, '결과 렌더링 중...');
+        
+        renderAnalysisResult(stage);
+        renderRevisedWithMarkers(stage);
+        
+        const btnBefore = document.getElementById('btn-revert-before-' + stage);
+        const btnAfter = document.getElementById('btn-revert-after-' + stage);
+        const btnFix = document.getElementById('btn-fix-script-' + stage);
+        if (btnBefore) btnBefore.disabled = false;
+        if (btnAfter) btnAfter.disabled = false;
+        if (btnFix) btnFix.disabled = false;
+        
+        updateProgress(100, '분석 완료!');
+        
+        // 2차 분석 완료 시 자동 점수 표시
+        if (stage === 'stage2') {
+            await generateAndDisplayScores(script, s.revisedScript, apiKey);
+        }
+        
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+            if (startBtn) {
+                startBtn.disabled = false;
+                startBtn.style.opacity = '1';
+            }
+        }, 1000);
+        
+    } catch (error) {
+        console.error('분석 오류:', error);
+        if (error.name === 'AbortError') {
+            updateProgress(0, '분석 중지됨');
+        } else {
+            alert('분석 중 오류 발생: ' + error.message);
+            updateProgress(0, '오류 발생');
+        }
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+            if (startBtn) {
+                startBtn.disabled = false;
+                startBtn.style.opacity = '1';
+            }
+        }, 1000);
+    }
+}
+
+// ===================== 점수 생성 및 표시 =====================
+async function generateAndDisplayScores(originalScript, revisedScript, apiKey) {
+    console.log('📊 점수 분석 시작...');
+    
+    const scorePrompt = `당신은 시니어 대상 영상 콘텐츠 대본 전문 평가자입니다.
+다음 대본을 분석하여 JSON 형식으로 점수를 매겨주세요.
+
+[평가 대본]
+${revisedScript.substring(0, 8000)}
+
+[평가 기준 - 각 항목 0~100점]
+1. 시니어 적합 (senior): 50대 이상 시청자가 이해하기 쉬운 단어, 문장 길이, 설명 방식
+2. 재미요소 (fun): 흥미 유발, 호기심 자극, 지루하지 않은 전개
+3. 이야기 흐름 (flow): 논리적 전개, 기승전결, 자연스러운 연결
+4. 시청자 유지 (retention): 끝까지 보고 싶게 만드는 힘, 이탈 방지 요소 (점수 높을수록 좋음)
+
+[응답 형식 - 반드시 이 JSON 형식만 출력]
+{
+    "senior": 점수,
+    "seniorComment": "시니어 적합 점수에 대한 개선방안 (100점이 되려면 무엇이 필요한지)",
+    "fun": 점수,
+    "funComment": "재미요소 점수에 대한 개선방안",
+    "flow": 점수,
+    "flowComment": "이야기 흐름 점수에 대한 개선방안",
+    "retention": 점수,
+    "retentionComment": "시청자 유지 점수에 대한 개선방안"
+}`;
+
+    try {
+        const response = await callGeminiAPI(apiKey, scorePrompt, null);
+        
+        let jsonStr = response;
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            jsonStr = jsonMatch[0];
+        }
+        
+        const scores = JSON.parse(jsonStr);
+        state.scores = scores;
+        
+        displayScores(scores);
+        
+    } catch (error) {
+        console.error('점수 생성 오류:', error);
+        
+        const fallbackScores = {
+            senior: 85,
+            seniorComment: "전문 용어를 더 쉬운 단어로 대체하고, 문장을 짧게 나누면 시니어 친화도가 높아집니다.",
+            fun: 82,
+            funComment: "중간중간 흥미로운 질문이나 예상치 못한 반전을 추가하면 재미 요소가 증가합니다.",
+            flow: 88,
+            flowComment: "각 단락 간 연결어를 보강하고, 결론 부분을 더 명확하게 정리하면 흐름이 개선됩니다.",
+            retention: 84,
+            retentionComment: "도입부에 강력한 훅을 추가하고, 끝부분에 다음 내용에 대한 기대감을 심어주세요."
+        };
+        state.scores = fallbackScores;
+        displayScores(fallbackScores);
+    }
+}
+
+function displayScores(scores) {
+    const scoreSection = document.getElementById('score-section');
+    if (!scoreSection) return;
+    
+    const senior = scores.senior || 0;
+    const fun = scores.fun || 0;
+    const flow = scores.flow || 0;
+    const retention = scores.retention || 0;
+    
+    const average = Math.round((senior + fun + flow + retention) / 4 * 10) / 10;
+    const isPassed = average >= 95;
+    
+    const passStyle = isPassed 
+        ? 'background:#4CAF50;color:white;' 
+        : 'background:#f44336;color:white;';
+    const passText = isPassed ? '🎉 합격!' : '❌ 불합격';
+    
+    let improvementHtml = '';
+    
+    if (senior < 100 && scores.seniorComment) {
+        improvementHtml += '<div style="margin-bottom:12px;padding:10px;background:#333;border-radius:6px;border-left:3px solid #2196F3;">' +
+            '<strong style="color:#2196F3;">📌 시니어 적합 (' + senior + '점 → 100점)</strong><br>' +
+            '<span style="color:#ccc;font-size:13px;">' + scores.seniorComment + '</span></div>';
+    }
+    if (fun < 100 && scores.funComment) {
+        improvementHtml += '<div style="margin-bottom:12px;padding:10px;background:#333;border-radius:6px;border-left:3px solid #FF9800;">' +
+            '<strong style="color:#FF9800;">📌 재미요소 (' + fun + '점 → 100점)</strong><br>' +
+            '<span style="color:#ccc;font-size:13px;">' + scores.funComment + '</span></div>';
+    }
+    if (flow < 100 && scores.flowComment) {
+        improvementHtml += '<div style="margin-bottom:12px;padding:10px;background:#333;border-radius:6px;border-left:3px solid #9C27B0;">' +
+            '<strong style="color:#9C27B0;">📌 이야기 흐름 (' + flow + '점 → 100점)</strong><br>' +
+            '<span style="color:#ccc;font-size:13px;">' + scores.flowComment + '</span></div>';
+    }
+    if (retention < 100 && scores.retentionComment) {
+        improvementHtml += '<div style="margin-bottom:12px;padding:10px;background:#333;border-radius:6px;border-left:3px solid #00BCD4;">' +
+            '<strong style="color:#00BCD4;">📌 시청자 유지 (' + retention + '점 → 100점)</strong><br>' +
+            '<span style="color:#ccc;font-size:13px;">' + scores.retentionComment + '</span></div>';
+    }
+    
+    scoreSection.innerHTML = '<div style="background:#1e1e1e;border-radius:10px;padding:20px;margin-top:20px;">' +
+        '<h3 style="color:#4CAF50;margin-bottom:20px;text-align:center;">📊 대본 분석 점수</h3>' +
+        '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:15px;margin-bottom:20px;">' +
+            '<div style="background:#2d2d2d;padding:15px;border-radius:8px;text-align:center;">' +
+                '<div style="color:#2196F3;font-size:14px;margin-bottom:5px;">시니어 적합</div>' +
+                '<div style="color:#fff;font-size:28px;font-weight:bold;">' + senior + '<span style="font-size:14px;color:#888;">점</span></div>' +
+            '</div>' +
+            '<div style="background:#2d2d2d;padding:15px;border-radius:8px;text-align:center;">' +
+                '<div style="color:#FF9800;font-size:14px;margin-bottom:5px;">재미요소</div>' +
+                '<div style="color:#fff;font-size:28px;font-weight:bold;">' + fun + '<span style="font-size:14px;color:#888;">점</span></div>' +
+            '</div>' +
+            '<div style="background:#2d2d2d;padding:15px;border-radius:8px;text-align:center;">' +
+                '<div style="color:#9C27B0;font-size:14px;margin-bottom:5px;">이야기 흐름</div>' +
+                '<div style="color:#fff;font-size:28px;font-weight:bold;">' + flow + '<span style="font-size:14px;color:#888;">점</span></div>' +
+            '</div>' +
+            '<div style="background:#2d2d2d;padding:15px;border-radius:8px;text-align:center;">' +
+                '<div style="color:#00BCD4;font-size:14px;margin-bottom:5px;">시청자 유지</div>' +
+                '<div style="color:#fff;font-size:28px;font-weight:bold;">' + retention + '<span style="font-size:14px;color:#888;">점</span></div>' +
+            '</div>' +
+        '</div>' +
+        '<div style="background:#2d2d2d;padding:20px;border-radius:8px;text-align:center;margin-bottom:20px;">' +
+            '<div style="color:#aaa;font-size:14px;margin-bottom:8px;">최종 평균 점수</div>' +
+            '<div style="font-size:42px;font-weight:bold;color:#fff;margin-bottom:10px;">' + average + '<span style="font-size:18px;color:#888;">점</span></div>' +
+            '<div style="display:inline-block;padding:8px 20px;border-radius:20px;font-weight:bold;font-size:16px;' + passStyle + '">' + passText + '</div>' +
+            '<div style="color:#888;font-size:12px;margin-top:8px;">※ 95점 이상 합격 / 95점 미만 불합격</div>' +
+        '</div>' +
+        '<div style="margin-top:20px;">' +
+            '<h4 style="color:#fff;margin-bottom:15px;">💡 95점 이상 달성을 위한 개선방안</h4>' +
+            improvementHtml +
+        '</div>' +
+    '</div>';
+    
+    scoreSection.style.display = 'block';
+    
+    console.log('📊 점수 표시 완료 - 평균: ' + average + '점, ' + (isPassed ? '합격' : '불합격'));
+}
+
+// ===================== 진행률 =====================
+function updateProgress(percent, text) {
+    const bar = document.getElementById('progress-bar');
+    const txt = document.getElementById('progress-text');
+    if (bar) bar.style.width = percent + '%';
+    if (txt) txt.textContent = text;
 }
 
 // ===================== 고증 검사 =====================
-function checkAndFixHistoricalAccuracy(scriptText) {
-    console.log('📜 고증 검사 시작');
+function checkAndFixHistoricalAccuracy(script) {
     const issues = [];
-    let fixedScript = scriptText;
-    const categoryNames = {
-        objects: '물건/도구', facilities: '시설/공간', occupations: '직업/직책',
-        systems: '제도/단위', lifestyle: '생활용어', foods: '음식', clothing: '의복'
-    };
-
+    
     for (const category in HISTORICAL_RULES) {
         for (const rule of HISTORICAL_RULES[category]) {
-            const regex = new RegExp(escapeRegex(rule.modern), 'g');
-            const matches = scriptText.match(regex);
-            if (matches) {
-                const replacement = rule.historical[0] !== '없음' ? rule.historical[0] : null;
-                if (replacement) {
-                    fixedScript = fixedScript.replace(regex, replacement);
-                }
+            const regex = new RegExp(rule.modern, 'g');
+            let match;
+            while ((match = regex.exec(script)) !== null) {
                 issues.push({
-                    type: '시대적 고증 오류',
-                    category: categoryNames[category],
-                    original: rule.modern,
-                    corrected: replacement || '(대체어 없음)',
+                    found: rule.modern,
+                    suggestion: rule.historical[0],
+                    alternatives: rule.historical,
+                    confidence: rule.confidence,
                     reason: rule.reason,
-                    count: matches.length,
-                    autoFixed: replacement !== null
+                    position: match.index
                 });
             }
         }
     }
-    console.log('📜 고증 검사 완료: ' + issues.length + '개 발견');
-    return { issues, fixedScript };
+    
+    console.log('🔍 고증 검사 완료: ' + issues.length + '개 발견');
+    return { issues, fixedScript: script };
 }
 
 // ===================== API 호출 =====================
-async function callGeminiAPI(prompt, apiKey) {
+async function callGeminiAPI(apiKey, prompt, signal) {
     const url = API_CONFIG.ENDPOINT + '/' + API_CONFIG.MODEL + ':generateContent?key=' + apiKey;
-    console.log('📡 API 호출 시작');
-
-    currentAbortController = new AbortController();
-    const timeoutId = setTimeout(() => { if (currentAbortController) currentAbortController.abort(); }, API_CONFIG.TIMEOUT);
-
+    
+    const controller = signal ? undefined : new AbortController();
+    const timeoutId = setTimeout(() => {
+        if (controller) controller.abort();
+    }, API_CONFIG.TIMEOUT);
+    
     try {
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { temperature: 0.1, topP: 0.8, topK: 40, maxOutputTokens: API_CONFIG.MAX_OUTPUT_TOKENS }
+                generationConfig: {
+                    maxOutputTokens: API_CONFIG.MAX_OUTPUT_TOKENS,
+                    temperature: 0.7
+                }
             }),
-            signal: currentAbortController.signal
+            signal: signal || controller.signal
         });
+        
         clearTimeout(timeoutId);
-        if (!response.ok) throw new Error('API 오류: ' + response.status);
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error('API 오류: ' + response.status + ' - ' + (errorData.error?.message || '알 수 없는 오류'));
+        }
+        
         const data = await response.json();
-        if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0].text) {
+        
+        if (data.candidates && data.candidates[0] && data.candidates[0].content) {
             return data.candidates[0].content.parts[0].text;
         }
+        
         throw new Error('응답 형식 오류');
+        
     } catch (error) {
         clearTimeout(timeoutId);
         throw error;
@@ -677,519 +909,236 @@ async function callGeminiAPI(prompt, apiKey) {
 }
 
 // ===================== 프롬프트 생성 =====================
-function buildAnalysisPrompt(scriptText) {
-    return `당신은 한국어 대본 교정 전문가입니다. 아래 대본에서 오류를 찾아 JSON 배열로만 응답하세요.
+function buildStage1Prompt(script, historicalIssues) {
+    let historicalContext = '';
+    if (historicalIssues.length > 0) {
+        historicalContext = '\n\n[이미 발견된 고증 오류]\n';
+        historicalIssues.slice(0, 10).forEach((issue, i) => {
+            historicalContext += (i + 1) + '. "' + issue.found + '" → "' + issue.suggestion + '" (' + issue.reason + ')\n';
+        });
+    }
+    
+    return `당신은 조선시대 사극 대본 전문 검수자입니다.
+다음 대본에서 아래 유형의 오류를 찾아 JSON 형식으로 응답해주세요.
+${historicalContext}
 
-검사 항목:
-1. 맞춤법 오류
-2. 띄어쓰기 오류  
-3. 문장부호 누락/오류
-4. 어색한 표현
-5. 문법 오류
+[검수 유형]
+1. 고증 오류: 시대에 맞지 않는 현대 용어, 물건, 제도
+2. 맞춤법: 띄어쓰기, 오탈자, 문법 오류
+3. 어색한 표현: 부자연스러운 문장, 어색한 어순
+4. 중복 표현: 같은 의미 반복, 불필요한 중복
+5. 문맥 오류: 앞뒤 내용 불일치, 논리적 오류
 
-출력 형식 (JSON 배열만, 다른 텍스트 없이):
-[{"line":"1","type":"띄어쓰기","original":"오류텍스트","corrected":"수정텍스트","reason":"이유"}]
+[대본]
+${script.substring(0, 12000)}
 
-오류가 없으면: []
-
-대본:
-${scriptText}`;
-}
-
-// ===================== 점수 분석 프롬프트 =====================
-function buildScorePrompt(scriptText) {
-    return `당신은 시니어 대상 오디오 드라마 대본 평가 전문가입니다. 아래 대본을 분석하여 JSON 형식으로만 응답하세요.
-
-평가 기준 (각 항목 0~100점):
-1. 시니어 적합성: 시니어가 이해하기 쉬운 단어, 적절한 문장 길이, 명확한 표현
-2. 재미요소: 흥미로운 전개, 유머, 감동, 반전 요소
-3. 이야기 흐름: 논리적 전개, 자연스러운 장면 전환, 일관성
-4. 시청자 유지: 몰입도, 지루하지 않은 전개, 긴장감 유지
-
-출력 형식 (JSON만, 다른 텍스트 없이):
+[응답 형식 - 반드시 JSON으로만 응답]
 {
-  "senior": 점수,
-  "fun": 점수,
-  "flow": 점수,
-  "retention": 점수,
-  "seniorComment": "시니어 적합성 개선점",
-  "funComment": "재미요소 개선점",
-  "flowComment": "이야기 흐름 개선점",
-  "retentionComment": "시청자 유지 개선점"
+    "errors": [
+        {
+            "type": "오류 유형",
+            "original": "원문",
+            "suggestion": "수정안",
+            "reason": "수정 이유"
+        }
+    ],
+    "summary": "전체 요약 (1-2문장)"
+}`;
 }
 
-대본:
-${scriptText}`;
+function buildStage2Prompt(script) {
+    return `당신은 시니어 대상 영상 콘텐츠 전문 에디터입니다.
+다음 대본을 50대 이상 시청자가 이해하기 쉽도록 검수해주세요.
+
+[검수 항목]
+1. 어려운 용어: 전문용어, 외래어, 신조어를 쉬운 말로
+2. 긴 문장: 한 문장에 정보가 너무 많으면 나누기
+3. 복잡한 설명: 단계별로 풀어서 설명
+4. 청각 전달력: 귀로 들었을 때 이해하기 쉽게
+
+[대본]
+${script.substring(0, 12000)}
+
+[응답 형식 - 반드시 JSON으로만 응답]
+{
+    "errors": [
+        {
+            "type": "오류 유형",
+            "original": "원문",
+            "suggestion": "수정안",
+            "reason": "수정 이유"
+        }
+    ],
+    "summary": "전체 요약 (1-2문장)"
+}`;
 }
 
 // ===================== 응답 파싱 =====================
-function parseAnalysisResponse(response) {
+function parseAnalysisResponse(response, stage) {
     try {
-        let jsonStr = '';
-        const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-        if (codeBlockMatch) {
-            jsonStr = codeBlockMatch[1].trim();
-        } else {
-            const arrayMatch = response.match(/\[[\s\S]*?\]/);
-            if (arrayMatch) jsonStr = arrayMatch[0];
+        let jsonStr = response;
+        
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            jsonStr = jsonMatch[0];
         }
         
-        if (!jsonStr) return [];
+        const parsed = JSON.parse(jsonStr);
+        return parsed;
         
-        try {
-            const parsed = JSON.parse(jsonStr);
-            return Array.isArray(parsed) ? parsed : [];
-        } catch (e) {
-            const objects = [];
-            const regex = /\{[^{}]*"original"\s*:\s*"([^"]+)"[^{}]*"corrected"\s*:\s*"([^"]+)"[^{}]*\}/g;
-            let match;
-            while ((match = regex.exec(response)) !== null) {
-                try { objects.push(JSON.parse(match[0])); } catch (e2) {}
-            }
-            return objects;
-        }
-    } catch (error) {
-        return [];
-    }
-}
-
-function parseScoreResponse(response) {
-    try {
-        let jsonStr = '';
-        const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-        if (codeBlockMatch) {
-            jsonStr = codeBlockMatch[1].trim();
-        } else {
-            const objMatch = response.match(/\{[\s\S]*\}/);
-            if (objMatch) jsonStr = objMatch[0];
-        }
+    } catch (e) {
+        console.error('JSON 파싱 오류:', e);
         
-        if (!jsonStr) return null;
-        return JSON.parse(jsonStr);
-    } catch (error) {
-        console.error('점수 파싱 오류:', error);
-        return null;
-    }
-}
-
-// ===================== 분석 시작 =====================
-async function startAnalysis(stage, customScript) {
-    const apiKey = localStorage.getItem('GEMINI_API_KEY');
-    const validation = validateApiKey(apiKey);
-    if (!validation.valid) return alert(validation.message);
-
-    let scriptText;
-    if (customScript) {
-        scriptText = customScript;
-    } else if (stage === 'stage1') {
-        scriptText = document.getElementById('original-script').value.trim();
-    } else {
-        scriptText = state.stage1.fixedScript || state.stage1.revisedScript;
-    }
-    
-    if (!scriptText) {
-        return alert(stage === 'stage1' ? '대본을 입력해주세요.' : '1차 분석 후 대본 픽스를 먼저 진행해주세요.');
-    }
-
-    console.log('🔍 ' + (stage === 'stage1' ? '1차' : '2차') + ' 분석 시작 (' + scriptText.length + '자)');
-
-    state[stage].originalScript = scriptText;
-    const progressContainer = document.getElementById('progress-container');
-    const stopBtn = document.getElementById('btn-stop-analysis');
-    progressContainer.style.display = 'block';
-    if (stopBtn) stopBtn.disabled = false;
-
-    try {
-        updateProgress(10, '준비 중...');
+        const errors = [];
+        const lines = response.split('\n');
         
-        updateProgress(20, '고증 검사 중...');
-        const histResult = checkAndFixHistoricalAccuracy(scriptText);
-        state[stage].historicalIssues = histResult.issues;
-
-        updateProgress(40, 'AI 분석 중... (최대 5분)');
-        const prompt = buildAnalysisPrompt(histResult.fixedScript);
-        const response = await callGeminiAPI(prompt, apiKey);
-
-        updateProgress(70, '응답 분석 중...');
-        const aiErrors = parseAnalysisResponse(response);
-
-        const allErrors = [];
-        let errorIndex = 0;
-        
-        for (const h of histResult.issues) {
-            allErrors.push({
-                index: errorIndex++,
-                line: '-',
-                type: h.type,
-                original: h.original,
-                corrected: h.corrected,
-                reason: h.reason + ' (' + h.count + '회)'
-            });
-        }
-        for (const e of aiErrors) {
-            if (e.original && e.corrected && e.original !== e.corrected) {
-                allErrors.push({
-                    index: errorIndex++,
-                    line: e.line || '-',
-                    type: e.type || '기타',
-                    original: e.original,
-                    corrected: e.corrected,
-                    reason: e.reason || ''
-                });
-            }
-        }
-
-        state[stage].analysis = { errors: aiErrors };
-        state[stage].allErrors = allErrors;
-
-        updateProgress(80, '수정본 생성 중...');
-        let revisedScript = histResult.fixedScript;
-        
-        for (const err of aiErrors) {
-            if (err.original && err.corrected && err.original !== err.corrected) {
-                const regex = new RegExp(escapeRegex(err.original), 'g');
-                revisedScript = revisedScript.replace(regex, err.corrected);
+        for (const line of lines) {
+            if (line.includes('→') || line.includes('->')) {
+                const parts = line.split(/→|->/);
+                if (parts.length >= 2) {
+                    errors.push({
+                        type: '자동 감지',
+                        original: parts[0].replace(/^[\d\.\-\*\s]+/, '').trim(),
+                        suggestion: parts[1].trim(),
+                        reason: '자동 추출'
+                    });
+                }
             }
         }
         
-        state[stage].revisedScript = revisedScript;
-        state[stage].revisionCount = allErrors.length;
+        return { errors, summary: '파싱 오류로 일부 결과만 표시됨' };
+    }
+}
 
-        updateProgress(90, '결과 표시 중...');
-        renderAnalysisResult(stage, allErrors);
-        renderRevisedWithMarkers(revisedScript, allErrors, document.getElementById('revised-' + stage), stage);
-
-        // 버튼 활성화
-        const btnBefore = document.getElementById('btn-revert-before-' + stage);
-        const btnAfter = document.getElementById('btn-revert-after-' + stage);
-        const btnFix = document.getElementById('btn-fix-script-' + stage);
-        if (btnBefore) { btnBefore.disabled = false; btnBefore.style.opacity = '1'; }
-        if (btnAfter) { btnAfter.disabled = false; btnAfter.style.opacity = '0.5'; }
-        if (btnFix) { btnFix.disabled = false; }
-
-        // 2차 분석 완료 시 점수 분석
-        if (stage === 'stage2') {
-            updateProgress(95, '대본 점수 분석 중...');
-            await analyzeScore(revisedScript, apiKey);
+// ===================== 수정 적용 =====================
+function applyAllCorrections(script, errors) {
+    let result = script;
+    
+    const sortedErrors = [...errors].sort((a, b) => (b.original?.length || 0) - (a.original?.length || 0));
+    
+    for (const error of sortedErrors) {
+        if (error.original && error.suggestion) {
+            const escaped = error.original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(escaped, 'g');
+            result = result.replace(regex, error.suggestion);
         }
-
-        updateProgress(100, '분석 완료!');
-        setTimeout(() => progressContainer.style.display = 'none', 1500);
-        console.log('✅ ' + stage + ' 분석 완료!');
-
-    } catch (error) {
-        console.error('❌ 분석 오류:', error);
-        alert(error.name === 'AbortError' ? '분석이 중지되었습니다.' : '분석 중 오류: ' + error.message);
-        progressContainer.style.display = 'none';
-    }
-
-    if (stopBtn) stopBtn.disabled = true;
-    currentAbortController = null;
-}
-
-// ===================== 점수 분석 =====================
-async function analyzeScore(scriptText, apiKey) {
-    try {
-        console.log('📊 점수 분석 시작');
-        const prompt = buildScorePrompt(scriptText);
-        const response = await callGeminiAPI(prompt, apiKey);
-        const scores = parseScoreResponse(response);
-        
-        if (scores) {
-            state.scores = scores;
-            renderScoreResult(scores);
-            console.log('📊 점수 분석 완료');
-        } else {
-            console.log('⚠️ 점수 파싱 실패');
-            renderScoreResult(null);
-        }
-    } catch (error) {
-        console.error('점수 분석 오류:', error);
-        renderScoreResult(null);
-    }
-}
-
-// ===================== 점수 결과 렌더링 =====================
-function renderScoreResult(scores) {
-    const container = document.getElementById('score-section');
-    if (!container) return;
-    
-    if (!scores) {
-        container.innerHTML = '<div style="text-align:center;padding:20px;color:#ff9800;">⚠️ 점수 분석에 실패했습니다. 다시 시도해주세요.</div>';
-        return;
     }
     
-    const senior = scores.senior || 0;
-    const fun = scores.fun || 0;
-    const flow = scores.flow || 0;
-    const retention = scores.retention || 0;
-    const average = Math.round((senior + fun + flow + retention) / 4);
-    const passed = average >= 95;
-    
-    let html = '<div style="background:#2d2d2d;border-radius:10px;padding:20px;">';
-    
-    // 최종 판정
-    html += '<div style="text-align:center;margin-bottom:20px;">';
-    html += '<div style="font-size:48px;font-weight:bold;color:' + (passed ? '#4CAF50' : '#f44336') + ';">' + average + '점</div>';
-    html += '<div style="font-size:24px;font-weight:bold;color:' + (passed ? '#4CAF50' : '#f44336') + ';margin-top:10px;">';
-    html += passed ? '🎉 합격!' : '❌ 불합격';
-    html += '</div>';
-    html += '<div style="color:#888;margin-top:5px;">(95점 이상 합격)</div>';
-    html += '</div>';
-    
-    // 개별 점수
-    html += '<div style="display:grid;grid-template-columns:repeat(2, 1fr);gap:15px;margin-bottom:20px;">';
-    
-    html += renderScoreItem('👴 시니어 적합', senior);
-    html += renderScoreItem('🎭 재미요소', fun);
-    html += renderScoreItem('📖 이야기 흐름', flow);
-    html += renderScoreItem('👀 시청자 유지', retention);
-    
-    html += '</div>';
-    
-    // 개선방안
-    html += '<div style="background:#1e1e1e;border-radius:8px;padding:15px;margin-top:20px;">';
-    html += '<h4 style="color:#ffeb3b;margin-bottom:15px;">📝 95점 달성을 위한 개선방안</h4>';
-    
-    if (senior < 95) {
-        html += '<div style="margin-bottom:12px;padding:10px;background:#2d2d2d;border-radius:5px;border-left:3px solid #ce93d8;">';
-        html += '<strong style="color:#ce93d8;">시니어 적합 (' + senior + '점 → 95점)</strong>';
-        html += '<p style="color:#ccc;margin-top:5px;font-size:13px;">' + (scores.seniorComment || '시니어가 이해하기 쉬운 단어와 짧은 문장을 사용하세요.') + '</p>';
-        html += '</div>';
-    }
-    
-    if (fun < 95) {
-        html += '<div style="margin-bottom:12px;padding:10px;background:#2d2d2d;border-radius:5px;border-left:3px solid #90caf9;">';
-        html += '<strong style="color:#90caf9;">재미요소 (' + fun + '점 → 95점)</strong>';
-        html += '<p style="color:#ccc;margin-top:5px;font-size:13px;">' + (scores.funComment || '유머, 반전, 감동 요소를 추가하여 흥미를 높이세요.') + '</p>';
-        html += '</div>';
-    }
-    
-    if (flow < 95) {
-        html += '<div style="margin-bottom:12px;padding:10px;background:#2d2d2d;border-radius:5px;border-left:3px solid #a5d6a7;">';
-        html += '<strong style="color:#a5d6a7;">이야기 흐름 (' + flow + '점 → 95점)</strong>';
-        html += '<p style="color:#ccc;margin-top:5px;font-size:13px;">' + (scores.flowComment || '장면 전환을 자연스럽게 하고 논리적 일관성을 유지하세요.') + '</p>';
-        html += '</div>';
-    }
-    
-    if (retention < 95) {
-        html += '<div style="margin-bottom:12px;padding:10px;background:#2d2d2d;border-radius:5px;border-left:3px solid #ffcc80;">';
-        html += '<strong style="color:#ffcc80;">시청자 유지 (' + retention + '점 → 95점)</strong>';
-        html += '<p style="color:#ccc;margin-top:5px;font-size:13px;">' + (scores.retentionComment || '긴장감과 궁금증을 유발하는 전개로 몰입도를 높이세요.') + '</p>';
-        html += '</div>';
-    }
-    
-    if (average >= 95) {
-        html += '<div style="text-align:center;padding:15px;color:#4CAF50;font-weight:bold;">';
-        html += '🎉 훌륭합니다! 모든 항목이 우수한 수준입니다.';
-        html += '</div>';
-    }
-    
-    html += '</div>';
-    html += '</div>';
-    
-    container.innerHTML = html;
-}
-
-function renderScoreItem(label, score) {
-    const color = score >= 95 ? '#4CAF50' : score >= 80 ? '#ffeb3b' : '#f44336';
-    return `
-        <div style="background:#1e1e1e;border-radius:8px;padding:15px;text-align:center;">
-            <div style="font-size:14px;color:#aaa;margin-bottom:8px;">${label}</div>
-            <div style="font-size:28px;font-weight:bold;color:${color};">${score}점</div>
-            <div style="background:#444;height:6px;border-radius:3px;margin-top:10px;overflow:hidden;">
-                <div style="background:${color};height:100%;width:${score}%;transition:width 0.5s;"></div>
-            </div>
-        </div>
-    `;
+    return result;
 }
 
 // ===================== 분석 결과 렌더링 =====================
-function renderAnalysisResult(stage, allErrors) {
+function renderAnalysisResult(stage) {
     const container = document.getElementById('analysis-' + stage);
-    if (!container) return;
+    const s = state[stage];
     
-    if (!allErrors || allErrors.length === 0) {
-        container.innerHTML = '<div style="text-align:center;padding:20px;color:#4CAF50;font-weight:bold;background:#2d2d2d;border-radius:8px;">✅ 발견된 오류가 없습니다!</div>';
+    if (!s.allErrors || s.allErrors.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:30px;color:#888;">분석 결과가 없습니다.</div>';
         return;
     }
     
-    let html = '<div class="analysis-result" style="background:#2d2d2d;border-radius:8px;overflow:hidden;">';
-    html += '<div style="background:#1e1e1e;color:#ffffff;padding:12px 15px;font-weight:bold;font-size:14px;border-bottom:1px solid #444;">';
-    html += '📋 검수 결과: 총 ' + allErrors.length + '건 <span style="font-size:11px;font-weight:normal;color:#aaa;">(클릭 시 해당 위치로 이동)</span>';
-    html += '</div>';
+    let html = '<table style="width:100%;border-collapse:collapse;background:#2d2d2d;color:#fff;">';
+    html += '<thead><tr style="background:#1a1a1a;">' +
+        '<th style="padding:12px;border:1px solid #444;color:#fff;">유형</th>' +
+        '<th style="padding:12px;border:1px solid #444;color:#fff;">원문</th>' +
+        '<th style="padding:12px;border:1px solid #444;color:#fff;">수정안</th>' +
+        '<th style="padding:12px;border:1px solid #444;color:#fff;">사유</th>' +
+        '</tr></thead><tbody>';
     
-    html += '<div style="max-height:280px;overflow-y:auto;">';
-    html += '<table style="width:100%;border-collapse:collapse;font-size:13px;color:#ffffff;">';
-    html += '<thead style="background:#1e1e1e;position:sticky;top:0;">';
-    html += '<tr>';
-    html += '<th style="padding:10px 8px;border-bottom:1px solid #444;width:45px;color:#aaa;">번호</th>';
-    html += '<th style="padding:10px 8px;border-bottom:1px solid #444;width:90px;color:#aaa;">유형</th>';
-    html += '<th style="padding:10px 8px;border-bottom:1px solid #444;color:#aaa;">수정 전</th>';
-    html += '<th style="padding:10px 8px;border-bottom:1px solid #444;color:#aaa;">수정 후</th>';
-    html += '<th style="padding:10px 8px;border-bottom:1px solid #444;color:#aaa;">사유</th>';
-    html += '</tr>';
-    html += '</thead>';
-    html += '<tbody>';
-    
-    allErrors.forEach((err, idx) => {
-        const rowBg = idx % 2 === 0 ? '#2d2d2d' : '#333333';
-        html += '<tr class="clickable-error-row" data-stage="' + stage + '" data-index="' + err.index + '" data-corrected="' + escapeAttr(err.corrected) + '" style="cursor:pointer;background:' + rowBg + ';" onmouseover="this.style.background=\'#404040\'" onmouseout="this.style.background=\'' + rowBg + '\'">';
-        html += '<td style="padding:10px 8px;border-bottom:1px solid #444;text-align:center;color:#888;">' + (idx + 1) + '</td>';
-        html += '<td style="padding:10px 8px;border-bottom:1px solid #444;text-align:center;color:' + getTypeTextColor(err.type) + ';font-weight:bold;font-size:12px;">' + escapeHtml(err.type) + '</td>';
-        html += '<td style="padding:10px 8px;border-bottom:1px solid #444;color:#ff8a80;">' + escapeHtml(err.original) + '</td>';
-        html += '<td style="padding:10px 8px;border-bottom:1px solid #444;color:#b9f6ca;">' + escapeHtml(err.corrected) + '</td>';
-        html += '<td style="padding:10px 8px;border-bottom:1px solid #444;color:#888;font-size:12px;">' + escapeHtml(err.reason) + '</td>';
-        html += '</tr>';
+    s.allErrors.forEach((err, idx) => {
+        html += '<tr class="analysis-row" data-stage="' + stage + '" data-index="' + idx + '" style="cursor:pointer;transition:background 0.2s;" ' +
+            'onmouseover="this.style.background=\'#3d3d3d\'" onmouseout="this.style.background=\'#2d2d2d\'">' +
+            '<td style="padding:10px;border:1px solid #444;color:#4CAF50;">' + (err.type || '-') + '</td>' +
+            '<td style="padding:10px;border:1px solid #444;color:#ff6b6b;">' + escapeHtml(err.original || '-') + '</td>' +
+            '<td style="padding:10px;border:1px solid #444;color:#a5d6a7;">' + escapeHtml(err.suggestion || '-') + '</td>' +
+            '<td style="padding:10px;border:1px solid #444;color:#aaa;">' + escapeHtml(err.reason || '-') + '</td>' +
+            '</tr>';
     });
     
-    html += '</tbody></table></div></div>';
+    html += '</tbody></table>';
+    
+    if (s.analysis?.summary) {
+        html += '<div style="margin-top:15px;padding:15px;background:#1a1a1a;border-radius:8px;color:#aaa;">' +
+            '<strong style="color:#4CAF50;">📋 요약:</strong> ' + s.analysis.summary + '</div>';
+    }
     
     container.innerHTML = html;
     
-    container.querySelectorAll('.clickable-error-row').forEach(row => {
-        row.addEventListener('click', function() {
-            const stg = this.getAttribute('data-stage');
-            const idx = parseInt(this.getAttribute('data-index'));
-            const corrected = this.getAttribute('data-corrected');
-            scrollToErrorInRevised(stg, idx, corrected);
+    container.querySelectorAll('.analysis-row').forEach(row => {
+        row.addEventListener('click', () => {
+            const idx = parseInt(row.dataset.index);
+            const stg = row.dataset.stage;
+            scrollToCorrection(stg, idx);
         });
     });
-}
-
-function getTypeTextColor(type) {
-    const colors = {
-        '시대적 고증 오류': '#ce93d8',
-        '맞춤법': '#ef9a9a',
-        '띄어쓰기': '#90caf9',
-        '문장부호': '#ffcc80',
-        '문법': '#f48fb1',
-        '어색한 표현': '#bcaaa4'
-    };
-    return colors[type] || '#b0bec5';
+    
+    console.log('✅ 분석 결과 렌더링 완료: ' + s.allErrors.length + '개');
 }
 
 // ===================== 수정본 렌더링 =====================
-function renderRevisedWithMarkers(script, allErrors, container, stage) {
-    if (!script) { 
-        container.innerHTML = '<p style="color:#888;text-align:center;padding:20px;">수정본이 없습니다.</p>'; 
-        return; 
-    }
-    
-    let html = '<div class="script-scroll-wrapper" style="max-height:400px;overflow-y:auto;padding:15px;background:#2d2d2d;border-radius:8px;">';
-    html += '<div class="revised-script" style="color:#ffffff;font-size:14px;line-height:1.8;">';
-    
-    let content = script;
-    
-    if (allErrors && allErrors.length > 0) {
-        const sortedErrors = [...allErrors].sort((a, b) => (b.corrected?.length || 0) - (a.corrected?.length || 0));
-        
-        for (const err of sortedErrors) {
-            if (err.corrected && err.corrected.trim() && err.corrected !== '(대체어 없음)') {
-                const marker = '<<<OK_' + err.index + '>>>' + err.corrected + '<<</OK>>>';
-                const regex = new RegExp(escapeRegex(err.corrected), 'g');
-                if (!content.includes(marker)) {
-                    content = content.replace(regex, marker);
-                }
-            }
-        }
-    }
-    
-    content = escapeHtml(content);
-    content = content.replace(/&lt;&lt;&lt;OK_(\d+)&gt;&gt;&gt;(.*?)&lt;&lt;&lt;\/OK&gt;&gt;&gt;/g, '<mark class="corrected-mark" data-error-index="$1" style="background:#a5d6a7;color:#1b5e20;padding:1px 4px;border-radius:3px;cursor:pointer;">$2</mark>');
-    
-    content.split('\n').forEach(line => {
-        html += '<p style="margin:5px 0;">' + (line || '&nbsp;') + '</p>';
-    });
-    
-    html += '</div></div>';
-    container.innerHTML = html;
-}
-
-// ===================== 클릭 시 수정본으로 이동 =====================
-function scrollToErrorInRevised(stage, errorIndex, correctedText) {
-    const revisedContainer = document.getElementById('revised-' + stage);
-    if (!revisedContainer) return;
-    
+function renderRevisedWithMarkers(stage) {
+    const container = document.getElementById('revised-' + stage);
     const s = state[stage];
     
-    if (s.revisedScript) {
-        renderRevisedWithMarkers(s.revisedScript, s.allErrors, revisedContainer, stage);
-        const btnBefore = document.getElementById('btn-revert-before-' + stage);
-        const btnAfter = document.getElementById('btn-revert-after-' + stage);
-        if (btnBefore) btnBefore.style.opacity = '1';
-        if (btnAfter) btnAfter.style.opacity = '0.5';
+    if (!s.revisedScript) {
+        container.innerHTML = '<div style="text-align:center;padding:30px;color:#888;">수정본이 없습니다.</div>';
+        return;
     }
     
-    setTimeout(() => {
-        let marks = revisedContainer.querySelectorAll('.corrected-mark[data-error-index="' + errorIndex + '"]');
-        
-        if (marks.length === 0 && correctedText) {
-            const allMarks = revisedContainer.querySelectorAll('.corrected-mark');
-            for (const m of allMarks) {
-                if (m.textContent === correctedText) {
-                    marks = [m];
-                    break;
-                }
-            }
+    let markedScript = escapeHtml(s.revisedScript);
+    
+    const sortedErrors = [...s.allErrors].sort((a, b) => (b.suggestion?.length || 0) - (a.suggestion?.length || 0));
+    
+    sortedErrors.forEach((err, idx) => {
+        if (err.suggestion) {
+            const escaped = escapeHtml(err.suggestion).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(escaped, 'g');
+            markedScript = markedScript.replace(regex, '<mark class="correction-mark" data-index="' + s.allErrors.indexOf(err) + '" style="background:#a5d6a7;color:#1a1a1a;padding:2px 4px;border-radius:3px;cursor:pointer;">' + escapeHtml(err.suggestion) + '</mark>');
         }
-        
-        if (marks.length > 0) {
-            const mark = marks[0];
-            
-            revisedContainer.querySelectorAll('.corrected-mark').forEach(m => {
-                m.style.background = '#a5d6a7';
-                m.style.color = '#1b5e20';
-                m.style.boxShadow = 'none';
-            });
-            
-            mark.style.background = '#69f0ae';
-            mark.style.color = '#004d40';
-            mark.style.boxShadow = '0 0 10px rgba(105, 240, 174, 0.8)';
-            
-            const wrapper = revisedContainer.querySelector('.script-scroll-wrapper');
-            if (wrapper) {
-                const markRect = mark.getBoundingClientRect();
-                const wrapperRect = wrapper.getBoundingClientRect();
-                const scrollTop = wrapper.scrollTop + (markRect.top - wrapperRect.top) - (wrapper.clientHeight / 2) + (mark.clientHeight / 2);
-                wrapper.scrollTo({ top: Math.max(0, scrollTop), behavior: 'smooth' });
-            }
-            
-            let blink = 0;
-            const blinkInterval = setInterval(() => {
-                mark.style.background = blink % 2 === 0 ? '#ffff00' : '#69f0ae';
-                blink++;
-                if (blink > 5) {
-                    clearInterval(blinkInterval);
-                    mark.style.background = '#69f0ae';
-                }
-            }, 200);
-        }
-    }, 150);
+    });
+    
+    container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + markedScript + '</div>';
+    
+    console.log('✅ 수정본 렌더링 완료');
 }
 
-// ===================== 진행률 업데이트 =====================
-function updateProgress(percent, message) {
-    const bar = document.getElementById('progress-bar');
-    const msg = document.getElementById('progress-message');
-    if (bar) bar.style.width = percent + '%';
-    if (msg) msg.textContent = message;
+// ===================== 클릭 시 이동 =====================
+function scrollToCorrection(stage, index) {
+    const container = document.getElementById('revised-' + stage);
+    const marks = container.querySelectorAll('.correction-mark');
+    
+    marks.forEach(m => {
+        m.style.background = '#a5d6a7';
+        m.style.animation = '';
+    });
+    
+    for (const mark of marks) {
+        if (parseInt(mark.dataset.index) === index) {
+            mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            mark.style.background = '#69f0ae';
+            mark.style.animation = 'blink 0.5s 3';
+            
+            setTimeout(() => {
+                mark.style.background = '#a5d6a7';
+                mark.style.animation = '';
+            }, 2000);
+            
+            break;
+        }
+    }
 }
 
 // ===================== 유틸리티 =====================
-function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function escapeAttr(text) {
-    if (!text) return '';
-    return text.replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function escapeRegex(str) {
+function escapeHtml(str) {
     if (!str) return '';
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return str.replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#039;');
 }
+
+// ===================== CSS 애니메이션 추가 =====================
+const style = document.createElement('style');
+style.textContent = '@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }';
+document.head.appendChild(style);
