@@ -1,13 +1,14 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.13 - Vertex AI + Gemini 3 Flash
+ * main.js v4.14 - Vertex AI + Gemini 3 Flash
  * 25가지 오류 유형 검수 + 조선시대 고증 검수 병합
  * - 고증 오류: 자동 수정 (첫 번째 대체어 적용)
  * - 수정 반영 강화: 로컬 강제 치환
- * - "수정 전" 버튼: 원문 복원 기능
+ * - "수정 전/후" 버튼: 원문 복원 기능 (스크롤 위치 유지)
+ * - 테이블 스타일 통일 (고증/일반 구분 제거)
  */
 
-console.log('🚀 main.js v4.13 (Vertex AI + Gemini 3 Flash + 고증 자동수정 + 원문복원) 로드됨');
+console.log('🚀 main.js v4.14 (Vertex AI + Gemini 3 Flash + 고증 자동수정 + 원문복원) 로드됨');
 
 // ===================== 조선시대 고증 DB =====================
 const HISTORICAL_RULES = {
@@ -210,7 +211,7 @@ function initApp() {
     initDownloadButton();
     initRevertButtons();
     console.log('✅ 고증 DB 로드됨: ' + getTotalHistoricalRules() + '개 규칙');
-    console.log('✅ main.js v4.13 초기화 완료');
+    console.log('✅ main.js v4.14 초기화 완료');
 }
 
 // ===================== 고증 DB 규칙 수 계산 =====================
@@ -416,7 +417,7 @@ function initRevertButtons() {
         addRevertButton(revised2Container, 'stage2');
     }
     
-    console.log('✅ 수정 전 버튼 초기화됨');
+    console.log('✅ 수정 전/후 버튼 초기화됨');
 }
 
 // ===================== "수정 전/후" 버튼 추가 함수 =====================
@@ -459,7 +460,7 @@ function addRevertButton(container, stage) {
     parent.appendChild(btnWrapper);
 }
 
-// ===================== 원문 보기 함수 =====================
+// ===================== 원문 보기 함수 (스크롤 위치 유지) =====================
 function showOriginal(stage) {
     const stageState = state[stage];
     if (!stageState.originalScript) {
@@ -471,8 +472,18 @@ function showOriginal(stage) {
     const btnBefore = document.getElementById(`btn-revert-before-${stage}`);
     const btnAfter = document.getElementById(`btn-revert-after-${stage}`);
     
+    // 현재 스크롤 위치 저장
+    const scrollWrapper = container.querySelector('.script-scroll-wrapper');
+    const currentScrollTop = scrollWrapper ? scrollWrapper.scrollTop : 0;
+    
     // 원본 표시
     renderPlainScript(stageState.originalScript, container);
+    
+    // 스크롤 위치 복원
+    const newScrollWrapper = container.querySelector('.script-scroll-wrapper');
+    if (newScrollWrapper) {
+        newScrollWrapper.scrollTop = currentScrollTop;
+    }
     
     // 버튼 상태 변경
     btnBefore.style.opacity = '0.5';
@@ -481,7 +492,7 @@ function showOriginal(stage) {
     console.log(`🔄 ${stage} 원문 보기`);
 }
 
-// ===================== 수정본 보기 함수 =====================
+// ===================== 수정본 보기 함수 (스크롤 위치 유지) =====================
 function showRevised(stage) {
     const stageState = state[stage];
     if (!stageState.revisedScript) {
@@ -493,8 +504,18 @@ function showRevised(stage) {
     const btnBefore = document.getElementById(`btn-revert-before-${stage}`);
     const btnAfter = document.getElementById(`btn-revert-after-${stage}`);
     
+    // 현재 스크롤 위치 저장
+    const scrollWrapper = container.querySelector('.script-scroll-wrapper');
+    const currentScrollTop = scrollWrapper ? scrollWrapper.scrollTop : 0;
+    
     // 수정본 표시
     renderFullScriptWithHighlight(stageState.revisedScript, stageState.analysis, container);
+    
+    // 스크롤 위치 복원
+    const newScrollWrapper = container.querySelector('.script-scroll-wrapper');
+    if (newScrollWrapper) {
+        newScrollWrapper.scrollTop = currentScrollTop;
+    }
     
     // 버튼 상태 변경
     btnBefore.style.opacity = '1';
@@ -566,7 +587,7 @@ function checkAndFixHistoricalAccuracy(scriptText) {
                     line: lineNum,
                     original: rule.modern,
                     suggestion: replacement,
-                    errorType: `⚠️ 고증-${categoryNames[category]}`,
+                    errorType: `고증-${categoryNames[category]}`,
                     confidence: rule.confidence,
                     reason: rule.reason,
                     isHistorical: true
@@ -675,10 +696,10 @@ async function startAnalysis(stage) {
             document.getElementById('btn-analyze-stage2').disabled = false;
             
             // 수정 전/후 버튼 활성화
-const revertBtnBefore1 = document.getElementById('btn-revert-before-stage1');
-const revertBtnAfter1 = document.getElementById('btn-revert-after-stage1');
-if (revertBtnBefore1) revertBtnBefore1.disabled = false;
-if (revertBtnAfter1) revertBtnAfter1.disabled = false;
+            const revertBtnBefore1 = document.getElementById('btn-revert-before-stage1');
+            const revertBtnAfter1 = document.getElementById('btn-revert-after-stage1');
+            if (revertBtnBefore1) revertBtnBefore1.disabled = false;
+            if (revertBtnAfter1) revertBtnAfter1.disabled = false;
         } else {
             state.stage2.analysis = mergedAnalysis;
             state.stage2.revisedScript = verified.revisedScript;
@@ -688,12 +709,11 @@ if (revertBtnAfter1) revertBtnAfter1.disabled = false;
             document.getElementById('btn-download').disabled = false;
             renderScores(verified.scores, historicalIssues.length);
             
-            // 수정 전 버튼 활성화
             // 수정 전/후 버튼 활성화
-const revertBtnBefore2 = document.getElementById('btn-revert-before-stage2');
-const revertBtnAfter2 = document.getElementById('btn-revert-after-stage2');
-if (revertBtnBefore2) revertBtnBefore2.disabled = false;
-if (revertBtnAfter2) revertBtnAfter2.disabled = false;
+            const revertBtnBefore2 = document.getElementById('btn-revert-before-stage2');
+            const revertBtnAfter2 = document.getElementById('btn-revert-after-stage2');
+            if (revertBtnBefore2) revertBtnBefore2.disabled = false;
+            if (revertBtnAfter2) revertBtnAfter2.disabled = false;
         }
 
         updateProgress(100, '분석 완료!');
@@ -983,15 +1003,16 @@ function renderResults(parsed, stage) {
 
     const generalCount = parsed.analysis ? parsed.analysis.filter(a => !a.isHistorical).length : 0;
     const historicalCount = parsed.analysis ? parsed.analysis.filter(a => a.isHistorical).length : 0;
+    const totalCount = generalCount + historicalCount;
     
-    if (generalCount > 0 || historicalCount > 0) {
+    if (totalCount > 0) {
         countSpan.innerHTML = `<span style="color:#4CAF50;">(일반 ${generalCount}건)</span> <span style="color:#ff9800;">(고증 ${historicalCount}건)</span>`;
     } else {
         countSpan.textContent = '';
     }
 }
 
-// ===================== 분석 테이블 렌더링 =====================
+// ===================== 분석 테이블 렌더링 (스타일 통일) =====================
 function renderAnalysisTable(analysis, parseError, stage, container) {
     if (parseError) {
         container.innerHTML = `<p class="error">파싱 오류: ${parseError}</p>`;
@@ -1007,28 +1028,18 @@ function renderAnalysisTable(analysis, parseError, stage, container) {
 
     let html = '<p class="click-hint">💡 각 행을 클릭하면 수정된 부분으로 이동합니다</p>';
     
-    // 범례 추가
-    html += `<div style="margin-bottom: 10px; padding: 8px; background: #f5f5f5; border-radius: 5px; font-size: 12px;">
-        <span style="display: inline-block; padding: 2px 8px; background: #e8f5e9; border-radius: 3px; margin-right: 10px;">일반 오류</span>
-        <span style="display: inline-block; padding: 2px 8px; background: #fff3e0; border-radius: 3px; color: #e65100;">⚠️ 고증 오류</span>
-        <span style="margin-left: 10px; color: #666;">※ 모든 오류 자동 수정됨</span>
-    </div>`;
-    
     html += '<div class="table-scroll-wrapper"><table class="analysis-table"><thead><tr><th>줄</th><th>유형</th><th>원본</th><th>수정</th><th>확신도</th><th>이유</th></tr></thead><tbody>';
 
     analysis.forEach((item, index) => {
-        const isHistorical = item.isHistorical;
-        const rowStyle = isHistorical ? 'background: #fff8e1;' : '';
-        
         // 확신도 표시
         let confidenceDisplay = '-';
-        if (isHistorical && item.confidence) {
+        if (item.confidence) {
             const confidenceColor = item.confidence === '높음' ? '#4CAF50' : 
                                    item.confidence === '중간' ? '#ff9800' : '#9e9e9e';
             confidenceDisplay = `<span style="color: ${confidenceColor}; font-weight: bold;">${item.confidence}</span>`;
         }
         
-        html += `<tr class="clickable-row" style="${rowStyle}"
+        html += `<tr class="clickable-row"
             data-target-container="${targetContainerId}" 
             data-search-text="${escapeHtml(item.suggestion || item.original)}"
             data-line="${item.line}"
@@ -1055,7 +1066,7 @@ function scrollToHighlight(row) {
     if (!container) return;
 
     const scrollWrapper = container.querySelector('.script-scroll-wrapper');
-    const highlights = container.querySelectorAll('.changed-text, .historical-text');
+    const highlights = container.querySelectorAll('.changed-text');
     let targetElement = null;
 
     highlights.forEach(el => {
@@ -1085,26 +1096,20 @@ function scrollToHighlight(row) {
     }
 }
 
-// ===================== 수정본 렌더링 =====================
+// ===================== 수정본 렌더링 (스타일 통일) =====================
 function renderFullScriptWithHighlight(revisedScript, analysis, container) {
     if (!revisedScript) {
         container.innerHTML = '<p class="placeholder">수정된 내용이 없습니다.</p>';
         return;
     }
 
-    // 일반 수정 사항
-    const generalSuggestions = new Set();
-    // 고증 수정 사항
-    const historicalSuggestions = new Set();
+    // 모든 수정 사항 (일반 + 고증 통합)
+    const allSuggestions = new Set();
     
     if (analysis && analysis.length > 0) {
         analysis.forEach(item => {
             if (item.suggestion && item.suggestion.trim()) {
-                if (item.isHistorical) {
-                    historicalSuggestions.add(item.suggestion.trim());
-                } else {
-                    generalSuggestions.add(item.suggestion.trim());
-                }
+                allSuggestions.add(item.suggestion.trim());
             }
         });
     }
@@ -1116,25 +1121,13 @@ function renderFullScriptWithHighlight(revisedScript, analysis, container) {
         let processedLine = escapeHtml(line);
         let hasHighlight = false;
 
-        // 일반 수정 하이라이트 (녹색)
-        generalSuggestions.forEach(suggestion => {
+        // 모든 수정 사항 하이라이트 (녹색 통일)
+        allSuggestions.forEach(suggestion => {
             const escapedSuggestion = escapeHtml(suggestion);
             if (processedLine.includes(escapedSuggestion)) {
                 processedLine = processedLine.replace(
                     new RegExp(escapeRegExp(escapedSuggestion), 'g'),
                     `<span class="changed-text">${escapedSuggestion}</span>`
-                );
-                hasHighlight = true;
-            }
-        });
-        
-        // 고증 수정 하이라이트 (주황색)
-        historicalSuggestions.forEach(suggestion => {
-            const escapedSuggestion = escapeHtml(suggestion);
-            if (processedLine.includes(escapedSuggestion) && !processedLine.includes(`"historical-text"`)) {
-                processedLine = processedLine.replace(
-                    new RegExp(escapeRegExp(escapedSuggestion), 'g'),
-                    `<span class="historical-text" style="background: #ffe0b2; padding: 1px 3px; border-radius: 2px; border-bottom: 2px solid #ff9800;">${escapedSuggestion}</span>`
                 );
                 hasHighlight = true;
             }
