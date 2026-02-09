@@ -1,11 +1,11 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.30 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.30: 수정 전/후 즉시 전환 + 2차 분석 후 자동 점수 표시
+ * main.js v4.31 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.31: 최종 수정본 다운로드 기능 수정
  */
 
-console.log('🚀 main.js v4.30 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
-console.log('📌 v4.30 업데이트: 수정 전/후 즉시 전환 + 자동 점수 표시');
+console.log('🚀 main.js v4.31 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
+console.log('📌 v4.31 업데이트: 최종 수정본 다운로드 기능 수정');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -189,12 +189,10 @@ function initApp() {
     initStage1AnalysisButton();
     initStage2AnalysisButton();
     initStopButton();
-    initFinalDownloadSection();
-    addBlinkAnimation();
     console.log('✅ 고증 DB 로드됨: ' + getTotalHistoricalRules() + '개 규칙');
     console.log('✅ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('✅ 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.30 초기화 완료');
+    console.log('✅ main.js v4.31 초기화 완료');
 }
 
 function getTotalHistoricalRules() {
@@ -346,15 +344,33 @@ function initDownloadButton() {
     var btn = document.getElementById('btn-download');
     if (btn) {
         btn.addEventListener('click', function() {
-            var finalScript = state.finalScript || state.stage2.fixedScript || state.stage2.revisedScript || state.stage1.fixedScript || state.stage1.revisedScript;
-            if (!finalScript) { alert('다운로드할 수정본이 없습니다.'); return; }
-            downloadScript(finalScript);
+            console.log('📥 다운로드 버튼 클릭');
+            console.log('📥 finalScript 길이:', state.finalScript ? state.finalScript.length : 0);
+            
+            var scriptToDownload = state.finalScript;
+            
+            if (!scriptToDownload || scriptToDownload.trim() === '') {
+                scriptToDownload = state.stage2.fixedScript || state.stage2.revisedScript || state.stage1.fixedScript || state.stage1.revisedScript;
+            }
+            
+            if (!scriptToDownload || scriptToDownload.trim() === '') {
+                alert('다운로드할 수정본이 없습니다.\n\n2차 분석 후 "대본 픽스" 버튼을 먼저 눌러주세요.');
+                return;
+            }
+            
+            downloadScript(scriptToDownload);
         });
     }
 }
 
 function downloadScript(script) {
-    if (!script || script.trim() === '') { alert('다운로드할 내용이 없습니다.'); return; }
+    if (!script || script.trim() === '') {
+        alert('다운로드할 내용이 없습니다.');
+        return;
+    }
+    
+    console.log('📥 다운로드 시작, 글자수:', script.length);
+    
     try {
         var blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
         var url = URL.createObjectURL(blob);
@@ -363,31 +379,21 @@ function downloadScript(script) {
         a.download = '최종수정본_' + new Date().toISOString().slice(0, 10) + '.txt';
         a.style.display = 'none';
         document.body.appendChild(a);
+        
+        console.log('📥 다운로드 링크 생성 완료');
+        
         a.click();
-        setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+        
+        setTimeout(function() {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            console.log('📥 다운로드 완료');
+        }, 200);
+        
     } catch (e) {
         console.error('다운로드 오류:', e);
-        alert('다운로드 중 오류가 발생했습니다.');
+        alert('다운로드 중 오류가 발생했습니다: ' + e.message);
     }
-}
-
-function initFinalDownloadSection() {
-    var scoreSection = document.getElementById('score-section');
-    if (!scoreSection) return;
-    var parent = scoreSection.parentElement;
-    var existing = parent.querySelector('.final-download-section');
-    if (existing) existing.remove();
-    var section = document.createElement('div');
-    section.className = 'final-download-section';
-    section.id = 'final-download-section';
-    section.style.cssText = 'text-align:center;padding:20px;margin-top:20px;background:#1e1e1e;border-radius:10px;display:none;';
-    section.innerHTML = '<h3 style="color:#4CAF50;margin-bottom:15px;">📥 최종 수정본 다운로드</h3><p style="color:#aaa;margin-bottom:15px;">픽스 완료된 최종 대본을 다운로드합니다.</p><button id="btn-final-download" style="background:#4CAF50;color:white;border:none;padding:15px 40px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:16px;">📥 최종 수정본 다운로드</button>';
-    parent.appendChild(section);
-    document.getElementById('btn-final-download').addEventListener('click', function() {
-        var scriptToDownload = state.finalScript || state.stage2.fixedScript || state.stage2.revisedScript;
-        if (scriptToDownload && scriptToDownload.trim() !== '') { downloadScript(scriptToDownload); }
-        else { alert('픽스 완료된 최종 대본이 없습니다.'); }
-    });
 }
 
 function initRevertButtons() {
@@ -500,25 +506,51 @@ function initStage2AnalysisButton() {
 
 function fixScript(stage) {
     var s = state[stage];
-    if (!s.revisedScript) { alert('픽스할 대본이 없습니다.'); return; }
+    if (!s.revisedScript) {
+        alert('픽스할 대본이 없습니다.');
+        return;
+    }
+    
     s.fixedScript = s.revisedScript;
+    
     var btn = document.getElementById('btn-fix-script-' + stage);
-    if (btn) { btn.innerHTML = '✅ 픽스 완료'; btn.style.background = '#1565C0'; }
+    if (btn) {
+        btn.innerHTML = '✅ 픽스 완료';
+        btn.style.background = '#1565C0';
+    }
+    
     if (stage === 'stage1') {
         var btn2 = document.getElementById('btn-start-stage2');
-        if (btn2) { btn2.disabled = false; btn2.style.opacity = '1'; }
+        if (btn2) {
+            btn2.disabled = false;
+            btn2.style.opacity = '1';
+        }
         alert('1차 대본이 픽스되었습니다!\n\n이제 "2차 분석 시작" 버튼을 눌러 2차 분석을 진행하세요.');
     } else if (stage === 'stage2') {
+        // 최종 스크립트 저장
         state.finalScript = s.revisedScript;
-        var downloadSection = document.getElementById('final-download-section');
-        if (downloadSection) downloadSection.style.display = 'block';
+        
+        console.log('📌 최종 대본 픽스 완료, 길이:', state.finalScript.length);
+        
+        // 다운로드 버튼 활성화
+        var downloadBtn = document.getElementById('btn-download');
+        if (downloadBtn) {
+            downloadBtn.disabled = false;
+            downloadBtn.style.opacity = '1';
+            downloadBtn.style.cursor = 'pointer';
+            console.log('📥 다운로드 버튼 활성화됨');
+        }
+        
         alert('최종 대본이 픽스되었습니다!\n\n하단의 "최종 수정본 다운로드" 버튼으로 다운로드할 수 있습니다.');
     }
 }
 
 function startStage2Analysis() {
     var fixedScript = state.stage1.fixedScript;
-    if (!fixedScript) { alert('픽스된 대본이 없습니다.\n\n1차 분석 후 "대본 픽스" 버튼을 먼저 눌러주세요.'); return; }
+    if (!fixedScript) {
+        alert('픽스된 대본이 없습니다.\n\n1차 분석 후 "대본 픽스" 버튼을 먼저 눌러주세요.');
+        return;
+    }
     state.stage2.originalScript = fixedScript;
     startAnalysis('stage2');
 }
@@ -526,7 +558,10 @@ function startStage2Analysis() {
 async function startAnalysis(stage) {
     var apiKey = localStorage.getItem('GEMINI_API_KEY');
     var validation = validateApiKey(apiKey);
-    if (!validation.valid) { alert(validation.message); return; }
+    if (!validation.valid) {
+        alert(validation.message);
+        return;
+    }
     
     var script;
     if (stage === 'stage1') {
@@ -534,7 +569,10 @@ async function startAnalysis(stage) {
     } else {
         script = state.stage1.fixedScript || state.stage1.revisedScript;
     }
-    if (!script) { alert('분석할 대본을 입력해주세요.'); return; }
+    if (!script) {
+        alert('분석할 대본을 입력해주세요.');
+        return;
+    }
     
     var s = state[stage];
     s.originalScript = script;
@@ -551,7 +589,12 @@ async function startAnalysis(stage) {
     stopBtn.disabled = false;
     
     var startBtn = document.getElementById('btn-start-' + stage);
-    if (startBtn) { startBtn.disabled = true; startBtn.style.opacity = '0.5'; }
+    if (startBtn) {
+        startBtn.disabled = true;
+        startBtn.style.opacity = '0.5';
+    }
+    
+    addBlinkAnimation();
     
     try {
         updateProgress(10, '고증 검사 중...');
@@ -599,16 +642,26 @@ async function startAnalysis(stage) {
         
         setTimeout(function() {
             progressContainer.style.display = 'none';
-            if (startBtn) { startBtn.disabled = false; startBtn.style.opacity = '1'; }
+            if (startBtn) {
+                startBtn.disabled = false;
+                startBtn.style.opacity = '1';
+            }
         }, 1000);
         
     } catch (error) {
         console.error('분석 오류:', error);
-        if (error.name === 'AbortError') { updateProgress(0, '분석 중지됨'); }
-        else { alert('분석 중 오류 발생: ' + error.message); updateProgress(0, '오류 발생'); }
+        if (error.name === 'AbortError') {
+            updateProgress(0, '분석 중지됨');
+        } else {
+            alert('분석 중 오류 발생: ' + error.message);
+            updateProgress(0, '오류 발생');
+        }
         setTimeout(function() {
             progressContainer.style.display = 'none';
-            if (startBtn) { startBtn.disabled = false; startBtn.style.opacity = '1'; }
+            if (startBtn) {
+                startBtn.disabled = false;
+                startBtn.style.opacity = '1';
+            }
         }, 1000);
     }
 }
@@ -650,9 +703,17 @@ async function generateAndDisplayScores(originalScript, revisedScript, apiKey) {
 
 function displayScores(scores) {
     var scoreSection = document.getElementById('score-section');
+    
     if (!scoreSection) {
-        console.error('score-section 요소를 찾을 수 없음');
-        return;
+        console.log('📊 score-section을 찾을 수 없어 동적 생성');
+        scoreSection = document.createElement('div');
+        scoreSection.id = 'score-section';
+        var resultsGrid = document.querySelector('.results-grid');
+        if (resultsGrid) {
+            resultsGrid.parentNode.insertBefore(scoreSection, resultsGrid.nextSibling);
+        } else {
+            document.querySelector('.container').appendChild(scoreSection);
+        }
     }
     
     var senior = parseInt(scores.senior) || 0;
@@ -702,7 +763,7 @@ function displayScores(scores) {
     
     scoreSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     
-    console.log('📊 점수 표시 완료 - 평균: ' + average + '점, ' + (isPassed ? '합격' : '불합격'));
+    console.log('📊 점수 렌더링 완료 - 평균: ' + average + '점, ' + (isPassed ? '합격' : '불합격'));
 }
 
 function updateProgress(percent, text) {
