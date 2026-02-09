@@ -1,14 +1,15 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.15 - Vertex AI + Gemini 3 Flash
+ * main.js v4.16 - Google AI + Gemini 2.5 Flash
  * 25가지 오류 유형 검수 + 조선시대 고증 검수 병합
  * - 고증 오류: 자동 수정 (첫 번째 대체어 적용)
  * - 수정 반영 강화: 로컬 강제 치환
  * - "수정 전/후" 버튼: 원문 복원 기능 (스크롤 위치 유지)
  * - API 키 검증 + 5분 타임아웃 + 디버깅 로그 강화
+ * - v4.16: Vertex AI API 키 + Google AI 엔드포인트 (CORS 허용)
  */
 
-console.log('🚀 main.js v4.15 (Vertex AI + Gemini 3 Flash + API 디버깅 강화) 로드됨');
+console.log('🚀 main.js v4.16 (Google AI + Gemini 2.5 Flash) 로드됨');
 
 // ===================== 조선시대 고증 DB =====================
 const HISTORICAL_RULES = {
@@ -193,10 +194,11 @@ const state = {
 
 let currentAbortController = null;
 
-// ===================== API 설정 =====================
+// ===================== API 설정 (v4.16 변경) =====================
 const API_CONFIG = {
     TIMEOUT: 300000, // 5분 (300초)
-    ENDPOINT: 'https://aiplatform.googleapis.com/v1/projects/gen-lang-client-0624453722/locations/global/publishers/google/models/gemini-3-flash-preview:generateContent'
+    MODEL: 'gemini-2.5-flash-preview-05-20',
+    ENDPOINT: 'https://generativelanguage.googleapis.com/v1beta/models'
 };
 
 // ===================== DOM 로드 후 초기화 =====================
@@ -218,7 +220,8 @@ function initApp() {
     initRevertButtons();
     console.log('✅ 고증 DB 로드됨: ' + getTotalHistoricalRules() + '개 규칙');
     console.log('✅ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
-    console.log('✅ main.js v4.15 초기화 완료');
+    console.log('✅ 모델: ' + API_CONFIG.MODEL);
+    console.log('✅ main.js v4.16 초기화 완료');
 }
 
 // ===================== 고증 DB 규칙 수 계산 =====================
@@ -292,7 +295,6 @@ function validateApiKey(apiKey) {
     console.log('   - 키 시작: ' + apiKey.substring(0, 10) + '...');
     console.log('   - 키 끝: ...' + apiKey.substring(apiKey.length - 5));
     
-    // Google Cloud API 키는 보통 AIza로 시작하지만, 다른 형식도 있을 수 있음
     if (apiKey.length < 20) {
         console.warn('⚠️ API 키가 너무 짧습니다.');
         return { valid: false, message: 'API 키가 너무 짧습니다. 올바른 키인지 확인해주세요.' };
@@ -436,13 +438,11 @@ function initAnalysisButtons() {
 
 // ===================== "수정 전" 버튼 초기화 =====================
 function initRevertButtons() {
-    // 1차 수정 반영 칸에 버튼 추가
     const revised1Container = document.getElementById('revised-stage1');
     if (revised1Container) {
         addRevertButton(revised1Container, 'stage1');
     }
     
-    // 최종 수정 반영 칸에 버튼 추가
     const revised2Container = document.getElementById('revised-stage2');
     if (revised2Container) {
         addRevertButton(revised2Container, 'stage2');
@@ -455,14 +455,12 @@ function initRevertButtons() {
 function addRevertButton(container, stage) {
     const parent = container.parentElement;
     
-    // 이미 버튼이 있으면 추가하지 않음
     if (parent.querySelector('.revert-btn-wrapper')) return;
     
     const btnWrapper = document.createElement('div');
     btnWrapper.className = 'revert-btn-wrapper';
     btnWrapper.style.cssText = 'text-align: center; padding: 10px; border-top: 1px solid #ddd; display: flex; justify-content: center; gap: 10px;';
     
-    // 수정 전 버튼
     const btnBefore = document.createElement('button');
     btnBefore.id = `btn-revert-before-${stage}`;
     btnBefore.className = 'btn-revert-before';
@@ -474,7 +472,6 @@ function addRevertButton(container, stage) {
     btnBefore.addEventListener('mouseover', () => { if (!btnBefore.disabled) btnBefore.style.background = '#f57c00'; });
     btnBefore.addEventListener('mouseout', () => { if (!btnBefore.disabled) btnBefore.style.background = '#ff9800'; });
     
-    // 수정 후 버튼
     const btnAfter = document.createElement('button');
     btnAfter.id = `btn-revert-after-${stage}`;
     btnAfter.className = 'btn-revert-after';
@@ -503,20 +500,16 @@ function showOriginal(stage) {
     const btnBefore = document.getElementById(`btn-revert-before-${stage}`);
     const btnAfter = document.getElementById(`btn-revert-after-${stage}`);
     
-    // 현재 스크롤 위치 저장
     const scrollWrapper = container.querySelector('.script-scroll-wrapper');
     const currentScrollTop = scrollWrapper ? scrollWrapper.scrollTop : 0;
     
-    // 원본 표시
     renderPlainScript(stageState.originalScript, container);
     
-    // 스크롤 위치 복원
     const newScrollWrapper = container.querySelector('.script-scroll-wrapper');
     if (newScrollWrapper) {
         newScrollWrapper.scrollTop = currentScrollTop;
     }
     
-    // 버튼 상태 변경
     btnBefore.style.opacity = '0.5';
     btnAfter.style.opacity = '1';
     
@@ -535,20 +528,16 @@ function showRevised(stage) {
     const btnBefore = document.getElementById(`btn-revert-before-${stage}`);
     const btnAfter = document.getElementById(`btn-revert-after-${stage}`);
     
-    // 현재 스크롤 위치 저장
     const scrollWrapper = container.querySelector('.script-scroll-wrapper');
     const currentScrollTop = scrollWrapper ? scrollWrapper.scrollTop : 0;
     
-    // 수정본 표시
     renderFullScriptWithHighlight(stageState.revisedScript, stageState.analysis, container);
     
-    // 스크롤 위치 복원
     const newScrollWrapper = container.querySelector('.script-scroll-wrapper');
     if (newScrollWrapper) {
         newScrollWrapper.scrollTop = currentScrollTop;
     }
     
-    // 버튼 상태 변경
     btnBefore.style.opacity = '1';
     btnAfter.style.opacity = '0.5';
     
@@ -589,403 +578,105 @@ function checkAndFixHistoricalAccuracy(scriptText) {
         clothing: '의복'
     };
     
-    const lines = scriptText.split('\n');
-    
     for (const category in HISTORICAL_RULES) {
-        HISTORICAL_RULES[category].forEach(rule => {
-            // "없음"인 경우 수정하지 않음
-            if (rule.historical[0] === '없음') return;
-            
+        const rules = HISTORICAL_RULES[category];
+        for (const rule of rules) {
             const regex = new RegExp(rule.modern, 'g');
-            let match;
-            let tempScript = fixedScript;
-            
-            while ((match = regex.exec(scriptText)) !== null) {
-                // 줄 번호 찾기
-                let charCount = 0;
-                let lineNum = 1;
-                for (let i = 0; i < lines.length; i++) {
-                    charCount += lines[i].length + 1;
-                    if (match.index < charCount) {
-                        lineNum = i + 1;
-                        break;
-                    }
+            const matches = scriptText.match(regex);
+            if (matches) {
+                const replacement = rule.historical[0] !== '없음' ? rule.historical[0] : null;
+                
+                if (replacement) {
+                    fixedScript = fixedScript.replace(regex, replacement);
                 }
                 
-                const replacement = rule.historical[0]; // 첫 번째 대체어 사용
-                
                 issues.push({
-                    line: lineNum,
-                    original: rule.modern,
-                    suggestion: replacement,
-                    errorType: `고증-${categoryNames[category]}`,
+                    type: 'historical',
+                    category: categoryNames[category],
+                    modern: rule.modern,
+                    historical: rule.historical,
                     confidence: rule.confidence,
                     reason: rule.reason,
-                    isHistorical: true
+                    count: matches.length,
+                    replacement: replacement,
+                    autoFixed: replacement !== null
                 });
             }
-            
-            // 실제 수정 적용
-            fixedScript = fixedScript.replace(regex, rule.historical[0]);
-        });
+        }
     }
     
-    // 중복 제거 (같은 줄, 같은 원본)
-    const uniqueIssues = [];
-    const seen = new Set();
-    issues.forEach(issue => {
-        const key = `${issue.line}-${issue.original}`;
-        if (!seen.has(key)) {
-            seen.add(key);
-            uniqueIssues.push(issue);
-        }
-    });
-    
-    console.log(`📜 로컬 고증 검사 완료: ${uniqueIssues.length}건 발견 및 자동 수정`);
-    return { issues: uniqueIssues, fixedScript };
+    console.log(`📜 고증 검사 완료: ${issues.length}개 문제 발견, 자동 수정 적용됨`);
+    return { issues, fixedScript };
 }
 
-// ===================== 분석 실행 (1차, 2차) =====================
-async function startAnalysis(stage) {
-    console.log(`🔍 ${stage} 분석 시작`);
-    console.log('='.repeat(50));
-
-    const apiKey = localStorage.getItem('GEMINI_API_KEY');
+// ===================== Gemini API 호출 (v4.16 수정) =====================
+async function callGeminiAPI(prompt, apiKey) {
+    const url = `${API_CONFIG.ENDPOINT}/${API_CONFIG.MODEL}:generateContent?key=${apiKey}`;
     
-    // API 키 검증
-    const keyValidation = validateApiKey(apiKey);
-    if (!keyValidation.valid) {
-        alert(keyValidation.message);
-        return;
-    }
-
-    let scriptText;
-    if (stage === 'stage1') {
-        scriptText = document.getElementById('original-script').value.trim();
-        if (!scriptText) {
-            alert('분석할 대본을 입력해주세요.');
-            return;
-        }
-        state.stage1.originalScript = scriptText;
-        console.log('📝 원본 대본 길이: ' + scriptText.length + '자');
-    } else {
-        scriptText = state.stage1.revisedScript;
-        if (!scriptText) {
-            alert('1차 분석을 먼저 완료해주세요.');
-            return;
-        }
-        state.stage2.originalScript = scriptText;
-        console.log('📝 1차 수정본 길이: ' + scriptText.length + '자');
-    }
-
-    const progressContainer = document.getElementById('progress-container');
-    const stopBtn = document.getElementById('btn-stop-analysis');
-    progressContainer.style.display = 'block';
-    stopBtn.disabled = false;
-    updateProgress(5, '로컬 고증 검사 및 자동 수정 중...');
-
-    // 1단계: 로컬 고증 검사 + 자동 수정 (100% 일관성)
-    const historicalResult = checkAndFixHistoricalAccuracy(scriptText);
-    const historicalIssues = historicalResult.issues;
-    let processedScript = historicalResult.fixedScript;
+    console.log('📡 API 호출 시작');
+    console.log('   - 모델: ' + API_CONFIG.MODEL);
+    console.log('   - 엔드포인트: generativelanguage.googleapis.com');
+    console.log('   - 프롬프트 길이: ' + prompt.length + '자');
     
-    updateProgress(15, 'AI 분석 준비 중...');
-
     currentAbortController = new AbortController();
-    const signal = currentAbortController.signal;
-
-    try {
-        updateProgress(25, '프롬프트 생성 중...');
-        const prompt = generatePrompt(processedScript);
-        console.log('📤 프롬프트 생성 완료, 길이: ' + prompt.length + '자');
-
-        updateProgress(45, 'AI 분석 중... (최대 5분 소요)');
-        console.log('🌐 API 호출 시작...');
-        console.log('   - 엔드포인트: ' + API_CONFIG.ENDPOINT);
-        console.log('   - 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
-        
-        const response = await callGeminiAPI(prompt, signal);
-        console.log('📥 API 응답 수신 완료');
-        console.log('   - 응답 길이: ' + response.length + '자');
-
-        updateProgress(70, '결과 파싱 중...');
-        const parsed = parseAnalysisResult(response);
-        console.log('✅ 파싱 완료');
-
-        // 수정 반영 강화: 로컬에서 강제 치환
-        updateProgress(80, '수정 사항 강제 반영 중...');
-        const verified = forceApplyAllCorrections(parsed, processedScript);
-
-        updateProgress(90, '결과 렌더링 중...');
-        
-        // 고증 오류와 일반 오류 병합
-        const mergedAnalysis = mergeAnalysisResults(verified.analysis, historicalIssues);
-        
-        renderResults({
-            analysis: mergedAnalysis,
-            revisedScript: verified.revisedScript,
-            historicalIssues: historicalIssues,
-            scores: verified.scores,
-            parseError: verified.parseError
-        }, stage);
-
-        if (stage === 'stage1') {
-            state.stage1.analysis = mergedAnalysis;
-            state.stage1.revisedScript = verified.revisedScript;
-            state.stage1.historicalIssues = historicalIssues;
-            state.stage1.scores = verified.scores;
-            state.stage1.revisionCount = mergedAnalysis ? mergedAnalysis.length : 0;
-            document.getElementById('btn-analyze-stage2').disabled = false;
-            
-            // 수정 전/후 버튼 활성화
-            const revertBtnBefore1 = document.getElementById('btn-revert-before-stage1');
-            const revertBtnAfter1 = document.getElementById('btn-revert-after-stage1');
-            if (revertBtnBefore1) revertBtnBefore1.disabled = false;
-            if (revertBtnAfter1) revertBtnAfter1.disabled = false;
-        } else {
-            state.stage2.analysis = mergedAnalysis;
-            state.stage2.revisedScript = verified.revisedScript;
-            state.stage2.historicalIssues = historicalIssues;
-            state.stage2.scores = verified.scores;
-            state.stage2.revisionCount = mergedAnalysis ? mergedAnalysis.length : 0;
-            document.getElementById('btn-download').disabled = false;
-            renderScores(verified.scores, historicalIssues.length);
-            
-            // 수정 전/후 버튼 활성화
-            const revertBtnBefore2 = document.getElementById('btn-revert-before-stage2');
-            const revertBtnAfter2 = document.getElementById('btn-revert-after-stage2');
-            if (revertBtnBefore2) revertBtnBefore2.disabled = false;
-            if (revertBtnAfter2) revertBtnAfter2.disabled = false;
-        }
-
-        updateProgress(100, '분석 완료!');
-        console.log('='.repeat(50));
-        console.log(`✅ ${stage} 분석 완료 (일반: ${verified.analysis?.length || 0}건, 고증: ${historicalIssues.length}건)`);
-
-    } catch (error) {
-        console.log('='.repeat(50));
-        if (error.name === 'AbortError') {
-            console.log('⏹️ 분석이 사용자에 의해 중지됨');
-            updateProgress(0, '분석이 중지되었습니다.');
-        } else if (error.message.includes('timeout')) {
-            console.error('⏰ API 타임아웃 발생 (5분 초과)');
-            alert('API 응답 시간이 초과되었습니다 (5분). 다시 시도해주세요.');
-            updateProgress(0, '타임아웃 발생');
-        } else {
-            console.error('❌ 분석 오류:', error);
-            console.error('   - 오류 메시지:', error.message);
-            console.error('   - 오류 스택:', error.stack);
-            alert('분석 중 오류가 발생했습니다: ' + error.message);
-            updateProgress(0, '오류 발생');
-        }
-    } finally {
-        stopBtn.disabled = true;
-        currentAbortController = null;
-        setTimeout(() => {
-            progressContainer.style.display = 'none';
-        }, 2000);
-    }
-}
-
-// ===================== 수정 사항 강제 반영 (강화된 버전) =====================
-function forceApplyAllCorrections(parsed, baseScript) {
-    let revisedScript = baseScript;
-    let appliedCount = 0;
-    let forcedCount = 0;
-    
-    if (!parsed.analysis || parsed.analysis.length === 0) {
-        return {
-            ...parsed,
-            revisedScript: revisedScript
-        };
-    }
-    
-    // AI가 제공한 revisedScript가 있으면 그것을 기반으로
-    if (parsed.revisedScript && parsed.revisedScript.trim().length > 0) {
-        revisedScript = parsed.revisedScript;
-    }
-    
-    // 모든 분석 항목에 대해 강제 치환
-    parsed.analysis.forEach((item, index) => {
-        if (item.original && item.suggestion && item.original !== item.suggestion) {
-            // 이미 수정되어 있는지 확인
-            if (revisedScript.includes(item.suggestion)) {
-                appliedCount++;
-            } else if (revisedScript.includes(item.original)) {
-                // 강제로 치환
-                revisedScript = revisedScript.split(item.original).join(item.suggestion);
-                appliedCount++;
-                forcedCount++;
-                console.log(`⚠️ 강제 수정 적용 [${index + 1}]: "${item.original}" → "${item.suggestion}"`);
-            }
-        }
-    });
-    
-    console.log(`✅ 수정 반영 완료: 총 ${appliedCount}건 (강제 적용: ${forcedCount}건)`);
-    
-    return {
-        analysis: parsed.analysis,
-        revisedScript: revisedScript,
-        scores: parsed.scores,
-        parseError: parsed.parseError
-    };
-}
-
-// ===================== 분석 결과 병합 =====================
-function mergeAnalysisResults(aiAnalysis, historicalIssues) {
-    const merged = [];
-    
-    // AI 분석 결과 추가 (일반 오류)
-    if (aiAnalysis && aiAnalysis.length > 0) {
-        aiAnalysis.forEach(item => {
-            merged.push({
-                ...item,
-                isHistorical: false
-            });
-        });
-    }
-    
-    // 고증 오류 추가
-    if (historicalIssues && historicalIssues.length > 0) {
-        historicalIssues.forEach(item => {
-            merged.push(item);
-        });
-    }
-    
-    // 줄 번호 기준 정렬
-    merged.sort((a, b) => (a.line || 0) - (b.line || 0));
-    
-    return merged;
-}
-
-// ===================== 진행률 업데이트 =====================
-function updateProgress(percent, text) {
-    const bar = document.getElementById('progress-bar');
-    const textEl = document.getElementById('progress-text');
-    bar.style.width = percent + '%';
-    textEl.textContent = text;
-}
-
-// ===================== 프롬프트 생성 (1차, 2차용) =====================
-function generatePrompt(scriptText) {
-    return `당신은 한국어 대본 검수 전문가입니다. 아래 규칙을 정확히 따라 분석하세요.
-
-[중요] 검수 범위 제한
-- 맞춤법, 띄어쓰기, 문장부호, 어색한 표현, 중복 표현만 검수
-- 조선시대 고증 오류는 이미 별도 시스템에서 처리 완료됨
-- 어투/말투/존대법은 절대 수정하지 마세요 (원문 그대로 유지)
-
-[규칙 1] 필수 검사 항목
-- 맞춤법 오류 (예: 되서→돼서, 됬→됐, 않된다→안 된다)
-- 띄어쓰기 오류 (예: 할수있다→할 수 있다)
-- 문장부호 오류 (마침표, 쉼표 누락)
-- 어색한 표현 (문맥상 부자연스러운 표현)
-- 중복 표현 (같은 의미 반복)
-
-[규칙 2] 절대 금지
-- 어투 변경 금지 (하였습니다→하였소 변경 금지)
-- 말투 변경 금지 (존대/반말 변경 금지)
-- 문장 구조 변경 금지
-- 내용 추가/삭제 금지
-
-[규칙 3] 수정 반영 필수 (가장 중요!)
-- analysis에 있는 모든 original → suggestion 변경사항은 revisedScript에 100% 반영
-- 단 하나도 누락하지 마세요
-- original 텍스트가 revisedScript에 남아있으면 안 됨
-
-[규칙 4] 줄맞춤
-revisedScript의 각 줄은 공백 포함 17자 이내로 작성하세요.
-
-[규칙 5] 전체 대본 포함
-revisedScript에는 전체 대본을 포함하세요. 생략 금지.
-
-[대본]
-${scriptText}
-
-[출력 형식]
-반드시 아래 형식의 유효한 JSON으로만 응답하세요:
-{"analysis":[{"line":1,"errorType":"오류유형","original":"원본","suggestion":"수정","reason":"이유"}],"revisedScript":"수정된 전체 대본","scores":{"entertainment":85,"seniorTarget":90,"storyFlow":80,"bounceRate":15}}`;
-}
-
-// ===================== Gemini API 호출 (5분 타임아웃 + 디버깅 강화) =====================
-async function callGeminiAPI(prompt, signal) {
-    const apiKey = localStorage.getItem('GEMINI_API_KEY');
-    
-    const endpoint = `${API_CONFIG.ENDPOINT}?key=${apiKey}`;
-    
-    console.log('🌐 API 요청 전송 중...');
-    const startTime = Date.now();
-
-    // 타임아웃 설정 (5분)
     const timeoutId = setTimeout(() => {
         if (currentAbortController) {
             currentAbortController.abort();
-            console.error('⏰ API 타임아웃: 5분 초과');
+            console.error('⏰ API 타임아웃 (5분 경과)');
         }
     }, API_CONFIG.TIMEOUT);
-
+    
     try {
-        const response = await fetch(endpoint, {
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
                 contents: [{
-                    role: 'user',
-                    parts: [{ text: prompt }]
+                    parts: [{
+                        text: prompt
+                    }]
                 }],
                 generationConfig: {
-                    temperature: 0,
-                    topP: 1,
-                    topK: 1,
-                    maxOutputTokens: 65536
+                    temperature: 0.1,
+                    topP: 0.8,
+                    topK: 40,
+                    maxOutputTokens: 8192
                 }
             }),
-            signal: signal
+            signal: currentAbortController.signal
         });
-
+        
         clearTimeout(timeoutId);
         
-        const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
-        console.log(`⏱️ API 응답 시간: ${elapsedTime}초`);
-        console.log(`📊 HTTP 상태: ${response.status} ${response.statusText}`);
-
-        if (!response.ok) {
-            let errorMsg = 'API 오류: ' + response.status;
-            try {
-                const errData = await response.json();
-                console.error('❌ API 에러 응답:', errData);
-                errorMsg = errData.error?.message || errorMsg;
-            } catch (e) {
-                console.error('❌ 에러 응답 파싱 실패');
-            }
-            throw new Error(errorMsg);
-        }
-
-        const data = await response.json();
-        console.log('✅ API 응답 JSON 파싱 성공');
+        console.log('📡 API 응답 수신');
+        console.log('   - HTTP 상태: ' + response.status);
         
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-        if (!text) {
-            console.error('❌ API 응답에 텍스트가 없습니다.');
-            console.error('   응답 구조:', JSON.stringify(data, null, 2).substring(0, 500));
-            throw new Error('API 응답이 비어있습니다.');
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ API 오류 응답:', errorText);
+            throw new Error(`API 오류: ${response.status} - ${errorText}`);
         }
-
-        console.log('✅ API 텍스트 추출 성공, 길이: ' + text.length + '자');
-        return text;
+        
+        const data = await response.json();
+        console.log('✅ API 응답 파싱 완료');
+        
+        if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+            const text = data.candidates[0].content.parts[0].text;
+            console.log('   - 응답 텍스트 길이: ' + text.length + '자');
+            return text;
+        } else {
+            console.error('❌ 응답 형식 오류:', JSON.stringify(data).substring(0, 500));
+            throw new Error('API 응답 형식이 올바르지 않습니다.');
+        }
         
     } catch (error) {
         clearTimeout(timeoutId);
         
         if (error.name === 'AbortError') {
-            const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
-            if (elapsedTime >= (API_CONFIG.TIMEOUT / 1000)) {
-                throw new Error('timeout: API 응답 시간 초과 (5분)');
-            }
-            throw error;
+            console.error('⏹️ 요청이 중단되었습니다.');
+            throw new Error('요청이 중단되었습니다.');
         }
         
         console.error('❌ API 호출 실패:', error.message);
@@ -993,339 +684,312 @@ async function callGeminiAPI(prompt, signal) {
     }
 }
 
-// ===================== 결과 파싱 =====================
-function parseAnalysisResult(responseText) {
-    console.log('📝 파싱 시작, 원본 길이:', responseText.length);
-
-    let jsonStr = responseText.trim();
-    jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-
-    if (!jsonStr.startsWith('{')) {
-        const firstBrace = jsonStr.indexOf('{');
-        if (firstBrace !== -1) {
-            jsonStr = jsonStr.substring(firstBrace);
-        } else if (jsonStr.startsWith('"analysis"')) {
-            jsonStr = '{' + jsonStr;
-        }
-    }
-
-    const lastBrace = jsonStr.lastIndexOf('}');
-    if (lastBrace !== -1) {
-        jsonStr = jsonStr.substring(0, lastBrace + 1);
-    }
-
-    let openBraces = (jsonStr.match(/{/g) || []).length;
-    let closeBraces = (jsonStr.match(/}/g) || []).length;
-    while (openBraces > closeBraces) {
-        jsonStr += '}';
-        closeBraces++;
-    }
-
-    let openBrackets = (jsonStr.match(/\[/g) || []).length;
-    let closeBrackets = (jsonStr.match(/\]/g) || []).length;
-    while (openBrackets > closeBrackets) {
-        const lastBraceIdx = jsonStr.lastIndexOf('}');
-        jsonStr = jsonStr.substring(0, lastBraceIdx) + ']' + jsonStr.substring(lastBraceIdx);
-        closeBrackets++;
-    }
-
-    jsonStr = jsonStr.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
-
-    try {
-        const parsed = JSON.parse(jsonStr);
-        console.log('✅ JSON 파싱 성공');
-        return {
-            analysis: parsed.analysis || [],
-            revisedScript: parsed.revisedScript || '',
-            scores: parsed.scores || {},
-            parseError: null
-        };
-    } catch (e) {
-        console.error('❌ JSON 파싱 실패:', e.message);
-        return extractPartialData(jsonStr, responseText);
-    }
-}
-
-// ===================== 부분 데이터 추출 =====================
-function extractPartialData(jsonStr, originalText) {
-    let analysis = [];
-    let revisedScript = '';
-    let scores = {};
-
-    try {
-        const analysisMatch = jsonStr.match(/"analysis"\s*:\s*\[([\s\S]*?)\](?=\s*,?\s*"revisedScript")/);
-        if (analysisMatch) {
-            analysis = JSON.parse('[' + analysisMatch[1] + ']');
-            console.log('✅ analysis 추출 성공:', analysis.length);
-        }
-    } catch (e) {}
-
-    try {
-        const scriptMatch = jsonStr.match(/"revisedScript"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"scores"|"\s*})/);
-        if (scriptMatch) {
-            revisedScript = scriptMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
-            console.log('✅ revisedScript 추출 성공:', revisedScript.length);
-        }
-    } catch (e) {}
-
-    try {
-        const scoresMatch = jsonStr.match(/"scores"\s*:\s*(\{[^}]+\})/);
-        if (scoresMatch) {
-            scores = JSON.parse(scoresMatch[1]);
-            console.log('✅ scores 추출 성공');
-        }
-    } catch (e) {}
-
-    if (analysis.length > 0 || revisedScript.length > 0) {
-        return { analysis, revisedScript, scores, parseError: null };
-    }
-
-    return { analysis: [], revisedScript: originalText, scores: {}, parseError: '파싱 실패' };
-}
-
-// ===================== 결과 렌더링 =====================
-function renderResults(parsed, stage) {
-    const analysisContainer = document.getElementById(`analysis-${stage}`);
-    const revisedContainer = document.getElementById(`revised-${stage}`);
-    const countSpan = document.getElementById(`revision-count-${stage}`);
-
-    renderAnalysisTable(parsed.analysis, parsed.parseError, stage, analysisContainer);
-    renderFullScriptWithHighlight(parsed.revisedScript, parsed.analysis, revisedContainer);
-
-    const generalCount = parsed.analysis ? parsed.analysis.filter(a => !a.isHistorical).length : 0;
-    const historicalCount = parsed.analysis ? parsed.analysis.filter(a => a.isHistorical).length : 0;
-    const totalCount = generalCount + historicalCount;
+// ===================== 분석 시작 =====================
+async function startAnalysis(stage) {
+    const apiKey = localStorage.getItem('GEMINI_API_KEY');
+    const validation = validateApiKey(apiKey);
     
-    if (totalCount > 0) {
-        countSpan.innerHTML = `<span style="color:#4CAF50;">(일반 ${generalCount}건)</span> <span style="color:#ff9800;">(고증 ${historicalCount}건)</span>`;
-    } else {
-        countSpan.textContent = '';
-    }
-}
-
-// ===================== 분석 테이블 렌더링 (스타일 통일) =====================
-function renderAnalysisTable(analysis, parseError, stage, container) {
-    if (parseError) {
-        container.innerHTML = `<p class="error">파싱 오류: ${parseError}</p>`;
+    if (!validation.valid) {
+        alert(validation.message + '\n\n⚙️ API 키 설정 버튼을 클릭하여 API 키를 입력해주세요.');
         return;
     }
-
-    if (!analysis || analysis.length === 0) {
-        container.innerHTML = '<p class="success">✅ 발견된 오류가 없습니다.</p>';
+    
+    const textarea = document.getElementById('original-script');
+    const scriptText = stage === 'stage1' ? textarea.value.trim() : state.stage1.revisedScript;
+    
+    if (!scriptText) {
+        alert(stage === 'stage1' ? '대본을 입력해주세요.' : '1차 분석을 먼저 진행해주세요.');
         return;
     }
-
-    const targetContainerId = stage === 'stage1' ? 'revised-stage1' : 'revised-stage2';
-
-    let html = '<p class="click-hint">💡 각 행을 클릭하면 수정된 부분으로 이동합니다</p>';
     
-    html += '<div class="table-scroll-wrapper"><table class="analysis-table"><thead><tr><th>줄</th><th>유형</th><th>원본</th><th>수정</th><th>확신도</th><th>이유</th></tr></thead><tbody>';
-
-    analysis.forEach((item, index) => {
-        // 확신도 표시
-        let confidenceDisplay = '-';
-        if (item.confidence) {
-            const confidenceColor = item.confidence === '높음' ? '#4CAF50' : 
-                                   item.confidence === '중간' ? '#ff9800' : '#9e9e9e';
-            confidenceDisplay = `<span style="color: ${confidenceColor}; font-weight: bold;">${item.confidence}</span>`;
+    console.log(`\n${'='.repeat(50)}`);
+    console.log(`🔍 ${stage === 'stage1' ? '1차' : '2차'} 분석 시작`);
+    console.log(`   - 대본 길이: ${scriptText.length}자`);
+    console.log(`${'='.repeat(50)}`);
+    
+    state[stage].originalScript = scriptText;
+    
+    const progressContainer = document.getElementById('progress-container');
+    const stopBtn = document.getElementById('btn-stop-analysis');
+    progressContainer.style.display = 'block';
+    stopBtn.disabled = false;
+    
+    updateProgress(10, '분석 준비 중...');
+    
+    try {
+        updateProgress(20, '로컬 고증 검사 중...');
+        const historicalResult = checkAndFixHistoricalAccuracy(scriptText);
+        state[stage].historicalIssues = historicalResult.issues;
+        
+        const scriptForAPI = historicalResult.fixedScript;
+        
+        updateProgress(30, 'AI 분석 요청 중...');
+        
+        const prompt = buildAnalysisPrompt(scriptForAPI, stage);
+        
+        updateProgress(40, 'AI 응답 대기 중... (최대 5분)');
+        
+        const response = await callGeminiAPI(prompt, apiKey);
+        
+        updateProgress(70, '응답 분석 중...');
+        
+        const analysis = parseAnalysisResponse(response);
+        state[stage].analysis = analysis;
+        
+        updateProgress(80, '수정본 생성 중...');
+        
+        const revisedScript = applyCorrections(scriptForAPI, analysis);
+        state[stage].revisedScript = revisedScript;
+        state[stage].revisionCount = countRevisions(analysis);
+        
+        updateProgress(90, '결과 렌더링 중...');
+        
+        renderAnalysisResult(stage);
+        renderRevisedScript(stage);
+        
+        if (stage === 'stage1') {
+            document.getElementById('btn-analyze-stage2').disabled = false;
         }
         
-        html += `<tr class="clickable-row"
-            data-target-container="${targetContainerId}" 
-            data-search-text="${escapeHtml(item.suggestion || item.original)}"
-            data-line="${item.line}"
-            onclick="scrollToHighlight(this)">
-            <td>${item.line || '-'}</td>
-            <td>${escapeHtml(item.errorType || '-')}</td>
-            <td>${escapeHtml(item.original || '-')}</td>
-            <td>${escapeHtml(item.suggestion || '-')}</td>
-            <td>${confidenceDisplay}</td>
-            <td>${escapeHtml(item.reason || '-')}</td>
-        </tr>`;
-    });
-
-    html += '</tbody></table></div>';
-    container.innerHTML = html;
-}
-
-// ===================== 클릭 시 해당 위치로 스크롤 =====================
-function scrollToHighlight(row) {
-    const targetContainerId = row.getAttribute('data-target-container');
-    const searchText = row.getAttribute('data-search-text');
-    const container = document.getElementById(targetContainerId);
-
-    if (!container) return;
-
-    const scrollWrapper = container.querySelector('.script-scroll-wrapper');
-    const highlights = container.querySelectorAll('.changed-text');
-    let targetElement = null;
-
-    highlights.forEach(el => {
-        if (el.textContent.includes(searchText) || searchText.includes(el.textContent)) {
-            targetElement = el;
-        }
-    });
-
-    if (!targetElement && highlights.length > 0) {
-        const lineIndex = parseInt(row.getAttribute('data-line')) - 1;
-        targetElement = highlights[Math.min(lineIndex, highlights.length - 1)] || highlights[0];
-    }
-
-    if (targetElement) {
-        container.querySelectorAll('.highlight-flash').forEach(el => {
-            el.classList.remove('highlight-flash');
-        });
-
-        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        targetElement.classList.add('highlight-flash');
-
+        updateProgress(100, '분석 완료!');
+        
         setTimeout(() => {
-            targetElement.classList.remove('highlight-flash');
-        }, 1500);
-    } else if (scrollWrapper) {
-        scrollWrapper.scrollTop = 0;
+            progressContainer.style.display = 'none';
+        }, 1000);
+        
+        console.log(`✅ ${stage === 'stage1' ? '1차' : '2차'} 분석 완료`);
+        
+    } catch (error) {
+        console.error('❌ 분석 중 오류:', error);
+        updateProgress(0, '분석 중 오류가 발생했습니다.');
+        alert('분석 중 오류가 발생했습니다: ' + error.message);
+        
+        setTimeout(() => {
+            progressContainer.style.display = 'none';
+        }, 2000);
     }
+    
+    stopBtn.disabled = true;
+    currentAbortController = null;
 }
 
-// ===================== 수정본 렌더링 (스타일 통일) =====================
-function renderFullScriptWithHighlight(revisedScript, analysis, container) {
-    if (!revisedScript) {
-        container.innerHTML = '<p class="placeholder">수정된 내용이 없습니다.</p>';
-        return;
-    }
-
-    // 모든 수정 사항 (일반 + 고증 통합)
-    const allSuggestions = new Set();
+// ===================== 분석 프롬프트 생성 =====================
+function buildAnalysisPrompt(script, stage) {
+    const errorTypes = [
+        '1. 오타/맞춤법 오류',
+        '2. 띄어쓰기 오류',
+        '3. 문법 오류',
+        '4. 어색한 표현',
+        '5. 중복 표현',
+        '6. 비문(문장이 완성되지 않음)',
+        '7. 주어-서술어 불일치',
+        '8. 시제 불일치',
+        '9. 존댓말/반말 혼용',
+        '10. 불필요한 외래어',
+        '11. 잘못된 관용어 사용',
+        '12. 동음이의어 오용',
+        '13. 조사 오류',
+        '14. 접속사 오용',
+        '15. 부정확한 숫자/단위',
+        '16. 인명/지명 오류',
+        '17. 일관성 없는 명칭',
+        '18. 대사 중복',
+        '19. 지문과 대사 불일치',
+        '20. 장면 전환 오류',
+        '21. 캐릭터 호칭 불일치',
+        '22. 불필요한 설명',
+        '23. 감정선 불일치',
+        '24. 논리적 모순',
+        '25. 시대적 고증 오류'
+    ];
     
-    if (analysis && analysis.length > 0) {
-        analysis.forEach(item => {
-            if (item.suggestion && item.suggestion.trim()) {
-                allSuggestions.add(item.suggestion.trim());
-            }
-        });
+    return `당신은 한국어 대본 검수 전문가입니다.
+
+아래 대본을 분석하여 오류를 찾아주세요.
+
+[검수 항목]
+${errorTypes.join('\n')}
+
+[출력 형식]
+반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.
+
+{
+  "errors": [
+    {
+      "line": 줄번호,
+      "type": "오류유형",
+      "original": "원본 텍스트",
+      "corrected": "수정 텍스트",
+      "reason": "수정 이유"
     }
+  ],
+  "summary": {
+    "totalErrors": 총오류수,
+    "byType": {
+      "오류유형1": 개수,
+      "오류유형2": 개수
+    }
+  }
+}
 
-    const lines = revisedScript.split('\n');
-    let html = '<div class="script-scroll-wrapper"><div class="revised-script">';
+[대본]
+${script}`;
+}
 
-    lines.forEach((line, index) => {
-        let processedLine = escapeHtml(line);
-        let hasHighlight = false;
-
-        // 모든 수정 사항 하이라이트 (녹색 통일)
-        allSuggestions.forEach(suggestion => {
-            const escapedSuggestion = escapeHtml(suggestion);
-            if (processedLine.includes(escapedSuggestion)) {
-                processedLine = processedLine.replace(
-                    new RegExp(escapeRegExp(escapedSuggestion), 'g'),
-                    `<span class="changed-text">${escapedSuggestion}</span>`
-                );
-                hasHighlight = true;
-            }
-        });
-
-        if (hasHighlight) {
-            html += `<p class="line-revised" data-line="${index + 1}">${processedLine}</p>`;
-        } else {
-            html += `<p class="line-unchanged">${processedLine || '&nbsp;'}</p>`;
+// ===================== 응답 파싱 =====================
+function parseAnalysisResponse(response) {
+    try {
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            return JSON.parse(jsonMatch[0]);
         }
-    });
-
-    html += '</div></div>';
-    container.innerHTML = html;
+        throw new Error('JSON 형식을 찾을 수 없습니다.');
+    } catch (error) {
+        console.error('응답 파싱 오류:', error);
+        return {
+            errors: [],
+            summary: { totalErrors: 0, byType: {} }
+        };
+    }
 }
 
-// ===================== 정규식 이스케이프 =====================
-function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// ===================== 수정 적용 =====================
+function applyCorrections(script, analysis) {
+    if (!analysis || !analysis.errors || analysis.errors.length === 0) {
+        return script;
+    }
+    
+    let lines = script.split('\n');
+    
+    for (const error of analysis.errors) {
+        if (error.line && error.line > 0 && error.line <= lines.length) {
+            const lineIndex = error.line - 1;
+            if (error.original && error.corrected) {
+                lines[lineIndex] = lines[lineIndex].replace(error.original, error.corrected);
+            }
+        }
+    }
+    
+    return lines.join('\n');
 }
 
-// ===================== 점수 렌더링 =====================
-function renderScores(scores, historicalIssueCount) {
-    const container = document.getElementById('score-display');
+// ===================== 수정 횟수 계산 =====================
+function countRevisions(analysis) {
+    if (!analysis || !analysis.errors) return 0;
+    return analysis.errors.length;
+}
 
-    if (!scores || Object.keys(scores).length === 0) {
-        container.innerHTML = '<p class="placeholder">점수 정보가 없습니다.</p>';
+// ===================== 분석 결과 렌더링 =====================
+function renderAnalysisResult(stage) {
+    const container = document.getElementById(`analysis-${stage}`);
+    const stageState = state[stage];
+    
+    if (!stageState.analysis && stageState.historicalIssues.length === 0) {
+        container.innerHTML = '<p class="placeholder">분석 결과가 없습니다.</p>';
         return;
     }
-
-    const entertainment = scores.entertainment || 0;
-    const seniorTarget = scores.seniorTarget || 0;
-    const storyFlow = scores.storyFlow || 0;
-    const bounceRate = scores.bounceRate || 0;
     
-    const bounceScore = 100 - bounceRate;
+    let html = '<div class="analysis-result">';
     
-    // 고증 정확도 (수정 완료 후이므로 100%)
-    const historicalAccuracy = 100;
+    if (stageState.historicalIssues.length > 0) {
+        html += '<h4>📜 고증 검사 결과</h4>';
+        html += '<ul class="historical-issues">';
+        for (const issue of stageState.historicalIssues) {
+            const fixedText = issue.autoFixed ? `✅ 자동 수정: "${issue.replacement}"` : '⚠️ 수동 확인 필요';
+            html += `<li>
+                <strong>[${issue.category}]</strong> "${issue.modern}" → ${issue.historical.join(' / ')}
+                <br><small>${issue.reason} (발견: ${issue.count}회) - ${fixedText}</small>
+            </li>`;
+        }
+        html += '</ul>';
+    }
     
-    const average = Math.round((entertainment + seniorTarget + storyFlow + bounceScore + historicalAccuracy) / 5);
-    const isPass = average >= 90;
-
-    const getScoreClass = (score) => {
-        if (score >= 95) return 'score-good';
-        if (score >= 80) return 'score-warning';
-        return 'score-danger';
-    };
-
-    let html = '<div class="score-grid">';
-
-    html += `<div class="score-card ${getScoreClass(entertainment)}">
-        <div class="score-value">${entertainment}</div>
-        <div class="score-label">재미요소</div>
-    </div>`;
-
-    html += `<div class="score-card ${getScoreClass(seniorTarget)}">
-        <div class="score-value">${seniorTarget}</div>
-        <div class="score-label">시니어 타겟</div>
-    </div>`;
-
-    html += `<div class="score-card ${getScoreClass(storyFlow)}">
-        <div class="score-value">${storyFlow}</div>
-        <div class="score-label">이야기 흐름</div>
-    </div>`;
-
-    html += `<div class="score-card ${getScoreClass(bounceScore)}">
-        <div class="score-value">${bounceScore}</div>
-        <div class="score-label">시청자 이탈</div>
-    </div>`;
+    if (stageState.analysis && stageState.analysis.errors && stageState.analysis.errors.length > 0) {
+        html += '<h4>🔍 AI 분석 결과</h4>';
+        html += `<p>총 ${stageState.analysis.errors.length}개 오류 발견</p>`;
+        html += '<ul class="error-list">';
+        for (const error of stageState.analysis.errors) {
+            html += `<li>
+                <strong>[${error.type}]</strong> ${error.line}번 줄
+                <br>"${escapeHtml(error.original)}" → "${escapeHtml(error.corrected)}"
+                <br><small>${error.reason}</small>
+            </li>`;
+        }
+        html += '</ul>';
+    }
     
-    html += `<div class="score-card ${getScoreClass(historicalAccuracy)}" style="border: 2px solid #ff9800;">
-        <div class="score-value" style="color: #4CAF50;">${historicalAccuracy}</div>
-        <div class="score-label">고증 정확도</div>
-        <div style="font-size: 11px; color: #888;">(${historicalIssueCount}건 수정됨)</div>
-    </div>`;
-
-    html += `<div class="score-card final-score ${isPass ? '' : 'fail'}">
-        <div class="score-value">${average}</div>
-        <div class="score-label">최종 점수</div>
-        <div class="pass-badge ${isPass ? 'pass' : 'fail'}">${isPass ? '✅ 합격' : '❌ 불합격'}</div>
-    </div>`;
-
     html += '</div>';
     container.innerHTML = html;
 }
 
-// ===================== 다운로드 =====================
-function initDownloadButton() {
-    const btn = document.getElementById('btn-download');
-    btn.addEventListener('click', () => {
-        const finalScript = state.stage2.revisedScript || state.stage1.revisedScript;
-        if (!finalScript) {
-            alert('다운로드할 수정본이 없습니다.');
-            return;
-        }
+// ===================== 수정본 렌더링 =====================
+function renderRevisedScript(stage) {
+    const container = document.getElementById(`revised-${stage}`);
+    const stageState = state[stage];
+    
+    renderFullScriptWithHighlight(stageState.revisedScript, stageState.analysis, container);
+    
+    const countEl = document.getElementById(`revision-count-${stage}`);
+    if (countEl) {
+        countEl.textContent = `수정: ${stageState.revisionCount}건`;
+    }
+    
+    const btnBefore = document.getElementById(`btn-revert-before-${stage}`);
+    const btnAfter = document.getElementById(`btn-revert-after-${stage}`);
+    if (btnBefore) {
+        btnBefore.disabled = false;
+        btnBefore.style.opacity = '1';
+    }
+    if (btnAfter) {
+        btnAfter.disabled = false;
+        btnAfter.style.opacity = '0.5';
+    }
+}
 
-        const blob = new Blob([finalScript], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'MISLGOM_최종수정본.txt';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+// ===================== 하이라이트 렌더링 =====================
+function renderFullScriptWithHighlight(script, analysis, container) {
+    if (!script) {
+        container.innerHTML = '<p class="placeholder">내용이 없습니다.</p>';
+        return;
+    }
+    
+    const lines = script.split('\n');
+    const errorLines = new Set();
+    
+    if (analysis && analysis.errors) {
+        for (const error of analysis.errors) {
+            if (error.line) {
+                errorLines.add(error.line);
+            }
+        }
+    }
+    
+    let html = '<div class="script-scroll-wrapper"><div class="revised-script">';
+    
+    lines.forEach((line, index) => {
+        const lineNum = index + 1;
+        const hasError = errorLines.has(lineNum);
+        const className = hasError ? 'line-modified' : 'line-unchanged';
+        html += `<p class="${className}">${escapeHtml(line) || '&nbsp;'}</p>`;
     });
+    
+    html += '</div></div>';
+    container.innerHTML = html;
+}
+
+// ===================== 진행 상태 업데이트 =====================
+function updateProgress(percent, text) {
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    
+    if (progressBar) {
+        progressBar.style.width = percent + '%';
+    }
+    if (progressText) {
+        progressText.textContent = text;
+    }
+    
+    console.log(`📊 진행률: ${percent}% - ${text}`);
 }
 
 // ===================== HTML 이스케이프 =====================
@@ -1334,4 +998,30 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ===================== 다운로드 버튼 =====================
+function initDownloadButton() {
+    const btn = document.getElementById('btn-download');
+    
+    btn.addEventListener('click', () => {
+        const finalScript = state.stage2.revisedScript || state.stage1.revisedScript;
+        
+        if (!finalScript) {
+            alert('다운로드할 수정본이 없습니다. 먼저 분석을 진행해주세요.');
+            return;
+        }
+        
+        const blob = new Blob([finalScript], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '수정본_' + new Date().toISOString().slice(0, 10) + '.txt';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        console.log('📥 수정본 다운로드 완료');
+    });
 }
