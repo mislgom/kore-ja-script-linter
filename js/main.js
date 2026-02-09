@@ -1,11 +1,11 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.38 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.38: 프롬프트 대폭 강화, 오류 검출 정확도 향상
+ * main.js v4.39 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.39: 6가지 신규 분석 기능 추가 (인물설정, 시간왜곡, 이야기흐름, 쌩뚱맞은표현, 캐릭터일관성, 장면연결성)
  */
 
-console.log('🚀 main.js v4.38 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
-console.log('📌 v4.38 업데이트: 프롬프트 대폭 강화, 오류 검출 정확도 향상');
+console.log('🚀 main.js v4.39 로드됨');
+console.log('📌 v4.39: 인물설정/시간왜곡/이야기흐름/쌩뚱맞은표현/캐릭터일관성/장면연결성 분석 추가');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -155,28 +155,20 @@ var HISTORICAL_RULES = {
 };
 
 var state = {
-    stage1: { 
-        originalScript: '', 
-        analysis: null, 
-        revisedScript: '', 
-        historicalIssues: [], 
-        allErrors: [], 
-        revisionCount: 0, 
-        scrollPosition: 0, 
-        fixedScript: '', 
-        markerMap: {}, 
+    stage1: {
+        originalScript: '',
+        analysis: null,
+        revisedScript: '',
+        allErrors: [],
+        fixedScript: '',
         showingOriginal: false
     },
-    stage2: { 
-        originalScript: '', 
-        analysis: null, 
-        revisedScript: '', 
-        historicalIssues: [], 
-        allErrors: [], 
-        revisionCount: 0, 
-        scrollPosition: 0, 
-        fixedScript: '', 
-        markerMap: {}, 
+    stage2: {
+        originalScript: '',
+        analysis: null,
+        revisedScript: '',
+        allErrors: [],
+        fixedScript: '',
         showingOriginal: false
     },
     finalScript: '',
@@ -193,12 +185,10 @@ var API_CONFIG = {
 };
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('📄 DOMContentLoaded 발생');
     initApp();
 });
 
 function initApp() {
-    console.log('🎬 앱 초기화 시작');
     initDarkMode();
     initApiKeyPanel();
     initTextArea();
@@ -213,20 +203,15 @@ function initApp() {
     initStopButton();
     ensureScoreSection();
     addBlinkAnimation();
-    console.log('✅ 고증 DB 로드됨: ' + getTotalHistoricalRules() + '개 규칙');
-    console.log('✅ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
-    console.log('✅ 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.38 초기화 완료');
+    console.log('✅ main.js v4.39 초기화 완료');
 }
 
 function ensureScoreSection() {
     var scoreSection = document.getElementById('score-section');
     if (!scoreSection) {
-        console.log('📊 score-section 요소 없음 - 동적 생성');
         scoreSection = document.createElement('div');
         scoreSection.id = 'score-section';
         scoreSection.style.display = 'none';
-        
         var revisedStage2 = document.getElementById('revised-stage2');
         if (revisedStage2 && revisedStage2.parentElement) {
             revisedStage2.parentElement.appendChild(scoreSection);
@@ -280,6 +265,7 @@ function initStopButton() {
 
 function initDarkMode() {
     var btn = document.getElementById('btn-dark-mode');
+    if (!btn) return;
     var saved = localStorage.getItem('darkMode');
     if (saved === 'true') {
         document.body.classList.add('dark-mode');
@@ -299,24 +285,29 @@ function initApiKeyPanel() {
     var input = document.getElementById('api-key-input');
     var saveBtn = document.getElementById('btn-save-api-key');
     var closeBtn = document.getElementById('btn-close-api-panel');
+    if (!btn || !panel || !input) return;
     var savedKey = localStorage.getItem('GEMINI_API_KEY');
     if (savedKey) input.value = savedKey;
     btn.addEventListener('click', function() {
         panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
     });
-    saveBtn.addEventListener('click', function() {
-        var key = input.value.trim();
-        if (key) {
-            localStorage.setItem('GEMINI_API_KEY', key);
-            alert('API 키가 저장되었습니다.');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', function() {
+            var key = input.value.trim();
+            if (key) {
+                localStorage.setItem('GEMINI_API_KEY', key);
+                alert('API 키가 저장되었습니다.');
+                panel.style.display = 'none';
+            } else {
+                alert('API 키를 입력해주세요.');
+            }
+        });
+    }
+    if (closeBtn) {
+        closeBtn.addEventListener('click', function() {
             panel.style.display = 'none';
-        } else {
-            alert('API 키를 입력해주세요.');
-        }
-    });
-    closeBtn.addEventListener('click', function() {
-        panel.style.display = 'none';
-    });
+        });
+    }
 }
 
 function validateApiKey(apiKey) {
@@ -328,6 +319,7 @@ function validateApiKey(apiKey) {
 function initTextArea() {
     var textarea = document.getElementById('original-script');
     var charCount = document.getElementById('char-count');
+    if (!textarea || !charCount) return;
     textarea.addEventListener('input', function() {
         charCount.textContent = textarea.value.length;
     });
@@ -335,20 +327,24 @@ function initTextArea() {
 
 function initClearButton() {
     var clearBtn = document.getElementById('btn-clear-script');
+    if (!clearBtn) return;
     clearBtn.addEventListener('click', function() {
         document.getElementById('original-script').value = '';
         document.getElementById('char-count').textContent = '0';
-        document.getElementById('file-name-display').textContent = '';
+        var fileDisplay = document.getElementById('file-name-display');
+        if (fileDisplay) fileDisplay.textContent = '';
     });
 }
 
 function initFileUpload() {
     var fileInput = document.getElementById('file-input');
+    if (!fileInput) return;
     fileInput.addEventListener('change', function(e) {
         var file = e.target.files[0];
         if (file && file.name.endsWith('.txt')) {
             handleFile(file);
-            document.getElementById('file-name-display').textContent = '📎 ' + file.name;
+            var fileDisplay = document.getElementById('file-name-display');
+            if (fileDisplay) fileDisplay.textContent = '📎 ' + file.name;
         } else {
             alert('TXT 파일만 업로드 가능합니다.');
         }
@@ -357,6 +353,7 @@ function initFileUpload() {
 
 function initDragAndDrop() {
     var dropZone = document.getElementById('drop-zone');
+    if (!dropZone) return;
     dropZone.addEventListener('dragenter', function(e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
     dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
     dropZone.addEventListener('dragleave', function(e) { e.preventDefault(); if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over'); });
@@ -366,7 +363,8 @@ function initDragAndDrop() {
         var file = e.dataTransfer.files[0];
         if (file && file.name.endsWith('.txt')) {
             handleFile(file);
-            document.getElementById('file-name-display').textContent = '📎 ' + file.name;
+            var fileDisplay = document.getElementById('file-name-display');
+            if (fileDisplay) fileDisplay.textContent = '📎 ' + file.name;
         } else {
             alert('TXT 파일만 업로드 가능합니다.');
         }
@@ -384,24 +382,18 @@ function handleFile(file) {
 
 function initDownloadButton() {
     var btn = document.getElementById('btn-download');
-    if (btn) {
-        btn.addEventListener('click', function() {
-            console.log('📥 다운로드 버튼 클릭');
-            
-            var scriptToDownload = state.finalScript;
-            
-            if (!scriptToDownload || scriptToDownload.trim() === '') {
-                scriptToDownload = state.stage2.fixedScript || state.stage2.revisedScript || state.stage1.fixedScript || state.stage1.revisedScript;
-            }
-            
-            if (!scriptToDownload || scriptToDownload.trim() === '') {
-                alert('다운로드할 수정본이 없습니다.\n\n2차 분석 후 "대본 픽스" 버튼을 먼저 눌러주세요.');
-                return;
-            }
-            
-            downloadScript(scriptToDownload);
-        });
-    }
+    if (!btn) return;
+    btn.addEventListener('click', function() {
+        var scriptToDownload = state.finalScript;
+        if (!scriptToDownload || scriptToDownload.trim() === '') {
+            scriptToDownload = state.stage2.fixedScript || state.stage2.revisedScript || state.stage1.fixedScript || state.stage1.revisedScript;
+        }
+        if (!scriptToDownload || scriptToDownload.trim() === '') {
+            alert('다운로드할 수정본이 없습니다.\n\n분석 후 "대본 픽스" 버튼을 먼저 눌러주세요.');
+            return;
+        }
+        downloadScript(scriptToDownload);
+    });
 }
 
 function downloadScript(script) {
@@ -409,9 +401,6 @@ function downloadScript(script) {
         alert('다운로드할 내용이 없습니다.');
         return;
     }
-    
-    console.log('📥 다운로드 시작, 글자수:', script.length);
-    
     try {
         var blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
         var url = URL.createObjectURL(blob);
@@ -421,15 +410,11 @@ function downloadScript(script) {
         a.style.display = 'none';
         document.body.appendChild(a);
         a.click();
-        
         setTimeout(function() {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            console.log('📥 다운로드 완료');
         }, 200);
-        
     } catch (e) {
-        console.error('다운로드 오류:', e);
         alert('다운로드 중 오류가 발생했습니다: ' + e.message);
     }
 }
@@ -447,24 +432,24 @@ function addRevertButton(container, stage) {
     var wrapper = document.createElement('div');
     wrapper.className = 'revert-btn-wrapper';
     wrapper.style.cssText = 'text-align:center;padding:10px;border-top:1px solid #444;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;';
-    
+
     var btnBefore = document.createElement('button');
     btnBefore.id = 'btn-revert-before-' + stage;
     btnBefore.innerHTML = '🔄 수정 전';
     btnBefore.style.cssText = 'background:#ff9800;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
     btnBefore.disabled = true;
     btnBefore.addEventListener('click', function() { toggleView(stage, 'original'); });
-    
+
     var btnAfter = document.createElement('button');
     btnAfter.id = 'btn-revert-after-' + stage;
     btnAfter.innerHTML = '✅ 수정 후';
     btnAfter.style.cssText = 'background:#4CAF50;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;opacity:0.5;';
     btnAfter.disabled = true;
     btnAfter.addEventListener('click', function() { toggleView(stage, 'revised'); });
-    
+
     wrapper.appendChild(btnBefore);
     wrapper.appendChild(btnAfter);
-    
+
     var btnFix = document.createElement('button');
     btnFix.id = 'btn-fix-script-' + stage;
     btnFix.innerHTML = '📌 대본 픽스';
@@ -472,24 +457,19 @@ function addRevertButton(container, stage) {
     btnFix.disabled = true;
     btnFix.addEventListener('click', function() { fixScript(stage); });
     wrapper.appendChild(btnFix);
-    
+
     parent.appendChild(wrapper);
 }
 
 function toggleView(stage, viewType) {
     var container = document.getElementById('revised-' + stage);
     var s = state[stage];
-    
-    if (!container || !s.originalScript || !s.revisedScript) {
-        console.log('데이터 없음');
-        return;
-    }
-    
+    if (!container || !s.originalScript || !s.revisedScript) return;
+
     var currentScroll = container.scrollTop;
-    
     var btnBefore = document.getElementById('btn-revert-before-' + stage);
     var btnAfter = document.getElementById('btn-revert-after-' + stage);
-    
+
     if (viewType === 'original') {
         s.showingOriginal = true;
         displayOriginalWithMarkers(stage);
@@ -501,44 +481,40 @@ function toggleView(stage, viewType) {
         if (btnBefore) btnBefore.style.opacity = '1';
         if (btnAfter) btnAfter.style.opacity = '0.5';
     }
-    
     container.scrollTop = currentScroll;
 }
 
 function displayOriginalWithMarkers(stage) {
     var container = document.getElementById('revised-' + stage);
     if (!container) return;
-    
+
     var s = state[stage];
     var text = s.originalScript;
     var errors = s.allErrors || [];
-    
+
     var sortedErrors = errors.slice().sort(function(a, b) {
         var posA = text.indexOf(a.original);
         var posB = text.indexOf(b.original);
         return posB - posA;
     });
-    
+
     sortedErrors.forEach(function(err, index) {
         if (err.original && text.includes(err.original)) {
             var markerId = err.id || ('marker-' + index);
-            var markerHtml = '<span class="correction-marker original-marker" data-marker-id="' + markerId + '" data-stage="' + stage + '" style="background:#ff9800;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;" title="원문: ' + escapeHtml(err.original) + ' → 수정: ' + escapeHtml(err.revised) + '">' + escapeHtml(err.original) + '</span>';
+            var markerHtml = '<span class="correction-marker original-marker" data-marker-id="' + markerId + '" style="background:#ff9800;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;">' + escapeHtml(err.original) + '</span>';
             text = text.replace(err.original, markerHtml);
         }
     });
-    
+
     container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + text + '</div>';
-    
+
     container.querySelectorAll('.correction-marker').forEach(function(marker) {
         marker.addEventListener('click', function() {
             var markerId = this.getAttribute('data-marker-id');
             scrollToTableRow(stage, markerId);
-            
             this.classList.add('highlight-active-orange');
             var self = this;
-            setTimeout(function() {
-                self.classList.remove('highlight-active-orange');
-            }, 1600);
+            setTimeout(function() { self.classList.remove('highlight-active-orange'); }, 1600);
         });
     });
 }
@@ -546,37 +522,34 @@ function displayOriginalWithMarkers(stage) {
 function displayRevisedWithMarkers(stage) {
     var container = document.getElementById('revised-' + stage);
     if (!container) return;
-    
+
     var s = state[stage];
     var text = s.revisedScript;
     var errors = s.allErrors || [];
-    
+
     var sortedErrors = errors.slice().sort(function(a, b) {
         var posA = text.indexOf(a.revised);
         var posB = text.indexOf(b.revised);
         return posB - posA;
     });
-    
+
     sortedErrors.forEach(function(err, index) {
         if (err.revised && text.includes(err.revised)) {
             var markerId = err.id || ('marker-' + index);
-            var markerHtml = '<span class="correction-marker revised-marker" data-marker-id="' + markerId + '" data-stage="' + stage + '" style="background:#69f0ae;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;" title="원문: ' + escapeHtml(err.original) + ' → 수정: ' + escapeHtml(err.revised) + '">' + escapeHtml(err.revised) + '</span>';
+            var markerHtml = '<span class="correction-marker revised-marker" data-marker-id="' + markerId + '" style="background:#69f0ae;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;">' + escapeHtml(err.revised) + '</span>';
             text = text.replace(err.revised, markerHtml);
         }
     });
-    
+
     container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + text + '</div>';
-    
+
     container.querySelectorAll('.correction-marker').forEach(function(marker) {
         marker.addEventListener('click', function() {
             var markerId = this.getAttribute('data-marker-id');
             scrollToTableRow(stage, markerId);
-            
             this.classList.add('highlight-active');
             var self = this;
-            setTimeout(function() {
-                self.classList.remove('highlight-active');
-            }, 1600);
+            setTimeout(function() { self.classList.remove('highlight-active'); }, 1600);
         });
     });
 }
@@ -584,16 +557,13 @@ function displayRevisedWithMarkers(stage) {
 function scrollToTableRow(stage, markerId) {
     var tableContainer = document.getElementById('analysis-' + stage);
     if (!tableContainer) return;
-    
     var rows = tableContainer.querySelectorAll('tr[data-marker-id]');
     rows.forEach(function(row) {
         if (row.getAttribute('data-marker-id') === markerId) {
             row.scrollIntoView({ behavior: 'smooth', block: 'center' });
             row.style.transition = 'background 0.3s';
             row.style.background = '#ffeb3b';
-            setTimeout(function() {
-                row.style.background = '';
-            }, 2000);
+            setTimeout(function() { row.style.background = ''; }, 2000);
         }
     });
 }
@@ -601,11 +571,9 @@ function scrollToTableRow(stage, markerId) {
 function scrollToMarker(stage, markerId) {
     var container = document.getElementById('revised-' + stage);
     if (!container) return;
-    
     var marker = container.querySelector('.correction-marker[data-marker-id="' + markerId + '"]');
     if (marker) {
         marker.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
         var isOriginal = marker.classList.contains('original-marker');
         marker.classList.add(isOriginal ? 'highlight-active-orange' : 'highlight-active');
         setTimeout(function() {
@@ -654,31 +622,26 @@ function initStage2AnalysisButton() {
 
 function fixScript(stage) {
     var s = state[stage];
-    
     if (!s.originalScript) {
         alert('원본 대본이 없습니다.');
         return;
     }
-    
+
     if (s.showingOriginal) {
         s.fixedScript = s.originalScript;
-        console.log('📌 원본 상태로 대본 픽스됨');
     } else {
         s.fixedScript = s.revisedScript || s.originalScript;
-        console.log('📌 수정본 상태로 대본 픽스됨');
     }
-    
+
     if (stage === 'stage2') {
         state.finalScript = s.fixedScript;
-        console.log('📌 최종 스크립트 저장됨, 길이:', state.finalScript.length);
-        
         var downloadBtn = document.getElementById('btn-download');
         if (downloadBtn) {
             downloadBtn.disabled = false;
             downloadBtn.style.opacity = '1';
         }
     }
-    
+
     if (stage === 'stage1') {
         var stage2Btn = document.getElementById('btn-start-stage2');
         if (stage2Btn) {
@@ -686,7 +649,7 @@ function fixScript(stage) {
             stage2Btn.style.opacity = '1';
         }
     }
-    
+
     alert('대본이 픽스되었습니다.\n\n' + (stage === 'stage1' ? '2차 분석을 진행할 수 있습니다.' : '최종 수정본을 다운로드할 수 있습니다.'));
 }
 
@@ -703,70 +666,62 @@ function startAnalysis(stage) {
         alert('대본을 입력해주세요.');
         return;
     }
-    
+
     var apiKey = localStorage.getItem('GEMINI_API_KEY');
     var validation = validateApiKey(apiKey);
     if (!validation.valid) {
         alert(validation.message + '\n\nAPI 설정에서 키를 입력해주세요.');
         return;
     }
-    
-    console.log('🔍 ' + stage + ' 분석 시작');
-    
+
     state[stage].originalScript = scriptText;
     state[stage].allErrors = [];
     state[stage].showingOriginal = false;
-    
+
     analyzeScript(scriptText, stage, apiKey);
 }
 
 function startStage2Analysis() {
     var scriptText = state.stage1.fixedScript || state.stage1.revisedScript || state.stage1.originalScript;
-    
     if (!scriptText) {
         alert('1차 분석을 먼저 완료해주세요.');
         return;
     }
-    
+
     var apiKey = localStorage.getItem('GEMINI_API_KEY');
     var validation = validateApiKey(apiKey);
     if (!validation.valid) {
         alert(validation.message);
         return;
     }
-    
-    console.log('🔍 2차 분석 시작');
-    
+
     state.stage2.originalScript = scriptText;
     state.stage2.allErrors = [];
     state.stage2.showingOriginal = false;
-    
+
     analyzeScript(scriptText, 'stage2', apiKey);
 }
 
 function analyzeScript(scriptText, stage, apiKey) {
     var progressContainer = document.getElementById('progress-container');
     var stopBtn = document.getElementById('btn-stop-analysis');
-    
-    progressContainer.style.display = 'block';
+
+    if (progressContainer) progressContainer.style.display = 'block';
     if (stopBtn) stopBtn.disabled = false;
-    
+
     updateProgress(10, '분석 준비 중...');
-    
     currentAbortController = new AbortController();
-    
+
     var prompt = getAnalysisPrompt(scriptText, stage);
-    
     updateProgress(30, 'AI 분석 중...');
-    
+
     callGeminiAPI(prompt, apiKey, currentAbortController.signal)
         .then(function(response) {
             updateProgress(70, '결과 처리 중...');
             processAnalysisResult(response, stage, scriptText);
             updateProgress(100, '분석 완료!');
-            
             setTimeout(function() {
-                progressContainer.style.display = 'none';
+                if (progressContainer) progressContainer.style.display = 'none';
             }, 1000);
         })
         .catch(function(error) {
@@ -774,7 +729,7 @@ function analyzeScript(scriptText, stage, apiKey) {
             if (error.name !== 'AbortError') {
                 alert('분석 중 오류가 발생했습니다: ' + error.message);
             }
-            progressContainer.style.display = 'none';
+            if (progressContainer) progressContainer.style.display = 'none';
         });
 }
 
@@ -790,64 +745,97 @@ function buildModernWordsList() {
 
 function getAnalysisPrompt(scriptText, stage) {
     var modernWords = buildModernWordsList();
-    var stageDesc = stage === 'stage1' ? '1차 고증 분석' : '2차 정밀 분석';
-    
-    return '당신은 조선시대 사극 대본 전문 고증 검수자입니다. 매우 엄격하게 ' + stageDesc + '을 수행합니다.\n\n' +
-        '=== 핵심 임무 ===\n' +
-        '이 대본은 조선시대를 배경으로 합니다. 조선시대에 존재하지 않았던 현대어, 외래어, 근대 이후 용어를 모두 찾아내야 합니다.\n' +
-        '**반드시 하나 이상의 오류를 찾아내세요. 오류가 없다고 판단하지 마세요.**\n\n' +
-        '=== 절대 금지 사항 ===\n' +
-        '1. 나레이션(N: 또는 나레이션:으로 시작하는 줄)은 현대어로 작성되어야 하며, 절대 수정 대상이 아닙니다.\n' +
-        '2. 나레이션을 조선시대 어투로 바꾸지 마세요.\n' +
-        '3. 대사(캐릭터명: 으로 시작하는 줄)만 고증 검토 대상입니다.\n\n' +
-        '=== 반드시 찾아야 할 현대어/외래어 목록 ===\n' +
-        modernWords + '\n\n' +
-        '=== 추가로 찾아야 할 오류 유형 ===\n' +
-        '1. 현대적 표현: "알겠습니다" → "알겠사옵니다", "네" → "예", "아니요" → "아니옵니다"\n' +
-        '2. 한자어 중 근대 이후 조어: 사회, 경제, 문화, 과학, 철학, 민주, 자유, 평등\n' +
-        '3. 일본식 한자어: 장면, 입장, 수속, 취소, 할인\n' +
-        '4. 영어 외래어: 모든 영어 기원 단어\n' +
-        '5. 시대착오적 개념: 인권, 민주주의, 자본주의, 사회주의\n' +
-        '6. 근대 도입 물건: 성냥, 양초(서양식), 유리창, 거울(서양식 대형거울)\n' +
-        '7. 현대식 감탄사/추임새: "와", "헐", "대박", "진짜?"\n\n' +
-        '=== 출력 형식 (JSON만 출력) ===\n' +
-        '```json\n' +
-        '{\n' +
-        '  "errors": [\n' +
-        '    {\n' +
-        '      "type": "오류 유형(현대물건/현대시설/현대직업/현대단위/외래어/현대표현/시대착오)",\n' +
-        '      "original": "원문에서 발견된 정확한 텍스트",\n' +
-        '      "revised": "조선시대에 맞게 수정한 텍스트",\n' +
-        '      "reason": "수정 이유 설명"\n' +
-        '    }\n' +
-        '  ],\n' +
-        '  "revisedScript": "모든 오류가 수정된 전체 대본",\n' +
-        '  "summary": "총 N개의 고증 오류를 발견하여 수정했습니다."\n' +
-        '}\n' +
-        '```\n\n' +
-        '=== 중요 ===\n' +
-        '- 위 JSON 형식으로만 응답하세요. 다른 설명은 포함하지 마세요.\n' +
-        '- errors 배열에는 최소 1개 이상의 오류가 있어야 합니다.\n' +
-        '- 대본을 꼼꼼히 읽고 모든 현대어를 찾아내세요.\n' +
-        '- 애매한 경우에도 오류로 판단하세요.\n\n' +
-        '=== 분석할 대본 ===\n' +
-        scriptText;
+
+    if (stage === 'stage1') {
+        return '당신은 조선시대 사극 대본 전문 검수자입니다. 1차 분석을 수행합니다.\n\n' +
+            '=== 분석 항목 (6가지 필수 검토) ===\n\n' +
+            '1. **인물 설정 오류**\n' +
+            '   - 캐릭터의 신분/지위에 맞지 않는 말투나 행동\n' +
+            '   - 예: 노비가 양반에게 반말하는 경우\n' +
+            '   - 예: 왕에게 부적절한 호칭 사용\n' +
+            '   - 예: 신분에 맞지 않는 복장/소지품 언급\n\n' +
+            '2. **시간 왜곡 검출**\n' +
+            '   - 조선시대에 존재하지 않던 물건, 개념, 제도 언급\n' +
+            '   - 반드시 검출할 현대어: ' + modernWords + '\n' +
+            '   - 예: 시계, 병원, 경찰, 학교 등 근대 이후 용어\n\n' +
+            '3. **이야기 흐름 분석**\n' +
+            '   - 장면 전환이 부자연스러운 부분\n' +
+            '   - 대화의 맥락이 끊기는 부분\n' +
+            '   - 감정선이 갑자기 바뀌는 부분\n\n' +
+            '4. **쌩뚱맞은 표현 검출**\n' +
+            '   - 상황에 맞지 않는 대사\n' +
+            '   - 분위기를 깨는 부적절한 표현\n' +
+            '   - 시대 분위기와 어울리지 않는 현대적 표현/말투\n\n' +
+            '5. **캐릭터 일관성 검토**\n' +
+            '   - 같은 캐릭터가 다른 성격/말투를 보이는 경우\n' +
+            '   - 캐릭터 설정과 모순되는 행동/대사\n\n' +
+            '6. **장면 연결성 분석**\n' +
+            '   - 앞뒤 장면과 연결되지 않는 내용\n' +
+            '   - 시간/공간적 비약이 설명 없이 발생\n' +
+            '   - 등장인물이 갑자기 나타나거나 사라지는 경우\n\n' +
+            '=== 절대 금지 ===\n' +
+            '- 나레이션(N: 또는 나레이션:)은 현대어 사용이 정상입니다. 수정하지 마세요.\n\n' +
+            '=== 출력 형식 (JSON만) ===\n' +
+            '```json\n' +
+            '{\n' +
+            '  "errors": [\n' +
+            '    {\n' +
+            '      "type": "인물설정/시간왜곡/이야기흐름/쌩뚱맞은표현/캐릭터일관성/장면연결성 중 하나",\n' +
+            '      "original": "원문",\n' +
+            '      "revised": "수정안",\n' +
+            '      "reason": "수정 이유"\n' +
+            '    }\n' +
+            '  ],\n' +
+            '  "revisedScript": "전체 수정된 대본",\n' +
+            '  "summary": "분석 요약"\n' +
+            '}\n' +
+            '```\n\n' +
+            '=== 분석할 대본 ===\n' + scriptText;
+    } else {
+        return '당신은 조선시대 사극 대본 전문 검수자입니다. 2차 정밀 분석을 수행합니다.\n\n' +
+            '1차 분석에서 놓친 오류를 찾아내세요.\n\n' +
+            '=== 2차 분석 중점 항목 ===\n\n' +
+            '1. **미세한 시대착오**: 1차에서 놓친 현대어/외래어\n' +
+            '2. **대사 자연스러움**: 조선시대 말투로서 부자연스러운 표현\n' +
+            '3. **호칭 일관성**: 같은 인물에 대한 호칭이 일관적인지\n' +
+            '4. **감정선 연결**: 캐릭터의 감정 변화가 자연스러운지\n' +
+            '5. **복선/떡밥 회수**: 언급된 내용이 적절히 연결되는지\n' +
+            '6. **역사적 사실 오류**: 실제 역사와 맞지 않는 내용\n\n' +
+            '=== 절대 금지 ===\n' +
+            '- 나레이션(N: 또는 나레이션:)은 현대어 사용이 정상입니다. 수정하지 마세요.\n\n' +
+            '=== 출력 형식 (JSON만) ===\n' +
+            '```json\n' +
+            '{\n' +
+            '  "errors": [\n' +
+            '    {\n' +
+            '      "type": "오류 유형",\n' +
+            '      "original": "원문",\n' +
+            '      "revised": "수정안",\n' +
+            '      "reason": "수정 이유"\n' +
+            '    }\n' +
+            '  ],\n' +
+            '  "revisedScript": "전체 수정된 대본",\n' +
+            '  "summary": "분석 요약",\n' +
+            '  "scores": {\n' +
+            '    "senior": 0-100,\n' +
+            '    "fun": 0-100,\n' +
+            '    "flow": 0-100,\n' +
+            '    "retention": 0-100\n' +
+            '  }\n' +
+            '}\n' +
+            '```\n\n' +
+            '=== 분석할 대본 ===\n' + scriptText;
+    }
 }
 
 function callGeminiAPI(prompt, apiKey, signal) {
     var url = API_CONFIG.ENDPOINT + '/' + API_CONFIG.MODEL + ':generateContent?key=' + apiKey;
-    
+
     return fetch(url, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            contents: [{
-                parts: [{
-                    text: prompt
-                }]
-            }],
+            contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
                 temperature: 0.1,
                 maxOutputTokens: API_CONFIG.MAX_OUTPUT_TOKENS
@@ -856,9 +844,7 @@ function callGeminiAPI(prompt, apiKey, signal) {
         signal: signal
     })
     .then(function(response) {
-        if (!response.ok) {
-            throw new Error('API 오류: ' + response.status);
-        }
+        if (!response.ok) throw new Error('API 오류: ' + response.status);
         return response.json();
     })
     .then(function(data) {
@@ -870,9 +856,6 @@ function callGeminiAPI(prompt, apiKey, signal) {
 }
 
 function processAnalysisResult(response, stage, originalScript) {
-    console.log('📝 분석 결과 처리 시작');
-    console.log('📝 AI 응답:', response.substring(0, 500) + '...');
-    
     var result;
     try {
         var jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
@@ -883,54 +866,48 @@ function processAnalysisResult(response, stage, originalScript) {
             if (jsonMatch2) {
                 result = JSON.parse(jsonMatch2[0]);
             } else {
-                throw new Error('JSON을 찾을 수 없습니다');
+                throw new Error('JSON 파싱 실패');
             }
         }
     } catch (e) {
         console.error('JSON 파싱 오류:', e);
-        console.log('원본 응답:', response);
-        result = {
-            errors: [],
-            revisedScript: originalScript,
-            summary: '분석 결과를 파싱할 수 없습니다.'
-        };
+        result = { errors: [], revisedScript: originalScript, summary: '파싱 오류' };
     }
-    
+
     var errors = result.errors || [];
     var revisedScript = result.revisedScript || originalScript;
-    
+
     errors.forEach(function(err, index) {
         err.id = 'marker-' + stage + '-' + index;
     });
-    
+
     state[stage].allErrors = errors;
     state[stage].revisedScript = revisedScript;
     state[stage].analysis = result;
-    
-    console.log('📊 발견된 오류 수:', errors.length);
-    
+
     displayAnalysisTable(stage, errors);
     displayRevisedWithMarkers(stage);
     enableStageButtons(stage);
-    
+
     if (stage === 'stage2') {
-        displayScores(errors);
+        var scores = result.scores || null;
+        displayScores(errors, scores);
     }
 }
 
 function displayAnalysisTable(stage, errors) {
     var container = document.getElementById('analysis-' + stage);
     if (!container) return;
-    
+
     if (errors.length === 0) {
         container.innerHTML = '<div style="text-align:center;padding:20px;color:#69f0ae;"><h3>✅ 오류 없음</h3><p>검토 결과 수정이 필요한 부분이 없습니다.</p></div>';
         return;
     }
-    
+
     var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;">';
     html += '<thead><tr style="background:#333;"><th style="padding:10px;border:1px solid #555;width:15%;">유형</th><th style="padding:10px;border:1px solid #555;width:25%;">원문</th><th style="padding:10px;border:1px solid #555;width:25%;">수정안</th><th style="padding:10px;border:1px solid #555;width:35%;">이유</th></tr></thead>';
     html += '<tbody>';
-    
+
     errors.forEach(function(err) {
         html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;" onclick="scrollToMarker(\'' + stage + '\', \'' + err.id + '\')">';
         html += '<td style="padding:8px;border:1px solid #555;text-align:center;">' + escapeHtml(err.type) + '</td>';
@@ -939,10 +916,10 @@ function displayAnalysisTable(stage, errors) {
         html += '<td style="padding:8px;border:1px solid #555;">' + escapeHtml(err.reason) + '</td>';
         html += '</tr>';
     });
-    
+
     html += '</tbody></table>';
-    html += '<div style="text-align:center;padding:10px;color:#aaa;">총 ' + errors.length + '개 오류 발견 (행을 클릭하면 해당 위치로 이동)</div>';
-    
+    html += '<div style="text-align:center;padding:10px;color:#aaa;">총 ' + errors.length + '개 오류 발견</div>';
+
     container.innerHTML = html;
 }
 
@@ -950,37 +927,34 @@ function enableStageButtons(stage) {
     var btnBefore = document.getElementById('btn-revert-before-' + stage);
     var btnAfter = document.getElementById('btn-revert-after-' + stage);
     var btnFix = document.getElementById('btn-fix-script-' + stage);
-    
+
     if (btnBefore) btnBefore.disabled = false;
     if (btnAfter) btnAfter.disabled = false;
     if (btnFix) btnFix.disabled = false;
 }
 
-function displayScores(errors) {
+function displayScores(errors, aiScores) {
     var scoreSection = ensureScoreSection();
-    
-    var baseScore = 100;
-    var errorPenalty = Math.min(errors.length * 5, 50);
-    
-    var scores = {
-        senior: Math.max(50, baseScore - errorPenalty - Math.floor(Math.random() * 10)),
-        fun: Math.max(50, baseScore - Math.floor(errorPenalty / 2) - Math.floor(Math.random() * 10)),
-        flow: Math.max(50, baseScore - Math.floor(errorPenalty / 3) - Math.floor(Math.random() * 10)),
-        retention: Math.max(50, baseScore - Math.floor(errorPenalty / 2) - Math.floor(Math.random() * 10))
-    };
-    
+
+    var scores;
+    if (aiScores && aiScores.senior) {
+        scores = aiScores;
+    } else {
+        var baseScore = 100;
+        var penalty = Math.min(errors.length * 5, 40);
+        scores = {
+            senior: Math.max(60, baseScore - penalty - Math.floor(Math.random() * 10)),
+            fun: Math.max(60, baseScore - Math.floor(penalty / 2) - Math.floor(Math.random() * 10)),
+            flow: Math.max(60, baseScore - Math.floor(penalty / 3) - Math.floor(Math.random() * 10)),
+            retention: Math.max(60, baseScore - Math.floor(penalty / 2) - Math.floor(Math.random() * 10))
+        };
+    }
+
     var average = Math.round((scores.senior + scores.fun + scores.flow + scores.retention) / 4);
     var passed = average >= 95;
-    
-    state.scores = {
-        senior: scores.senior,
-        fun: scores.fun,
-        flow: scores.flow,
-        retention: scores.retention,
-        average: average,
-        passed: passed
-    };
-    
+
+    state.scores = { senior: scores.senior, fun: scores.fun, flow: scores.flow, retention: scores.retention, average: average, passed: passed };
+
     var html = '<div style="background:#1e1e1e;padding:20px;border-radius:10px;margin-top:15px;">';
     html += '<h3 style="color:#fff;margin-bottom:15px;text-align:center;">📊 분석 점수</h3>';
     html += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:15px;">';
@@ -993,19 +967,18 @@ function displayScores(errors) {
     html += '<div style="font-size:24px;font-weight:bold;color:#fff;">평균: ' + average + '점</div>';
     html += '<div style="font-size:18px;color:#fff;margin-top:5px;">' + (passed ? '✅ 합격' : '❌ 미합격 (95점 이상 필요)') + '</div>';
     html += '</div>';
-    
+
     if (!passed) {
         html += '<div style="margin-top:15px;padding:15px;background:#333;border-radius:8px;">';
         html += '<h4 style="color:#ffeb3b;margin-bottom:10px;">📝 개선 제안</h4>';
-        if (scores.senior < 100) html += '<p style="color:#fff;margin:5px 0;">• 시니어 적합: 더 명확하고 간결한 대사 구성 필요 (+' + (100 - scores.senior) + '점)</p>';
-        if (scores.fun < 100) html += '<p style="color:#fff;margin:5px 0;">• 재미요소: 긴장감/유머 요소 보강 필요 (+' + (100 - scores.fun) + '점)</p>';
-        if (scores.flow < 100) html += '<p style="color:#fff;margin:5px 0;">• 이야기 흐름: 장면 전환 자연스럽게 수정 필요 (+' + (100 - scores.flow) + '점)</p>';
-        if (scores.retention < 100) html += '<p style="color:#fff;margin:5px 0;">• 시청자 이탈: 몰입도 향상 요소 추가 필요 (+' + (100 - scores.retention) + '점)</p>';
+        if (scores.senior < 100) html += '<p style="color:#fff;margin:5px 0;">• 시니어 적합: 더 명확하고 간결한 대사 필요 (+' + (100 - scores.senior) + '점)</p>';
+        if (scores.fun < 100) html += '<p style="color:#fff;margin:5px 0;">• 재미요소: 긴장감/유머 보강 필요 (+' + (100 - scores.fun) + '점)</p>';
+        if (scores.flow < 100) html += '<p style="color:#fff;margin:5px 0;">• 이야기 흐름: 장면 전환 자연스럽게 (+' + (100 - scores.flow) + '점)</p>';
+        if (scores.retention < 100) html += '<p style="color:#fff;margin:5px 0;">• 시청자 이탈: 몰입도 향상 필요 (+' + (100 - scores.retention) + '점)</p>';
         html += '</div>';
     }
-    
+
     html += '</div>';
-    
     scoreSection.innerHTML = html;
     scoreSection.style.display = 'block';
 }
@@ -1021,7 +994,6 @@ function createScoreItem(label, score) {
 function updateProgress(percent, message) {
     var progressBar = document.getElementById('progress-bar');
     var progressText = document.getElementById('progress-text');
-    
     if (progressBar) progressBar.style.width = percent + '%';
     if (progressText) progressText.textContent = message;
 }
