@@ -1,15 +1,15 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.16 - Vertex AI API 키 + Gemini 2.5 Flash
+ * main.js v4.17 - Vertex AI API 키 + Gemini 2.5 Flash
  * 25가지 오류 유형 검수 + 조선시대 고증 검수 병합
  * - 고증 오류: 자동 수정 (첫 번째 대체어 적용)
  * - 수정 반영 강화: 로컬 강제 치환
  * - "수정 전/후" 버튼: 원문 복원 기능 (스크롤 위치 유지)
  * - API 키 검증 + 5분 타임아웃 + 디버깅 로그 강화
- * - v4.16: Vertex AI API 키 + Google AI 엔드포인트 (CORS 허용)
+ * - v4.17: JSON 파싱 강화 (불완전한 응답 복구)
  */
 
-console.log('🚀 main.js v4.16 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
+console.log('🚀 main.js v4.17 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
 
 // ===================== 조선시대 고증 DB =====================
 const HISTORICAL_RULES = {
@@ -194,7 +194,7 @@ const state = {
 
 let currentAbortController = null;
 
-// ===================== API 설정 (v4.16 변경) =====================
+// ===================== API 설정 (v4.17) =====================
 const API_CONFIG = {
     TIMEOUT: 300000, // 5분 (300초)
     MODEL: 'gemini-2.5-flash',
@@ -221,7 +221,7 @@ function initApp() {
     console.log('✅ 고증 DB 로드됨: ' + getTotalHistoricalRules() + '개 규칙');
     console.log('✅ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('✅ 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.16 초기화 완료');
+    console.log('✅ main.js v4.17 초기화 완료');
 }
 
 // ===================== 고증 DB 규칙 수 계산 =====================
@@ -609,7 +609,7 @@ function checkAndFixHistoricalAccuracy(scriptText) {
     return { issues, fixedScript };
 }
 
-// ===================== Gemini API 호출 (v4.16 수정) =====================
+// ===================== Gemini API 호출 (v4.17) =====================
 async function callGeminiAPI(prompt, apiKey) {
     const url = `${API_CONFIG.ENDPOINT}/${API_CONFIG.MODEL}:generateContent?key=${apiKey}`;
     
@@ -810,13 +810,16 @@ function buildAnalysisPrompt(script, stage) {
 [검수 항목]
 ${errorTypes.join('\n')}
 
-[출력 형식]
-반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.
+[중요] 반드시 완전한 JSON 형식으로만 응답하세요. 
+- JSON 외의 텍스트는 절대 포함하지 마세요.
+- 배열과 객체를 올바르게 닫아주세요.
+- 마지막 요소 뒤에 쉼표를 넣지 마세요.
 
+[출력 형식]
 {
   "errors": [
     {
-      "line": 줄번호,
+      "line": 1,
       "type": "오류유형",
       "original": "원본 텍스트",
       "corrected": "수정 텍스트",
@@ -824,11 +827,8 @@ ${errorTypes.join('\n')}
     }
   ],
   "summary": {
-    "totalErrors": 총오류수,
-    "byType": {
-      "오류유형1": 개수,
-      "오류유형2": 개수
-    }
+    "totalErrors": 0,
+    "byType": {}
   }
 }
 
@@ -836,16 +836,87 @@ ${errorTypes.join('\n')}
 ${script}`;
 }
 
-// ===================== 응답 파싱 =====================
+// ===================== 응답 파싱 (v4.17 강화) =====================
 function parseAnalysisResponse(response) {
     try {
-        const jsonMatch = response.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            return JSON.parse(jsonMatch[0]);
+        console.log('📝 원본 응답 (처음 500자):', response.substring(0, 500));
+        
+        // JSON 블록 추출 시도
+        let jsonStr = response;
+        
+        // ```json ... ``` 형식 처리
+        const jsonBlockMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+        if (jsonBlockMatch) {
+            jsonStr = jsonBlockMatch[1];
+            console.log('📝 ```json 블록에서 추출됨');
+        } else {
+            // ``` ... ``` 형식 처리 (json 없이)
+            const codeBlockMatch = response.match(/```\s*([\s\S]*?)\s*```/);
+            if (codeBlockMatch) {
+                jsonStr = codeBlockMatch[1];
+                console.log('📝 ``` 블록에서 추출됨');
+            } else {
+                // { } 블록 추출
+                const jsonMatch = response.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    jsonStr = jsonMatch[0];
+                    console.log('📝 { } 블록에서 추출됨');
+                }
+            }
         }
-        throw new Error('JSON 형식을 찾을 수 없습니다.');
+        
+        // JSON 파싱 시도
+        try {
+            const parsed = JSON.parse(jsonStr);
+            console.log('✅ JSON 파싱 성공, 오류 수:', parsed.errors ? parsed.errors.length : 0);
+            return parsed;
+        } catch (e) {
+            // JSON 복구 시도
+            console.log('⚠️ JSON 복구 시도 중... 오류:', e.message);
+            
+            // 끝부분 정리
+            jsonStr = jsonStr.replace(/,\s*]/g, ']');  // 배열 끝 쉼표 제거
+            jsonStr = jsonStr.replace(/,\s*}/g, '}');  // 객체 끝 쉼표 제거
+            
+            // 불완전한 문자열 처리 (끝나지 않은 문자열)
+            // "text 형태로 끝나면 " 추가
+            if (jsonStr.match(/"[^"]*$/)) {
+                jsonStr += '"';
+            }
+            
+            // 불완전한 JSON 닫기
+            const openBraces = (jsonStr.match(/{/g) || []).length;
+            const closeBraces = (jsonStr.match(/}/g) || []).length;
+            const openBrackets = (jsonStr.match(/\[/g) || []).length;
+            const closeBrackets = (jsonStr.match(/]/g) || []).length;
+            
+            console.log(`📝 괄호 분석: { ${openBraces}개, } ${closeBraces}개, [ ${openBrackets}개, ] ${closeBrackets}개`);
+            
+            // 누락된 괄호 추가
+            for (let i = 0; i < openBrackets - closeBrackets; i++) {
+                jsonStr += ']';
+            }
+            for (let i = 0; i < openBraces - closeBraces; i++) {
+                jsonStr += '}';
+            }
+            
+            // 다시 끝부분 정리
+            jsonStr = jsonStr.replace(/,\s*]/g, ']');
+            jsonStr = jsonStr.replace(/,\s*}/g, '}');
+            
+            try {
+                const parsed = JSON.parse(jsonStr);
+                console.log('✅ JSON 복구 성공, 오류 수:', parsed.errors ? parsed.errors.length : 0);
+                return parsed;
+            } catch (e2) {
+                console.error('❌ JSON 복구 실패:', e2.message);
+                console.log('📝 복구 시도한 JSON (처음 1000자):', jsonStr.substring(0, 1000));
+            }
+        }
+        
+        throw new Error('JSON 파싱 실패');
     } catch (error) {
-        console.error('응답 파싱 오류:', error);
+        console.error('❌ 응답 파싱 오류:', error);
         return {
             errors: [],
             summary: { totalErrors: 0, byType: {} }
@@ -856,19 +927,27 @@ function parseAnalysisResponse(response) {
 // ===================== 수정 적용 =====================
 function applyCorrections(script, analysis) {
     if (!analysis || !analysis.errors || analysis.errors.length === 0) {
+        console.log('📝 적용할 수정 사항 없음');
         return script;
     }
     
+    console.log(`📝 ${analysis.errors.length}개 수정 사항 적용 중...`);
+    
     let lines = script.split('\n');
+    let appliedCount = 0;
     
     for (const error of analysis.errors) {
         if (error.line && error.line > 0 && error.line <= lines.length) {
             const lineIndex = error.line - 1;
-            if (error.original && error.corrected) {
+            if (error.original && error.corrected && lines[lineIndex].includes(error.original)) {
                 lines[lineIndex] = lines[lineIndex].replace(error.original, error.corrected);
+                appliedCount++;
+                console.log(`   ✏️ ${error.line}번 줄: "${error.original}" → "${error.corrected}"`);
             }
         }
     }
+    
+    console.log(`📝 수정 적용 완료: ${appliedCount}/${analysis.errors.length}건`);
     
     return lines.join('\n');
 }
@@ -891,31 +970,45 @@ function renderAnalysisResult(stage) {
     
     let html = '<div class="analysis-result">';
     
+    // 고증 검사 결과
     if (stageState.historicalIssues.length > 0) {
         html += '<h4>📜 고증 검사 결과</h4>';
-        html += '<ul class="historical-issues">';
+        html += '<div class="historical-section">';
+        html += `<p class="issue-count">총 ${stageState.historicalIssues.length}개 고증 문제 발견</p>`;
+        html += '<table class="result-table"><thead><tr><th>카테고리</th><th>현대어</th><th>고증어</th><th>수정</th></tr></thead><tbody>';
         for (const issue of stageState.historicalIssues) {
-            const fixedText = issue.autoFixed ? `✅ 자동 수정: "${issue.replacement}"` : '⚠️ 수동 확인 필요';
-            html += `<li>
-                <strong>[${issue.category}]</strong> "${issue.modern}" → ${issue.historical.join(' / ')}
-                <br><small>${issue.reason} (발견: ${issue.count}회) - ${fixedText}</small>
-            </li>`;
+            const fixedText = issue.autoFixed ? `✅ ${issue.replacement}` : '⚠️ 수동확인';
+            html += `<tr>
+                <td>${issue.category}</td>
+                <td><span class="error-text">${issue.modern}</span></td>
+                <td>${issue.historical.join(', ')}</td>
+                <td>${fixedText}</td>
+            </tr>`;
         }
-        html += '</ul>';
+        html += '</tbody></table>';
+        html += '</div>';
     }
     
+    // AI 분석 결과
     if (stageState.analysis && stageState.analysis.errors && stageState.analysis.errors.length > 0) {
         html += '<h4>🔍 AI 분석 결과</h4>';
-        html += `<p>총 ${stageState.analysis.errors.length}개 오류 발견</p>`;
-        html += '<ul class="error-list">';
+        html += '<div class="ai-section">';
+        html += `<p class="issue-count">총 ${stageState.analysis.errors.length}개 오류 발견</p>`;
+        html += '<table class="result-table"><thead><tr><th>줄</th><th>유형</th><th>원본</th><th>수정</th><th>사유</th></tr></thead><tbody>';
         for (const error of stageState.analysis.errors) {
-            html += `<li>
-                <strong>[${error.type}]</strong> ${error.line}번 줄
-                <br>"${escapeHtml(error.original)}" → "${escapeHtml(error.corrected)}"
-                <br><small>${error.reason}</small>
-            </li>`;
+            html += `<tr>
+                <td>${error.line || '-'}</td>
+                <td>${error.type || '-'}</td>
+                <td><span class="error-text">${escapeHtml(error.original) || '-'}</span></td>
+                <td><span class="corrected-text">${escapeHtml(error.corrected) || '-'}</span></td>
+                <td>${error.reason || '-'}</td>
+            </tr>`;
         }
-        html += '</ul>';
+        html += '</tbody></table>';
+        html += '</div>';
+    } else if (!stageState.analysis || !stageState.analysis.errors || stageState.analysis.errors.length === 0) {
+        html += '<h4>🔍 AI 분석 결과</h4>';
+        html += '<p class="no-issues">✅ AI가 발견한 추가 오류가 없습니다.</p>';
     }
     
     html += '</div>';
@@ -931,7 +1024,8 @@ function renderRevisedScript(stage) {
     
     const countEl = document.getElementById(`revision-count-${stage}`);
     if (countEl) {
-        countEl.textContent = `수정: ${stageState.revisionCount}건`;
+        const totalCount = stageState.revisionCount + stageState.historicalIssues.filter(i => i.autoFixed).length;
+        countEl.textContent = `수정: ${totalCount}건`;
     }
     
     const btnBefore = document.getElementById(`btn-revert-before-${stage}`);
