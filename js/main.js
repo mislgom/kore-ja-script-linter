@@ -1,11 +1,11 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.32 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.32: 수정 전 버튼 부분 되돌림, score-section 동적 생성, 자동 점수 표시 수정
+ * main.js v4.33 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.33: 개별 마커 토글 시스템, 나레이션 보호 강화, score-section 동적 생성
  */
 
-console.log('🚀 main.js v4.32 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
-console.log('📌 v4.32 업데이트: 수정 전 버튼 부분 되돌림 + score-section 동적 생성 + 자동 점수 표시');
+console.log('🚀 main.js v4.33 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
+console.log('📌 v4.33 업데이트: 개별 마커 토글 + 나레이션 보호 강화 + 자동 점수 표시');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -160,26 +160,24 @@ var state = {
         analysis: null, 
         revisedScript: '', 
         historicalIssues: [], 
-        allErrors: [], 
+        allErrors: [],
         revisionCount: 0, 
         scrollPosition: 0, 
         fixedScript: '', 
-        markerMap: {}, 
-        showingOriginal: false,
-        revertedMarkers: {} // v4.32: 개별 마커 되돌림 상태 추적
+        markerMap: {},
+        showingOriginal: false
     },
     stage2: { 
         originalScript: '', 
         analysis: null, 
         revisedScript: '', 
         historicalIssues: [], 
-        allErrors: [], 
+        allErrors: [],
         revisionCount: 0, 
         scrollPosition: 0, 
         fixedScript: '', 
-        markerMap: {}, 
-        showingOriginal: false,
-        revertedMarkers: {} // v4.32: 개별 마커 되돌림 상태 추적
+        markerMap: {},
+        showingOriginal: false
     },
     finalScript: '',
     scores: null
@@ -213,14 +211,14 @@ function initApp() {
     initStage1AnalysisButton();
     initStage2AnalysisButton();
     initStopButton();
-    ensureScoreSection(); // v4.32: score-section 보장
+    ensureScoreSection();
+    addBlinkAnimation();
     console.log('✅ 고증 DB 로드됨: ' + getTotalHistoricalRules() + '개 규칙');
     console.log('✅ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('✅ 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.32 초기화 완료');
+    console.log('✅ main.js v4.33 초기화 완료');
 }
 
-// v4.32: score-section이 없으면 동적으로 생성
 function ensureScoreSection() {
     var scoreSection = document.getElementById('score-section');
     if (!scoreSection) {
@@ -253,7 +251,7 @@ function addBlinkAnimation() {
     if (document.getElementById('blink-style')) return;
     var style = document.createElement('style');
     style.id = 'blink-style';
-    style.textContent = '@keyframes blink{0%,100%{opacity:1;background:#69f0ae;}50%{opacity:0.3;background:#ffeb3b;}}@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(105,240,174,0.7);}70%{box-shadow:0 0 0 10px rgba(105,240,174,0);}100%{box-shadow:0 0 0 0 rgba(105,240,174,0);}}.highlight-active{animation:blink 0.4s ease-in-out 4,pulse 0.4s ease-in-out 4!important;background:#69f0ae!important;color:#000!important;font-weight:bold!important;}';
+    style.textContent = '@keyframes blink{0%,100%{opacity:1;background:#69f0ae;}50%{opacity:0.3;background:#ffeb3b;}}@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(105,240,174,0.7);}70%{box-shadow:0 0 0 10px rgba(105,240,174,0);}100%{box-shadow:0 0 0 0 rgba(105,240,174,0);}}.highlight-active{animation:blink 0.4s ease-in-out 4,pulse 0.4s ease-in-out 4!important;background:#69f0ae!important;color:#000!important;font-weight:bold!important;}.marker-highlight{animation:blink 0.5s ease-in-out 3!important;}';
     document.head.appendChild(style);
 }
 
@@ -456,61 +454,15 @@ function addRevertButton(container, stage) {
     wrapper.className = 'revert-btn-wrapper';
     wrapper.style.cssText = 'text-align:center;padding:10px;border-top:1px solid #444;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;';
     
-    var btnBefore = document.createElement('button');
-    btnBefore.id = 'btn-revert-before-' + stage;
-    btnBefore.innerHTML = '🔄 수정 전';
-    btnBefore.style.cssText = 'background:#ff9800;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
-    btnBefore.disabled = true;
-    btnBefore.addEventListener('click', function() { toggleView(stage, 'original'); });
-    
-    var btnAfter = document.createElement('button');
-    btnAfter.id = 'btn-revert-after-' + stage;
-    btnAfter.innerHTML = '✅ 수정 후';
-    btnAfter.style.cssText = 'background:#4CAF50;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;opacity:0.5;';
-    btnAfter.disabled = true;
-    btnAfter.addEventListener('click', function() { toggleView(stage, 'revised'); });
-    
-    wrapper.appendChild(btnBefore);
-    wrapper.appendChild(btnAfter);
-    
     var btnFix = document.createElement('button');
     btnFix.id = 'btn-fix-script-' + stage;
     btnFix.innerHTML = '📌 대본 픽스';
-    btnFix.style.cssText = 'background:#2196F3;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
+    btnFix.style.cssText = 'background:#2196F3;color:white;border:none;padding:10px 24px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:14px;';
     btnFix.disabled = true;
     btnFix.addEventListener('click', function() { fixScript(stage); });
     wrapper.appendChild(btnFix);
     
     parent.appendChild(wrapper);
-}
-
-function toggleView(stage, viewType) {
-    var container = document.getElementById('revised-' + stage);
-    var s = state[stage];
-    
-    if (!container || !s.originalScript || !s.revisedScript) {
-        console.log('데이터 없음');
-        return;
-    }
-    
-    var currentScroll = container.scrollTop;
-    
-    var btnBefore = document.getElementById('btn-revert-before-' + stage);
-    var btnAfter = document.getElementById('btn-revert-after-' + stage);
-    
-    if (viewType === 'original') {
-        s.showingOriginal = true;
-        container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + escapeHtml(s.originalScript) + '</div>';
-        if (btnBefore) btnBefore.style.opacity = '0.5';
-        if (btnAfter) btnAfter.style.opacity = '1';
-    } else {
-        s.showingOriginal = false;
-        renderRevisedWithMarkers(stage);
-        if (btnBefore) btnBefore.style.opacity = '1';
-        if (btnAfter) btnAfter.style.opacity = '0.5';
-    }
-    
-    container.scrollTop = currentScroll;
 }
 
 function initStage1AnalysisButton() {
@@ -557,7 +509,9 @@ function fixScript(stage) {
         return;
     }
     
-    s.fixedScript = s.revisedScript;
+    // 현재 마커 상태 기준으로 최종 텍스트 생성
+    var finalText = generateFinalTextFromMarkers(stage);
+    s.fixedScript = finalText;
     
     var btn = document.getElementById('btn-fix-script-' + stage);
     if (btn) {
@@ -573,7 +527,7 @@ function fixScript(stage) {
         }
         alert('1차 대본이 픽스되었습니다!\n\n이제 "2차 분석 시작" 버튼을 눌러 2차 분석을 진행하세요.');
     } else if (stage === 'stage2') {
-        state.finalScript = s.revisedScript;
+        state.finalScript = finalText;
         
         console.log('📌 최종 대본 픽스 완료, 길이:', state.finalScript.length);
         
@@ -589,6 +543,26 @@ function fixScript(stage) {
     }
 }
 
+// v4.33: 마커 상태 기반 최종 텍스트 생성
+function generateFinalTextFromMarkers(stage) {
+    var s = state[stage];
+    var text = s.revisedScript;
+    
+    // 각 오류의 useRevised 상태에 따라 텍스트 치환
+    var errors = s.allErrors || [];
+    
+    // 역순으로 처리 (위치 변경 방지)
+    for (var i = errors.length - 1; i >= 0; i--) {
+        var err = errors[i];
+        if (err.useRevised === false && err.suggestion && err.original) {
+            // 수정 전 선택: suggestion을 original로 되돌림
+            text = text.split(err.suggestion).join(err.original);
+        }
+    }
+    
+    return text;
+}
+
 function startStage2Analysis() {
     var fixedScript = state.stage1.fixedScript;
     if (!fixedScript) {
@@ -597,7 +571,6 @@ function startStage2Analysis() {
     }
     
     state.stage2.originalScript = fixedScript;
-    state.stage2.revertedMarkers = {}; // v4.32: 되돌림 상태 초기화
     
     var btn = document.getElementById('btn-start-stage2');
     if (btn) {
@@ -624,17 +597,45 @@ function updateProgress(percent, status) {
     if (progressText) progressText.textContent = status;
 }
 
+// v4.33: 나레이션 보호 강화 프롬프트
 function getAnalysisPrompt(stage, script) {
-    var promptBase = '당신은 조선시대 사극 대본 전문 검수자입니다.\n\n';
+    var promptBase = '';
     
-    promptBase += '【절대 오류로 판단하지 말아야 할 항목 - 매우 중요】\n';
-    promptBase += '1. 나레이션(N): "N:" 또는 "나레이션:"으로 시작하는 부분은 현대 시청자를 위한 설명이므로 절대로 오류로 판단하지 마세요.\n';
-    promptBase += '2. 중복 지적 금지: 동일한 단어/표현에 대해 중복으로 오류를 지적하지 마세요. 한 번만 지적하세요.\n';
-    promptBase += '3. 조선시대 어투 보호: "-하오", "-하시오", "-소서", "-옵니다", "-사옵니다" 등 조선시대 어투는 정상입니다.\n';
-    promptBase += '4. 존칭/경어 보호: "마마", "전하", "나리", "대감" 등 전통 호칭은 정상입니다.\n';
-    promptBase += '5. 시대적 표현 보호: 조선시대 배경에 맞는 표현은 수정 대상이 아닙니다.\n\n';
+    // ★★★ 최우선 규칙 - 매우 강력하게 강조 ★★★
+    promptBase += '★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★\n';
+    promptBase += '★★★ 절대 위반 금지 - 최우선 규칙 (이 규칙을 어기면 실패입니다) ★★★\n';
+    promptBase += '★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★\n\n';
     
-    promptBase += '【오류 검출 대상】\n';
+    promptBase += '【규칙 1】 나레이션 절대 수정 금지!!! (가장 중요)\n';
+    promptBase += '─────────────────────────────────────────────\n';
+    promptBase += '• "N:" 또는 "나레이션:"으로 시작하는 줄은 절대로 절대로 절대로 수정하지 마세요!\n';
+    promptBase += '• 나레이션은 현대 시청자를 위한 설명이므로 현대어가 정상입니다.\n';
+    promptBase += '• 나레이션을 조선시대 어투로 바꾸면 절대 안 됩니다!!!\n';
+    promptBase += '• 나레이션에 있는 현대 단어도 오류가 아닙니다!!!\n\n';
+    
+    promptBase += '예시 (절대 수정하면 안 됨 - 그대로 유지):\n';
+    promptBase += '• "N: 조선시대 한양의 모습이다." → 이대로 유지 (수정 금지)\n';
+    promptBase += '• "나레이션: 왕은 고민에 빠졌다." → 이대로 유지 (수정 금지)\n';
+    promptBase += '• "N: 그때 전화벨이 울렸다." → 이대로 유지 (나레이션이므로 현대어 OK)\n\n';
+    
+    promptBase += '【규칙 2】 중복 지적 절대 금지!!!\n';
+    promptBase += '─────────────────────────────────────────────\n';
+    promptBase += '• 동일한 단어/표현에 대해 한 번만 지적하세요.\n';
+    promptBase += '• 같은 오류를 여러 번 지적하면 안 됩니다!\n\n';
+    
+    promptBase += '【규칙 3】 조선시대 어투 보호!!!\n';
+    promptBase += '─────────────────────────────────────────────\n';
+    promptBase += '• 다음 어투는 조선시대 정상 표현이므로 절대 수정 금지:\n';
+    promptBase += '  - "-하오", "-하시오", "-소서", "-옵니다", "-사옵니다"\n';
+    promptBase += '  - "-하였사옵니다", "-하옵소서", "-이로소이다"\n';
+    promptBase += '  - "마마", "전하", "나리", "대감", "영감" 등 전통 호칭\n';
+    promptBase += '• 이런 표현을 현대어로 바꾸면 안 됩니다!\n\n';
+    
+    promptBase += '★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★\n\n';
+    
+    promptBase += '당신은 조선시대 사극 대본 전문 검수자입니다.\n\n';
+    
+    promptBase += '【오류 검출 대상 (대사 부분만)】\n';
     promptBase += '1. 현대 용어: 휴대폰, 컴퓨터, 인터넷, 자동차, 비행기 등\n';
     promptBase += '2. 외래어: 커피, 피자, 햄버거, 카페 등\n';
     promptBase += '3. 현대 단위: 킬로미터, 미터, 킬로그램 등 (조선시대: 리, 자, 근)\n';
@@ -644,23 +645,75 @@ function getAnalysisPrompt(stage, script) {
     promptBase += '아래 대본을 검수하고 JSON 형식으로 응답하세요:\n\n';
     promptBase += '대본:\n"""\n' + script + '\n"""\n\n';
     
-    promptBase += '응답 형식:\n';
+    promptBase += '응답 형식 (반드시 이 형식으로):\n';
     promptBase += '```json\n';
     promptBase += '{\n';
     promptBase += '  "errors": [\n';
     promptBase += '    {\n';
     promptBase += '      "type": "오류유형",\n';
-    promptBase += '      "original": "원문",\n';
-    promptBase += '      "suggestion": "수정안",\n';
-    promptBase += '      "reason": "이유",\n';
-    promptBase += '      "line": "해당 줄 번호(숫자)"\n';
+    promptBase += '      "original": "원문 (수정 전)",\n';
+    promptBase += '      "suggestion": "수정안 (수정 후)",\n';
+    promptBase += '      "reason": "수정 이유",\n';
+    promptBase += '      "line": 해당줄번호\n';
     promptBase += '    }\n';
     promptBase += '  ],\n';
-    promptBase += '  "revisedScript": "전체 수정된 대본"\n';
+    promptBase += '  "revisedScript": "전체 수정된 대본 (나레이션은 절대 수정하지 말 것!)"\n';
     promptBase += '}\n';
     promptBase += '```\n';
     
+    promptBase += '\n★★★ 다시 한번 강조: 나레이션(N:, 나레이션:)은 절대 수정 금지!!! ★★★\n';
+    
     return promptBase;
+}
+
+// v4.33: 나레이션 오류 필터링
+function filterNarrationErrors(errors, originalScript) {
+    if (!errors || !Array.isArray(errors)) return [];
+    
+    var lines = originalScript.split('\n');
+    var seenOriginals = {};
+    
+    return errors.filter(function(err) {
+        // 나레이션 라인 체크
+        var lineNum = parseInt(err.line) || 0;
+        
+        if (lineNum > 0 && lineNum <= lines.length) {
+            var line = lines[lineNum - 1].trim().toLowerCase();
+            if (line.startsWith('n:') || line.startsWith('나레이션:') || line.startsWith('n :') || line.startsWith('나레이션 :')) {
+                console.log('🚫 나레이션 오류 필터링:', err.original);
+                return false;
+            }
+        }
+        
+        // 나레이션 관련 키워드 체크
+        var reason = (err.reason || '').toLowerCase();
+        if (reason.includes('나레이션') || reason.includes('narration')) {
+            console.log('🚫 나레이션 관련 오류 필터링:', err.original);
+            return false;
+        }
+        
+        // 조선시대 어투 보호
+        var original = err.original || '';
+        var suggestion = err.suggestion || '';
+        
+        var joseonPatterns = ['-하오', '-하시오', '-소서', '-옵니다', '-사옵니다', '-하였사옵니다', '-하옵소서', '-이로소이다', '마마', '전하', '나리', '대감', '영감'];
+        
+        for (var i = 0; i < joseonPatterns.length; i++) {
+            if (original.includes(joseonPatterns[i])) {
+                console.log('🚫 조선시대 어투 보호:', err.original);
+                return false;
+            }
+        }
+        
+        // 중복 체크
+        if (seenOriginals[original]) {
+            console.log('🚫 중복 오류 필터링:', err.original);
+            return false;
+        }
+        seenOriginals[original] = true;
+        
+        return true;
+    });
 }
 
 async function startAnalysis(stage) {
@@ -680,7 +733,6 @@ async function startAnalysis(stage) {
             return;
         }
         state.stage1.originalScript = script;
-        state.stage1.revertedMarkers = {}; // v4.32: 되돌림 상태 초기화
     } else {
         script = state.stage2.originalScript;
     }
@@ -703,7 +755,7 @@ async function startAnalysis(stage) {
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
                 generationConfig: {
-                    temperature: 0.3,
+                    temperature: 0.2,
                     maxOutputTokens: API_CONFIG.MAX_OUTPUT_TOKENS
                 }
             }),
@@ -741,6 +793,13 @@ async function startAnalysis(stage) {
             }
         }
         
+        // v4.33: 나레이션 오류 필터링
+        if (result.errors) {
+            var originalCount = result.errors.length;
+            result.errors = filterNarrationErrors(result.errors, script);
+            console.log('📊 오류 필터링: ' + originalCount + '개 → ' + result.errors.length + '개');
+        }
+        
         updateProgress(90, '결과 표시 중...');
         
         displayResults(stage, result);
@@ -753,7 +812,7 @@ async function startAnalysis(stage) {
         
         if (stopBtn) stopBtn.disabled = true;
         
-        // v4.32: 2차 분석 완료 시 자동으로 점수 생성
+        // 2차 분석 완료 시 자동으로 점수 생성
         if (stage === 'stage2') {
             console.log('📊 2차 분석 완료 - 점수 자동 생성 시작');
             setTimeout(function() {
@@ -778,18 +837,21 @@ async function startAnalysis(stage) {
 function displayResults(stage, result) {
     var s = state[stage];
     s.analysis = result;
-    s.allErrors = result.errors || [];
+    
+    // 오류에 useRevised 속성 추가 (기본값: true = 수정 후 사용)
+    var errors = result.errors || [];
+    errors.forEach(function(err, idx) {
+        err.id = stage + '-marker-' + idx;
+        err.useRevised = true; // 기본: 수정안 사용
+    });
+    
+    s.allErrors = errors;
     s.revisedScript = result.revisedScript || s.originalScript;
     
-    displayAnalysis(stage, s.allErrors);
-    displayRevised(stage, s.revisedScript, s.originalScript);
+    displayAnalysisWithToggle(stage, s.allErrors);
+    displayRevisedWithMarkers(stage);
     
-    var btnBefore = document.getElementById('btn-revert-before-' + stage);
-    var btnAfter = document.getElementById('btn-revert-after-' + stage);
     var btnFix = document.getElementById('btn-fix-script-' + stage);
-    
-    if (btnBefore) btnBefore.disabled = false;
-    if (btnAfter) btnAfter.disabled = false;
     if (btnFix) btnFix.disabled = false;
     
     if (stage === 'stage2') {
@@ -801,7 +863,8 @@ function displayResults(stage, result) {
     }
 }
 
-function displayAnalysis(stage, errors) {
+// v4.33: 개별 토글 버튼이 포함된 분석 결과 테이블
+function displayAnalysisWithToggle(stage, errors) {
     var container = document.getElementById('analysis-' + stage);
     if (!container) return;
     
@@ -810,180 +873,210 @@ function displayAnalysis(stage, errors) {
         return;
     }
     
-    addBlinkAnimation();
-    
     var html = '<table style="width:100%;border-collapse:collapse;color:white;">';
     html += '<thead><tr style="background:#1a1a2e;">';
-    html += '<th style="padding:12px;border:1px solid #444;text-align:left;width:15%;">유형</th>';
-    html += '<th style="padding:12px;border:1px solid #444;text-align:left;width:25%;">원문</th>';
-    html += '<th style="padding:12px;border:1px solid #444;text-align:left;width:25%;">수정안</th>';
-    html += '<th style="padding:12px;border:1px solid #444;text-align:left;width:35%;">이유</th>';
+    html += '<th style="padding:10px;border:1px solid #444;text-align:left;width:12%;">유형</th>';
+    html += '<th style="padding:10px;border:1px solid #444;text-align:left;width:18%;">원문</th>';
+    html += '<th style="padding:10px;border:1px solid #444;text-align:left;width:18%;">수정안</th>';
+    html += '<th style="padding:10px;border:1px solid #444;text-align:left;width:27%;">이유</th>';
+    html += '<th style="padding:10px;border:1px solid #444;text-align:center;width:25%;">상태 선택</th>';
     html += '</tr></thead><tbody>';
     
     errors.forEach(function(err, idx) {
-        var markerId = stage + '-marker-' + idx;
-        html += '<tr class="error-row" data-marker-id="' + markerId + '" data-stage="' + stage + '" style="cursor:pointer;transition:background 0.2s;" ';
-        html += 'onmouseover="this.style.background=\'#333\'" onmouseout="this.style.background=\'transparent\'">';
-        html += '<td style="padding:10px;border:1px solid #444;">' + escapeHtml(err.type || '일반') + '</td>';
-        html += '<td style="padding:10px;border:1px solid #444;color:#ff6b6b;">' + escapeHtml(err.original || '') + '</td>';
-        html += '<td style="padding:10px;border:1px solid #444;color:#69f0ae;">' + escapeHtml(err.suggestion || '') + '</td>';
-        html += '<td style="padding:10px;border:1px solid #444;">' + escapeHtml(err.reason || '') + '</td>';
+        var markerId = err.id || (stage + '-marker-' + idx);
+        html += '<tr class="error-row" data-marker-id="' + markerId + '" data-stage="' + stage + '" style="transition:background 0.2s;">';
+        html += '<td style="padding:8px;border:1px solid #444;cursor:pointer;" class="clickable-cell">' + escapeHtml(err.type || '일반') + '</td>';
+        html += '<td style="padding:8px;border:1px solid #444;color:#ff6b6b;cursor:pointer;" class="clickable-cell">' + escapeHtml(err.original || '') + '</td>';
+        html += '<td style="padding:8px;border:1px solid #444;color:#69f0ae;cursor:pointer;" class="clickable-cell">' + escapeHtml(err.suggestion || '') + '</td>';
+        html += '<td style="padding:8px;border:1px solid #444;cursor:pointer;" class="clickable-cell">' + escapeHtml(err.reason || '') + '</td>';
+        html += '<td style="padding:8px;border:1px solid #444;text-align:center;">';
+        html += '<button class="toggle-btn btn-before" data-marker-id="' + markerId + '" data-stage="' + stage + '" style="background:#555;color:#aaa;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;margin-right:5px;">수정 전</button>';
+        html += '<button class="toggle-btn btn-after active" data-marker-id="' + markerId + '" data-stage="' + stage + '" style="background:#69f0ae;color:#000;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">수정 후</button>';
+        html += '</td>';
         html += '</tr>';
     });
     
     html += '</tbody></table>';
     container.innerHTML = html;
     
-    // v4.32: 클릭 이벤트 - 해당 마커로 이동 및 하이라이트
-    container.querySelectorAll('.error-row').forEach(function(row) {
-        row.addEventListener('click', function() {
+    // 셀 클릭: 해당 마커로 이동
+    container.querySelectorAll('.clickable-cell').forEach(function(cell) {
+        cell.addEventListener('click', function() {
+            var row = this.closest('.error-row');
+            var markerId = row.getAttribute('data-marker-id');
+            var stg = row.getAttribute('data-stage');
+            scrollToMarkerAndHighlight(stg, markerId);
+        });
+    });
+    
+    // 토글 버튼 클릭
+    container.querySelectorAll('.toggle-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
             var markerId = this.getAttribute('data-marker-id');
             var stg = this.getAttribute('data-stage');
-            scrollToMarkerAndHighlight(stg, markerId);
+            var useRevised = this.classList.contains('btn-after');
+            toggleErrorState(stg, markerId, useRevised);
         });
     });
 }
 
-// v4.32: 마커로 스크롤 이동 및 하이라이트
+// v4.33: 오류 상태 토글 (수정 전/후)
+function toggleErrorState(stage, markerId, useRevised) {
+    var s = state[stage];
+    var errors = s.allErrors || [];
+    
+    // 해당 오류 찾기
+    var targetError = null;
+    for (var i = 0; i < errors.length; i++) {
+        if (errors[i].id === markerId) {
+            targetError = errors[i];
+            break;
+        }
+    }
+    
+    if (!targetError) return;
+    
+    // 상태 변경
+    targetError.useRevised = useRevised;
+    
+    console.log('📝 상태 변경:', markerId, useRevised ? '수정 후' : '수정 전');
+    
+    // 테이블 버튼 상태 업데이트
+    updateTableButtons(stage, markerId, useRevised);
+    
+    // 마커 업데이트
+    updateMarkerInRevised(stage, markerId, targetError);
+}
+
+// v4.33: 테이블 버튼 상태 업데이트
+function updateTableButtons(stage, markerId, useRevised) {
+    var container = document.getElementById('analysis-' + stage);
+    if (!container) return;
+    
+    var btnBefore = container.querySelector('.btn-before[data-marker-id="' + markerId + '"]');
+    var btnAfter = container.querySelector('.btn-after[data-marker-id="' + markerId + '"]');
+    
+    if (btnBefore && btnAfter) {
+        if (useRevised) {
+            btnBefore.style.background = '#555';
+            btnBefore.style.color = '#aaa';
+            btnBefore.style.fontWeight = 'normal';
+            btnAfter.style.background = '#69f0ae';
+            btnAfter.style.color = '#000';
+            btnAfter.style.fontWeight = 'bold';
+        } else {
+            btnBefore.style.background = '#ff9800';
+            btnBefore.style.color = '#000';
+            btnBefore.style.fontWeight = 'bold';
+            btnAfter.style.background = '#555';
+            btnAfter.style.color = '#aaa';
+            btnAfter.style.fontWeight = 'normal';
+        }
+    }
+}
+
+// v4.33: 수정 반영 영역의 마커 업데이트
+function updateMarkerInRevised(stage, markerId, error) {
+    var container = document.getElementById('revised-' + stage);
+    if (!container) return;
+    
+    var marker = container.querySelector('.correction-marker[data-marker-id="' + markerId + '"]');
+    if (!marker) return;
+    
+    // 현재 스크롤 위치 저장
+    var scrollTop = container.scrollTop;
+    
+    if (error.useRevised) {
+        marker.innerHTML = escapeHtml(error.suggestion);
+        marker.style.background = '#69f0ae';
+        marker.style.color = '#000';
+        marker.title = '수정 후 (클릭하여 이동)';
+    } else {
+        marker.innerHTML = escapeHtml(error.original);
+        marker.style.background = '#ff9800';
+        marker.style.color = '#000';
+        marker.title = '수정 전 (클릭하여 이동)';
+    }
+    
+    // 스크롤 위치 복원
+    container.scrollTop = scrollTop;
+}
+
+// v4.33: 마커가 포함된 수정 대본 렌더링
+function displayRevisedWithMarkers(stage) {
+    var container = document.getElementById('revised-' + stage);
+    if (!container) return;
+    
+    var s = state[stage];
+    var text = s.revisedScript;
+    var errors = s.allErrors || [];
+    
+    // 각 오류에 대해 마커 삽입
+    errors.forEach(function(err) {
+        var markerId = err.id;
+        var searchText = err.useRevised ? err.suggestion : err.original;
+        var displayText = err.useRevised ? err.suggestion : err.original;
+        var bgColor = err.useRevised ? '#69f0ae' : '#ff9800';
+        var title = err.useRevised ? '수정 후 (클릭하여 이동)' : '수정 전 (클릭하여 이동)';
+        
+        if (searchText && text.includes(err.suggestion)) {
+            var markerHtml = '<span class="correction-marker" data-marker-id="' + markerId + '" style="background:' + bgColor + ';color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;" title="' + title + '">' + escapeHtml(displayText) + '</span>';
+            text = text.replace(err.suggestion, markerHtml);
+        }
+    });
+    
+    container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + text + '</div>';
+    
+    // 마커 클릭 이벤트
+    container.querySelectorAll('.correction-marker').forEach(function(marker) {
+        marker.addEventListener('click', function() {
+            var markerId = this.getAttribute('data-marker-id');
+            scrollToTableRow(stage, markerId);
+        });
+    });
+}
+
+// v4.33: 마커로 스크롤 이동 및 하이라이트
 function scrollToMarkerAndHighlight(stage, markerId) {
     var container = document.getElementById('revised-' + stage);
     if (!container) return;
     
-    var marker = container.querySelector('[data-marker-id="' + markerId + '"]');
+    var marker = container.querySelector('.correction-marker[data-marker-id="' + markerId + '"]');
     if (!marker) {
         console.log('마커를 찾을 수 없음:', markerId);
         return;
     }
     
-    // 부드럽게 스크롤
+    // 마커로 스크롤
     marker.scrollIntoView({ behavior: 'smooth', block: 'center' });
     
-    // 하이라이트 애니메이션
-    marker.classList.add('highlight-active');
+    // 하이라이트 효과
+    marker.classList.add('marker-highlight');
     setTimeout(function() {
-        marker.classList.remove('highlight-active');
-    }, 2000);
+        marker.classList.remove('marker-highlight');
+    }, 1500);
 }
 
-function displayRevised(stage, revisedScript, originalScript) {
-    var container = document.getElementById('revised-' + stage);
+// v4.33: 테이블 행으로 스크롤
+function scrollToTableRow(stage, markerId) {
+    var container = document.getElementById('analysis-' + stage);
     if (!container) return;
     
-    var s = state[stage];
-    s.markerMap = {};
+    var row = container.querySelector('.error-row[data-marker-id="' + markerId + '"]');
+    if (!row) return;
     
-    var errors = s.allErrors || [];
-    var markedScript = revisedScript;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
     
-    // 에러별로 마커 생성
-    errors.forEach(function(err, idx) {
-        var markerId = stage + '-marker-' + idx;
-        var suggestion = err.suggestion || '';
-        var original = err.original || '';
-        
-        if (suggestion && markedScript.includes(suggestion)) {
-            s.markerMap[markerId] = {
-                original: original,
-                suggestion: suggestion,
-                reverted: false
-            };
-            
-            var markerHtml = '<span class="correction-marker" data-marker-id="' + markerId + '" style="background:#69f0ae;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;" title="클릭: 수정 전으로 되돌리기">' + escapeHtml(suggestion) + '</span>';
-            markedScript = markedScript.replace(suggestion, markerHtml);
-        }
-    });
-    
-    container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + markedScript + '</div>';
-    
-    // v4.32: 마커 클릭 이벤트 - 개별 되돌리기
-    container.querySelectorAll('.correction-marker').forEach(function(marker) {
-        marker.addEventListener('click', function(e) {
-            e.stopPropagation();
-            var mid = this.getAttribute('data-marker-id');
-            toggleIndividualMarker(stage, mid, this);
-        });
-    });
+    // 행 하이라이트
+    var originalBg = row.style.background;
+    row.style.background = '#444';
+    setTimeout(function() {
+        row.style.background = originalBg || 'transparent';
+    }, 1500);
 }
 
-// v4.32: 개별 마커 되돌리기 토글
-function toggleIndividualMarker(stage, markerId, element) {
-    var s = state[stage];
-    var markerData = s.markerMap[markerId];
-    
-    if (!markerData) {
-        console.log('마커 데이터 없음:', markerId);
-        return;
-    }
-    
-    // 현재 스크롤 위치 저장
-    var container = document.getElementById('revised-' + stage);
-    var scrollTop = container ? container.scrollTop : 0;
-    
-    if (!s.revertedMarkers[markerId]) {
-        // 수정 전으로 되돌리기
-        s.revertedMarkers[markerId] = true;
-        element.innerHTML = escapeHtml(markerData.original);
-        element.style.background = '#ff9800';
-        element.style.color = '#000';
-        element.title = '클릭: 수정 후로 변경';
-        console.log('📝 마커 되돌림:', markerId, markerData.suggestion, '->', markerData.original);
-    } else {
-        // 수정 후로 복원
-        s.revertedMarkers[markerId] = false;
-        element.innerHTML = escapeHtml(markerData.suggestion);
-        element.style.background = '#69f0ae';
-        element.style.color = '#000';
-        element.title = '클릭: 수정 전으로 되돌리기';
-        console.log('📝 마커 복원:', markerId, markerData.original, '->', markerData.suggestion);
-    }
-    
-    // 스크롤 위치 복원
-    if (container) {
-        container.scrollTop = scrollTop;
-    }
-}
-
-// v4.32: 마커가 포함된 수정 스크립트 렌더링
-function renderRevisedWithMarkers(stage) {
-    var s = state[stage];
-    var container = document.getElementById('revised-' + stage);
-    if (!container) return;
-    
-    var markedScript = s.revisedScript;
-    var errors = s.allErrors || [];
-    
-    errors.forEach(function(err, idx) {
-        var markerId = stage + '-marker-' + idx;
-        var markerData = s.markerMap[markerId];
-        
-        if (!markerData) return;
-        
-        var isReverted = s.revertedMarkers[markerId];
-        var displayText = isReverted ? markerData.original : markerData.suggestion;
-        var bgColor = isReverted ? '#ff9800' : '#69f0ae';
-        var titleText = isReverted ? '클릭: 수정 후로 변경' : '클릭: 수정 전으로 되돌리기';
-        
-        var markerHtml = '<span class="correction-marker" data-marker-id="' + markerId + '" style="background:' + bgColor + ';color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;" title="' + titleText + '">' + escapeHtml(displayText) + '</span>';
-        
-        // 원래 suggestion 위치에 마커 삽입
-        if (markedScript.includes(markerData.suggestion)) {
-            markedScript = markedScript.replace(markerData.suggestion, markerHtml);
-        }
-    });
-    
-    container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + markedScript + '</div>';
-    
-    // 마커 클릭 이벤트 재바인딩
-    container.querySelectorAll('.correction-marker').forEach(function(marker) {
-        marker.addEventListener('click', function(e) {
-            e.stopPropagation();
-            var mid = this.getAttribute('data-marker-id');
-            toggleIndividualMarker(stage, mid, this);
-        });
-    });
-}
-
-// v4.32: 2차 분석 완료 시 자동 점수 생성 및 표시
+// v4.33: 2차 분석 완료 시 자동 점수 생성 및 표시
 async function generateAndDisplayScores() {
     console.log('📊 점수 분석 API 호출 시작...');
     
@@ -1070,7 +1163,6 @@ async function generateAndDisplayScores() {
     } catch (error) {
         console.error('점수 생성 오류:', error);
         
-        // 오류 시 기본 점수 표시
         var defaultScores = {
             seniorFit: 85,
             funFactor: 80,
@@ -1091,7 +1183,6 @@ async function generateAndDisplayScores() {
 function displayScores(scores) {
     console.log('📊 점수 표시 시작:', scores);
     
-    // v4.32: score-section이 없으면 동적 생성
     var scoreSection = ensureScoreSection();
     
     var seniorFit = scores.seniorFit || 0;
@@ -1109,7 +1200,6 @@ function displayScores(scores) {
     var html = '<div style="background:#1a1a2e;padding:20px;border-radius:10px;margin-top:20px;">';
     html += '<h3 style="color:#fff;text-align:center;margin-bottom:20px;font-size:20px;">📊 대본 분석 점수</h3>';
     
-    // 점수 표
     html += '<table style="width:100%;border-collapse:collapse;color:white;margin-bottom:20px;">';
     html += '<thead><tr style="background:#2d2d2d;">';
     html += '<th style="padding:12px;border:1px solid #444;">항목</th>';
@@ -1124,14 +1214,12 @@ function displayScores(scores) {
     
     html += '</tbody></table>';
     
-    // 평균 점수 및 합격 여부
     html += '<div style="text-align:center;padding:15px;background:#2d2d2d;border-radius:8px;margin-bottom:20px;">';
     html += '<div style="font-size:24px;color:#fff;margin-bottom:10px;">평균 점수: <span style="color:' + (average >= 95 ? '#69f0ae' : average >= 80 ? '#ffd93d' : '#ff6b6b') + ';font-weight:bold;">' + average + '점</span></div>';
     html += '<div style="font-size:28px;color:' + passColor + ';font-weight:bold;">' + passText + '</div>';
     html += '<div style="font-size:14px;color:#888;margin-top:5px;">(95점 이상 합격)</div>';
     html += '</div>';
     
-    // 개선안
     html += '<div style="background:#2d2d2d;padding:15px;border-radius:8px;">';
     html += '<h4 style="color:#ffd93d;margin-bottom:15px;">📝 100점 달성을 위한 개선안</h4>';
     
@@ -1154,7 +1242,6 @@ function displayScores(scores) {
     scoreSection.innerHTML = html;
     scoreSection.style.display = 'block';
     
-    // 점수 섹션으로 스크롤
     scoreSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     
     console.log('📊 점수 표시 완료');
