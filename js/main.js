@@ -1,6 +1,6 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.16 - Google AI + Gemini 2.5 Flash
+ * main.js v4.16 - Vertex AI API 키 + Gemini 2.5 Flash
  * 25가지 오류 유형 검수 + 조선시대 고증 검수 병합
  * - 고증 오류: 자동 수정 (첫 번째 대체어 적용)
  * - 수정 반영 강화: 로컬 강제 치환
@@ -9,7 +9,7 @@
  * - v4.16: Vertex AI API 키 + Google AI 엔드포인트 (CORS 허용)
  */
 
-console.log('🚀 main.js v4.16 (Google AI + Gemini 2.5 Flash) 로드됨');
+console.log('🚀 main.js v4.16 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
 
 // ===================== 조선시대 고증 DB =====================
 const HISTORICAL_RULES = {
