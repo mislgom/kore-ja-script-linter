@@ -1,11 +1,11 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.39 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.39: 6가지 신규 분석 기능 추가 (인물설정, 시간왜곡, 이야기흐름, 쌩뚱맞은표현, 캐릭터일관성, 장면연결성)
+ * main.js v4.40 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.40: 개별 수정사항 토글 기능 (수정 전/후 개별 선택)
  */
 
-console.log('🚀 main.js v4.39 로드됨');
-console.log('📌 v4.39: 인물설정/시간왜곡/이야기흐름/쌩뚱맞은표현/캐릭터일관성/장면연결성 분석 추가');
+console.log('🚀 main.js v4.40 로드됨');
+console.log('📌 v4.40: 개별 수정사항 토글 기능 추가');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -202,8 +202,29 @@ function initApp() {
     initStage2AnalysisButton();
     initStopButton();
     ensureScoreSection();
-    addBlinkAnimation();
-    console.log('✅ main.js v4.39 초기화 완료');
+    addStyles();
+    console.log('✅ main.js v4.40 초기화 완료');
+}
+
+function addStyles() {
+    if (document.getElementById('custom-styles')) return;
+    var style = document.createElement('style');
+    style.id = 'custom-styles';
+    style.textContent = 
+        '@keyframes blink{0%,100%{opacity:1;background:#69f0ae;}50%{opacity:0.3;background:#ffeb3b;}}' +
+        '@keyframes blinkOrange{0%,100%{opacity:1;background:#ff9800;}50%{opacity:0.3;background:#ffeb3b;}}' +
+        '.highlight-active{animation:blink 0.4s ease-in-out 4!important;}' +
+        '.highlight-active-orange{animation:blinkOrange 0.4s ease-in-out 4!important;}' +
+        '.marker-revised{background:#69f0ae;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;}' +
+        '.marker-original{background:#ff9800;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;}' +
+        '.toggle-btn{padding:4px 8px;margin:0 2px;border:none;border-radius:3px;cursor:pointer;font-size:11px;font-weight:bold;}' +
+        '.toggle-btn-before{background:#ff9800;color:#fff;}' +
+        '.toggle-btn-before.active{background:#ff9800;opacity:1;}' +
+        '.toggle-btn-before:not(.active){background:#666;opacity:0.6;}' +
+        '.toggle-btn-after{background:#4CAF50;color:#fff;}' +
+        '.toggle-btn-after.active{background:#4CAF50;opacity:1;}' +
+        '.toggle-btn-after:not(.active){background:#666;opacity:0.6;}';
+    document.head.appendChild(style);
 }
 
 function ensureScoreSection() {
@@ -220,22 +241,6 @@ function ensureScoreSection() {
         }
     }
     return scoreSection;
-}
-
-function getTotalHistoricalRules() {
-    var total = 0;
-    for (var category in HISTORICAL_RULES) {
-        total += HISTORICAL_RULES[category].length;
-    }
-    return total;
-}
-
-function addBlinkAnimation() {
-    if (document.getElementById('blink-style')) return;
-    var style = document.createElement('style');
-    style.id = 'blink-style';
-    style.textContent = '@keyframes blink{0%,100%{opacity:1;background:#69f0ae;}50%{opacity:0.3;background:#ffeb3b;}}@keyframes blinkOrange{0%,100%{opacity:1;background:#ff9800;}50%{opacity:0.3;background:#ffeb3b;}}@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(105,240,174,0.7);}70%{box-shadow:0 0 0 10px rgba(105,240,174,0);}100%{box-shadow:0 0 0 0 rgba(105,240,174,0);}}.highlight-active{animation:blink 0.4s ease-in-out 4,pulse 0.4s ease-in-out 4!important;background:#69f0ae!important;color:#000!important;font-weight:bold!important;}.highlight-active-orange{animation:blinkOrange 0.4s ease-in-out 4,pulse 0.4s ease-in-out 4!important;background:#ff9800!important;color:#000!important;font-weight:bold!important;}';
-    document.head.appendChild(style);
 }
 
 function hideOriginalAnalysisButtons() {
@@ -435,17 +440,17 @@ function addRevertButton(container, stage) {
 
     var btnBefore = document.createElement('button');
     btnBefore.id = 'btn-revert-before-' + stage;
-    btnBefore.innerHTML = '🔄 수정 전';
+    btnBefore.innerHTML = '🔄 전체 수정 전';
     btnBefore.style.cssText = 'background:#ff9800;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
     btnBefore.disabled = true;
-    btnBefore.addEventListener('click', function() { toggleView(stage, 'original'); });
+    btnBefore.addEventListener('click', function() { setAllErrorsState(stage, false); });
 
     var btnAfter = document.createElement('button');
     btnAfter.id = 'btn-revert-after-' + stage;
-    btnAfter.innerHTML = '✅ 수정 후';
-    btnAfter.style.cssText = 'background:#4CAF50;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;opacity:0.5;';
+    btnAfter.innerHTML = '✅ 전체 수정 후';
+    btnAfter.style.cssText = 'background:#4CAF50;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
     btnAfter.disabled = true;
-    btnAfter.addEventListener('click', function() { toggleView(stage, 'revised'); });
+    btnAfter.addEventListener('click', function() { setAllErrorsState(stage, true); });
 
     wrapper.appendChild(btnBefore);
     wrapper.appendChild(btnAfter);
@@ -461,30 +466,29 @@ function addRevertButton(container, stage) {
     parent.appendChild(wrapper);
 }
 
-function toggleView(stage, viewType) {
-    var container = document.getElementById('revised-' + stage);
+function setAllErrorsState(stage, useRevised) {
     var s = state[stage];
-    if (!container || !s.originalScript || !s.revisedScript) return;
-
-    var currentScroll = container.scrollTop;
-    var btnBefore = document.getElementById('btn-revert-before-' + stage);
-    var btnAfter = document.getElementById('btn-revert-after-' + stage);
-
-    if (viewType === 'original') {
-        s.showingOriginal = true;
-        displayOriginalWithMarkers(stage);
-        if (btnBefore) btnBefore.style.opacity = '0.5';
-        if (btnAfter) btnAfter.style.opacity = '1';
-    } else {
-        s.showingOriginal = false;
-        displayRevisedWithMarkers(stage);
-        if (btnBefore) btnBefore.style.opacity = '1';
-        if (btnAfter) btnAfter.style.opacity = '0.5';
-    }
-    container.scrollTop = currentScroll;
+    var errors = s.allErrors || [];
+    errors.forEach(function(err) {
+        err.useRevised = useRevised;
+    });
+    renderScriptWithMarkers(stage);
+    updateAnalysisTableButtons(stage);
 }
 
-function displayOriginalWithMarkers(stage) {
+function toggleSingleError(stage, errorId, useRevised) {
+    var s = state[stage];
+    var errors = s.allErrors || [];
+    errors.forEach(function(err) {
+        if (err.id === errorId) {
+            err.useRevised = useRevised;
+        }
+    });
+    renderScriptWithMarkers(stage);
+    updateAnalysisTableButtons(stage);
+}
+
+function renderScriptWithMarkers(stage) {
     var container = document.getElementById('revised-' + stage);
     if (!container) return;
 
@@ -498,10 +502,11 @@ function displayOriginalWithMarkers(stage) {
         return posB - posA;
     });
 
-    sortedErrors.forEach(function(err, index) {
+    sortedErrors.forEach(function(err) {
         if (err.original && text.includes(err.original)) {
-            var markerId = err.id || ('marker-' + index);
-            var markerHtml = '<span class="correction-marker original-marker" data-marker-id="' + markerId + '" style="background:#ff9800;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;">' + escapeHtml(err.original) + '</span>';
+            var displayText = err.useRevised ? err.revised : err.original;
+            var markerClass = err.useRevised ? 'marker-revised' : 'marker-original';
+            var markerHtml = '<span class="correction-marker ' + markerClass + '" data-marker-id="' + err.id + '" data-stage="' + stage + '" title="' + escapeHtml(err.original) + ' → ' + escapeHtml(err.revised) + '">' + escapeHtml(displayText) + '</span>';
             text = text.replace(err.original, markerHtml);
         }
     });
@@ -512,45 +517,34 @@ function displayOriginalWithMarkers(stage) {
         marker.addEventListener('click', function() {
             var markerId = this.getAttribute('data-marker-id');
             scrollToTableRow(stage, markerId);
-            this.classList.add('highlight-active-orange');
+            var isRevised = this.classList.contains('marker-revised');
+            this.classList.add(isRevised ? 'highlight-active' : 'highlight-active-orange');
             var self = this;
-            setTimeout(function() { self.classList.remove('highlight-active-orange'); }, 1600);
+            setTimeout(function() {
+                self.classList.remove('highlight-active');
+                self.classList.remove('highlight-active-orange');
+            }, 1600);
         });
     });
 }
 
-function displayRevisedWithMarkers(stage) {
-    var container = document.getElementById('revised-' + stage);
-    if (!container) return;
-
+function updateAnalysisTableButtons(stage) {
     var s = state[stage];
-    var text = s.revisedScript;
     var errors = s.allErrors || [];
-
-    var sortedErrors = errors.slice().sort(function(a, b) {
-        var posA = text.indexOf(a.revised);
-        var posB = text.indexOf(b.revised);
-        return posB - posA;
-    });
-
-    sortedErrors.forEach(function(err, index) {
-        if (err.revised && text.includes(err.revised)) {
-            var markerId = err.id || ('marker-' + index);
-            var markerHtml = '<span class="correction-marker revised-marker" data-marker-id="' + markerId + '" style="background:#69f0ae;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;">' + escapeHtml(err.revised) + '</span>';
-            text = text.replace(err.revised, markerHtml);
+    
+    errors.forEach(function(err) {
+        var btnBefore = document.querySelector('.toggle-btn-before[data-error-id="' + err.id + '"]');
+        var btnAfter = document.querySelector('.toggle-btn-after[data-error-id="' + err.id + '"]');
+        
+        if (btnBefore && btnAfter) {
+            if (err.useRevised) {
+                btnBefore.classList.remove('active');
+                btnAfter.classList.add('active');
+            } else {
+                btnBefore.classList.add('active');
+                btnAfter.classList.remove('active');
+            }
         }
-    });
-
-    container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + text + '</div>';
-
-    container.querySelectorAll('.correction-marker').forEach(function(marker) {
-        marker.addEventListener('click', function() {
-            var markerId = this.getAttribute('data-marker-id');
-            scrollToTableRow(stage, markerId);
-            this.classList.add('highlight-active');
-            var self = this;
-            setTimeout(function() { self.classList.remove('highlight-active'); }, 1600);
-        });
     });
 }
 
@@ -574,8 +568,8 @@ function scrollToMarker(stage, markerId) {
     var marker = container.querySelector('.correction-marker[data-marker-id="' + markerId + '"]');
     if (marker) {
         marker.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        var isOriginal = marker.classList.contains('original-marker');
-        marker.classList.add(isOriginal ? 'highlight-active-orange' : 'highlight-active');
+        var isRevised = marker.classList.contains('marker-revised');
+        marker.classList.add(isRevised ? 'highlight-active' : 'highlight-active-orange');
         setTimeout(function() {
             marker.classList.remove('highlight-active');
             marker.classList.remove('highlight-active-orange');
@@ -627,14 +621,25 @@ function fixScript(stage) {
         return;
     }
 
-    if (s.showingOriginal) {
-        s.fixedScript = s.originalScript;
-    } else {
-        s.fixedScript = s.revisedScript || s.originalScript;
-    }
+    var finalText = s.originalScript;
+    var errors = s.allErrors || [];
+
+    var sortedErrors = errors.slice().sort(function(a, b) {
+        var posA = finalText.indexOf(a.original);
+        var posB = finalText.indexOf(b.original);
+        return posB - posA;
+    });
+
+    sortedErrors.forEach(function(err) {
+        if (err.useRevised && err.original && err.revised) {
+            finalText = finalText.replace(err.original, err.revised);
+        }
+    });
+
+    s.fixedScript = finalText;
 
     if (stage === 'stage2') {
-        state.finalScript = s.fixedScript;
+        state.finalScript = finalText;
         var downloadBtn = document.getElementById('btn-download');
         if (downloadBtn) {
             downloadBtn.disabled = false;
@@ -676,13 +681,12 @@ function startAnalysis(stage) {
 
     state[stage].originalScript = scriptText;
     state[stage].allErrors = [];
-    state[stage].showingOriginal = false;
 
     analyzeScript(scriptText, stage, apiKey);
 }
 
 function startStage2Analysis() {
-    var scriptText = state.stage1.fixedScript || state.stage1.revisedScript || state.stage1.originalScript;
+    var scriptText = state.stage1.fixedScript || state.stage1.originalScript;
     if (!scriptText) {
         alert('1차 분석을 먼저 완료해주세요.');
         return;
@@ -697,7 +701,6 @@ function startStage2Analysis() {
 
     state.stage2.originalScript = scriptText;
     state.stage2.allErrors = [];
-    state.stage2.showingOriginal = false;
 
     analyzeScript(scriptText, 'stage2', apiKey);
 }
@@ -749,80 +752,34 @@ function getAnalysisPrompt(scriptText, stage) {
     if (stage === 'stage1') {
         return '당신은 조선시대 사극 대본 전문 검수자입니다. 1차 분석을 수행합니다.\n\n' +
             '=== 분석 항목 (6가지 필수 검토) ===\n\n' +
-            '1. **인물 설정 오류**\n' +
-            '   - 캐릭터의 신분/지위에 맞지 않는 말투나 행동\n' +
-            '   - 예: 노비가 양반에게 반말하는 경우\n' +
-            '   - 예: 왕에게 부적절한 호칭 사용\n' +
-            '   - 예: 신분에 맞지 않는 복장/소지품 언급\n\n' +
-            '2. **시간 왜곡 검출**\n' +
-            '   - 조선시대에 존재하지 않던 물건, 개념, 제도 언급\n' +
-            '   - 반드시 검출할 현대어: ' + modernWords + '\n' +
-            '   - 예: 시계, 병원, 경찰, 학교 등 근대 이후 용어\n\n' +
-            '3. **이야기 흐름 분석**\n' +
-            '   - 장면 전환이 부자연스러운 부분\n' +
-            '   - 대화의 맥락이 끊기는 부분\n' +
-            '   - 감정선이 갑자기 바뀌는 부분\n\n' +
-            '4. **쌩뚱맞은 표현 검출**\n' +
-            '   - 상황에 맞지 않는 대사\n' +
-            '   - 분위기를 깨는 부적절한 표현\n' +
-            '   - 시대 분위기와 어울리지 않는 현대적 표현/말투\n\n' +
-            '5. **캐릭터 일관성 검토**\n' +
-            '   - 같은 캐릭터가 다른 성격/말투를 보이는 경우\n' +
-            '   - 캐릭터 설정과 모순되는 행동/대사\n\n' +
-            '6. **장면 연결성 분석**\n' +
-            '   - 앞뒤 장면과 연결되지 않는 내용\n' +
-            '   - 시간/공간적 비약이 설명 없이 발생\n' +
-            '   - 등장인물이 갑자기 나타나거나 사라지는 경우\n\n' +
+            '1. **인물 설정 오류**: 캐릭터의 신분/지위에 맞지 않는 말투나 행동\n' +
+            '2. **시간 왜곡 검출**: 조선시대에 존재하지 않던 물건, 개념, 제도\n' +
+            '   - 검출 대상: ' + modernWords + '\n' +
+            '3. **이야기 흐름 분석**: 장면 전환이 부자연스러운 부분\n' +
+            '4. **쌩뚱맞은 표현 검출**: 상황에 맞지 않는 대사, 분위기를 깨는 표현\n' +
+            '5. **캐릭터 일관성 검토**: 같은 캐릭터가 다른 성격/말투를 보이는 경우\n' +
+            '6. **장면 연결성 분석**: 앞뒤 장면과 연결되지 않는 내용\n\n' +
             '=== 절대 금지 ===\n' +
             '- 나레이션(N: 또는 나레이션:)은 현대어 사용이 정상입니다. 수정하지 마세요.\n\n' +
             '=== 출력 형식 (JSON만) ===\n' +
             '```json\n' +
-            '{\n' +
-            '  "errors": [\n' +
-            '    {\n' +
-            '      "type": "인물설정/시간왜곡/이야기흐름/쌩뚱맞은표현/캐릭터일관성/장면연결성 중 하나",\n' +
-            '      "original": "원문",\n' +
-            '      "revised": "수정안",\n' +
-            '      "reason": "수정 이유"\n' +
-            '    }\n' +
-            '  ],\n' +
-            '  "revisedScript": "전체 수정된 대본",\n' +
-            '  "summary": "분석 요약"\n' +
-            '}\n' +
+            '{"errors":[{"type":"유형","original":"원문","revised":"수정안","reason":"이유"}],"revisedScript":"전체 수정 대본","summary":"요약"}\n' +
             '```\n\n' +
             '=== 분석할 대본 ===\n' + scriptText;
     } else {
         return '당신은 조선시대 사극 대본 전문 검수자입니다. 2차 정밀 분석을 수행합니다.\n\n' +
-            '1차 분석에서 놓친 오류를 찾아내세요.\n\n' +
-            '=== 2차 분석 중점 항목 ===\n\n' +
-            '1. **미세한 시대착오**: 1차에서 놓친 현대어/외래어\n' +
-            '2. **대사 자연스러움**: 조선시대 말투로서 부자연스러운 표현\n' +
-            '3. **호칭 일관성**: 같은 인물에 대한 호칭이 일관적인지\n' +
-            '4. **감정선 연결**: 캐릭터의 감정 변화가 자연스러운지\n' +
-            '5. **복선/떡밥 회수**: 언급된 내용이 적절히 연결되는지\n' +
-            '6. **역사적 사실 오류**: 실제 역사와 맞지 않는 내용\n\n' +
+            '=== 2차 분석 항목 ===\n' +
+            '1. 미세한 시대착오: 1차에서 놓친 현대어/외래어\n' +
+            '2. 대사 자연스러움: 조선시대 말투로서 부자연스러운 표현\n' +
+            '3. 호칭 일관성: 같은 인물에 대한 호칭이 일관적인지\n' +
+            '4. 감정선 연결: 캐릭터의 감정 변화가 자연스러운지\n' +
+            '5. 복선/떡밥 회수: 언급된 내용이 적절히 연결되는지\n' +
+            '6. 역사적 사실 오류: 실제 역사와 맞지 않는 내용\n\n' +
             '=== 절대 금지 ===\n' +
-            '- 나레이션(N: 또는 나레이션:)은 현대어 사용이 정상입니다. 수정하지 마세요.\n\n' +
+            '- 나레이션(N: 또는 나레이션:)은 수정하지 마세요.\n\n' +
             '=== 출력 형식 (JSON만) ===\n' +
             '```json\n' +
-            '{\n' +
-            '  "errors": [\n' +
-            '    {\n' +
-            '      "type": "오류 유형",\n' +
-            '      "original": "원문",\n' +
-            '      "revised": "수정안",\n' +
-            '      "reason": "수정 이유"\n' +
-            '    }\n' +
-            '  ],\n' +
-            '  "revisedScript": "전체 수정된 대본",\n' +
-            '  "summary": "분석 요약",\n' +
-            '  "scores": {\n' +
-            '    "senior": 0-100,\n' +
-            '    "fun": 0-100,\n' +
-            '    "flow": 0-100,\n' +
-            '    "retention": 0-100\n' +
-            '  }\n' +
-            '}\n' +
+            '{"errors":[{"type":"유형","original":"원문","revised":"수정안","reason":"이유"}],"revisedScript":"전체 수정 대본","summary":"요약","scores":{"senior":0-100,"fun":0-100,"flow":0-100,"retention":0-100}}\n' +
             '```\n\n' +
             '=== 분석할 대본 ===\n' + scriptText;
     }
@@ -879,6 +836,7 @@ function processAnalysisResult(response, stage, originalScript) {
 
     errors.forEach(function(err, index) {
         err.id = 'marker-' + stage + '-' + index;
+        err.useRevised = true;
     });
 
     state[stage].allErrors = errors;
@@ -886,7 +844,7 @@ function processAnalysisResult(response, stage, originalScript) {
     state[stage].analysis = result;
 
     displayAnalysisTable(stage, errors);
-    displayRevisedWithMarkers(stage);
+    renderScriptWithMarkers(stage);
     enableStageButtons(stage);
 
     if (stage === 'stage2') {
@@ -905,20 +863,33 @@ function displayAnalysisTable(stage, errors) {
     }
 
     var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;">';
-    html += '<thead><tr style="background:#333;"><th style="padding:10px;border:1px solid #555;width:15%;">유형</th><th style="padding:10px;border:1px solid #555;width:25%;">원문</th><th style="padding:10px;border:1px solid #555;width:25%;">수정안</th><th style="padding:10px;border:1px solid #555;width:35%;">이유</th></tr></thead>';
+    html += '<thead><tr style="background:#333;">';
+    html += '<th style="padding:10px;border:1px solid #555;width:12%;">유형</th>';
+    html += '<th style="padding:10px;border:1px solid #555;width:22%;">원문</th>';
+    html += '<th style="padding:10px;border:1px solid #555;width:22%;">수정안</th>';
+    html += '<th style="padding:10px;border:1px solid #555;width:28%;">이유</th>';
+    html += '<th style="padding:10px;border:1px solid #555;width:16%;">선택</th>';
+    html += '</tr></thead>';
     html += '<tbody>';
 
     errors.forEach(function(err) {
-        html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;" onclick="scrollToMarker(\'' + stage + '\', \'' + err.id + '\')">';
-        html += '<td style="padding:8px;border:1px solid #555;text-align:center;">' + escapeHtml(err.type) + '</td>';
-        html += '<td style="padding:8px;border:1px solid #555;background:#ffebee;color:#c62828;">' + escapeHtml(err.original) + '</td>';
-        html += '<td style="padding:8px;border:1px solid #555;background:#e8f5e9;color:#2e7d32;">' + escapeHtml(err.revised) + '</td>';
-        html += '<td style="padding:8px;border:1px solid #555;">' + escapeHtml(err.reason) + '</td>';
+        var beforeActive = !err.useRevised ? 'active' : '';
+        var afterActive = err.useRevised ? 'active' : '';
+        
+        html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;">';
+        html += '<td style="padding:8px;border:1px solid #555;text-align:center;" onclick="scrollToMarker(\'' + stage + '\', \'' + err.id + '\')">' + escapeHtml(err.type) + '</td>';
+        html += '<td style="padding:8px;border:1px solid #555;background:#ffebee;color:#c62828;" onclick="scrollToMarker(\'' + stage + '\', \'' + err.id + '\')">' + escapeHtml(err.original) + '</td>';
+        html += '<td style="padding:8px;border:1px solid #555;background:#e8f5e9;color:#2e7d32;" onclick="scrollToMarker(\'' + stage + '\', \'' + err.id + '\')">' + escapeHtml(err.revised) + '</td>';
+        html += '<td style="padding:8px;border:1px solid #555;" onclick="scrollToMarker(\'' + stage + '\', \'' + err.id + '\')">' + escapeHtml(err.reason) + '</td>';
+        html += '<td style="padding:8px;border:1px solid #555;text-align:center;">';
+        html += '<button class="toggle-btn toggle-btn-before ' + beforeActive + '" data-error-id="' + err.id + '" onclick="toggleSingleError(\'' + stage + '\', \'' + err.id + '\', false)">수정 전</button>';
+        html += '<button class="toggle-btn toggle-btn-after ' + afterActive + '" data-error-id="' + err.id + '" onclick="toggleSingleError(\'' + stage + '\', \'' + err.id + '\', true)">수정 후</button>';
+        html += '</td>';
         html += '</tr>';
     });
 
     html += '</tbody></table>';
-    html += '<div style="text-align:center;padding:10px;color:#aaa;">총 ' + errors.length + '개 오류 발견</div>';
+    html += '<div style="text-align:center;padding:10px;color:#aaa;">총 ' + errors.length + '개 오류 발견 (각 항목별로 수정 전/후 선택 가능)</div>';
 
     container.innerHTML = html;
 }
