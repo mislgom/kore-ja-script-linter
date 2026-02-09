@@ -1,10 +1,10 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.20 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.20: 스크롤 위치 유지 + 분석 결과 클릭 시 수정본 이동/하이라이트
+ * main.js v4.21 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.21: 분석결과 표 색상 통일 + 수정 반영 연한 초록색 하이라이트
  */
 
-console.log('🚀 main.js v4.20 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
+console.log('🚀 main.js v4.21 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
 
 // ===================== 조선시대 고증 DB =====================
 const HISTORICAL_RULES = {
@@ -190,8 +190,7 @@ function initApp() {
     console.log('✅ 고증 DB 로드됨: ' + getTotalHistoricalRules() + '개 규칙');
     console.log('✅ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('✅ 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.20 초기화 완료');
-    console.log('📌 v4.20 업데이트: 스크롤 위치 유지 + 분석 결과 클릭 시 수정본 이동/하이라이트');
+    console.log('✅ main.js v4.21 초기화 완료');
 }
 
 function getTotalHistoricalRules() {
@@ -386,7 +385,6 @@ function showOriginal(stage) {
     const s = state[stage];
     if (!s.originalScript) return alert('원본이 없습니다.');
     
-    // 현재 스크롤 위치 저장
     const container = document.getElementById('revised-' + stage);
     const scrollWrapper = container.querySelector('.script-scroll-wrapper');
     if (scrollWrapper) {
@@ -395,7 +393,6 @@ function showOriginal(stage) {
     
     renderPlainScript(s.originalScript, container, s.allErrors, 'original');
     
-    // 스크롤 위치 복원
     setTimeout(() => {
         const newWrapper = container.querySelector('.script-scroll-wrapper');
         if (newWrapper && s.scrollPosition) {
@@ -411,7 +408,6 @@ function showRevised(stage) {
     const s = state[stage];
     if (!s.revisedScript) return alert('수정본이 없습니다.');
     
-    // 현재 스크롤 위치 저장
     const container = document.getElementById('revised-' + stage);
     const scrollWrapper = container.querySelector('.script-scroll-wrapper');
     if (scrollWrapper) {
@@ -420,7 +416,6 @@ function showRevised(stage) {
     
     renderRevisedWithMarkers(s.revisedScript, s.allErrors, container, stage);
     
-    // 스크롤 위치 복원
     setTimeout(() => {
         const newWrapper = container.querySelector('.script-scroll-wrapper');
         if (newWrapper && s.scrollPosition) {
@@ -435,18 +430,17 @@ function showRevised(stage) {
 function renderPlainScript(script, container, allErrors, mode) {
     if (!script) { container.innerHTML = '<p class="placeholder">내용이 없습니다.</p>'; return; }
     
-    let html = '<div class="script-scroll-wrapper" style="max-height:400px;overflow-y:auto;padding:15px;background:#f9f9f9;border-radius:8px;">';
+    let html = '<div class="script-scroll-wrapper" style="max-height:400px;overflow-y:auto;padding:15px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;">';
     html += '<div class="revised-script">';
     
-    // 원본에서 수정 전 텍스트 하이라이트 (빨간색 취소선)
-    let markedScript = script;
+    let markedScript = escapeHtml(script);
     if (mode === 'original' && allErrors && allErrors.length > 0) {
         for (const err of allErrors) {
             if (err.original && err.original.trim()) {
-                const escapedOriginal = err.original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const escapedOriginal = escapeHtml(err.original).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 const regex = new RegExp(escapedOriginal, 'g');
                 markedScript = markedScript.replace(regex, 
-                    '<mark class="error-original" data-error-index="' + err.index + '" style="background:#ffcdd2;text-decoration:line-through;cursor:pointer;" title="수정 전: ' + escapeHtml(err.original) + ' → ' + escapeHtml(err.corrected) + '">' + escapeHtml(err.original) + '</mark>');
+                    '<mark class="error-original" data-error-index="' + err.index + '" style="background:#ffcdd2;padding:1px 3px;border-radius:2px;cursor:pointer;" title="' + escapeHtml(err.original) + ' → ' + escapeHtml(err.corrected) + '">' + escapeHtml(err.original) + '</mark>');
             }
         }
     }
@@ -553,13 +547,11 @@ function parseAnalysisResponse(response) {
     console.log('📝 응답 파싱 시작, 길이: ' + response.length);
     
     try {
-        // 1. ```json ... ``` 블록 추출 시도
         let jsonStr = '';
         const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
         if (codeBlockMatch) {
             jsonStr = codeBlockMatch[1].trim();
         } else {
-            // 2. [ ... ] 배열 직접 추출
             const arrayMatch = response.match(/\[[\s\S]*\]/);
             if (arrayMatch) {
                 jsonStr = arrayMatch[0];
@@ -571,7 +563,6 @@ function parseAnalysisResponse(response) {
             return [];
         }
         
-        // 3. JSON 파싱 시도
         try {
             const parsed = JSON.parse(jsonStr);
             console.log('✅ JSON 파싱 성공: ' + parsed.length + '개 오류');
@@ -579,7 +570,6 @@ function parseAnalysisResponse(response) {
         } catch (e) {
             console.log('⚠️ JSON 파싱 실패, 복구 시도...');
             
-            // 4. 개별 객체 추출 시도
             const objects = [];
             const objectRegex = /\{[^{}]*"line"[^{}]*"type"[^{}]*"original"[^{}]*"corrected"[^{}]*"reason"[^{}]*\}/g;
             let match;
@@ -587,9 +577,7 @@ function parseAnalysisResponse(response) {
                 try {
                     const obj = JSON.parse(match[0]);
                     objects.push(obj);
-                } catch (e2) {
-                    // 개별 객체 파싱 실패 무시
-                }
+                } catch (e2) {}
             }
             
             if (objects.length > 0) {
@@ -659,7 +647,6 @@ async function startAnalysis(stage) {
         updateProgress(70, '응답 분석 중...');
         const aiErrors = parseAnalysisResponse(response);
 
-        // 통합 오류 목록
         const allErrors = [];
         let errorIndex = 0;
         
@@ -696,7 +683,6 @@ async function startAnalysis(stage) {
         renderAnalysisResult(stage, allErrors);
         renderRevisedWithMarkers(revisedScript, allErrors, document.getElementById('revised-' + stage), stage);
 
-        // 버튼 활성화
         const btnBefore = document.getElementById('btn-revert-before-' + stage);
         const btnAfter = document.getElementById('btn-revert-after-' + stage);
         if (btnBefore) { btnBefore.disabled = false; btnBefore.style.opacity = '1'; }
@@ -721,7 +707,7 @@ async function startAnalysis(stage) {
     currentAbortController = null;
 }
 
-// ===================== 분석 결과 렌더링 (클릭 이동 기능) =====================
+// ===================== 분석 결과 렌더링 =====================
 function renderAnalysisResult(stage, allErrors) {
     const container = document.getElementById('analysis-' + stage);
     if (!container) return;
@@ -732,30 +718,31 @@ function renderAnalysisResult(stage, allErrors) {
     }
     
     let html = '<div class="analysis-result">';
-    html += '<div class="result-header" style="background:#1a237e;color:white;padding:10px 15px;border-radius:8px 8px 0 0;font-weight:bold;">';
-    html += '📋 검수 결과: 총 ' + allErrors.length + '건 (클릭하면 해당 위치로 이동)';
+    html += '<div class="result-header" style="background:#3d5afe;color:white;padding:12px 15px;border-radius:8px 8px 0 0;font-weight:bold;font-size:15px;">';
+    html += '📋 검수 결과: 총 ' + allErrors.length + '건 <span style="font-size:12px;font-weight:normal;opacity:0.9;">(클릭 시 해당 위치로 이동)</span>';
     html += '</div>';
     
-    html += '<div class="result-table-wrapper" style="max-height:300px;overflow-y:auto;">';
+    html += '<div class="result-table-wrapper" style="max-height:300px;overflow-y:auto;border:1px solid #c5cae9;border-top:none;border-radius:0 0 8px 8px;">';
     html += '<table class="result-table" style="width:100%;border-collapse:collapse;font-size:14px;">';
     html += '<thead style="background:#e8eaf6;position:sticky;top:0;">';
     html += '<tr>';
-    html += '<th style="padding:10px;border:1px solid #c5cae9;width:40px;">번호</th>';
-    html += '<th style="padding:10px;border:1px solid #c5cae9;width:80px;">유형</th>';
-    html += '<th style="padding:10px;border:1px solid #c5cae9;">수정 전</th>';
-    html += '<th style="padding:10px;border:1px solid #c5cae9;">수정 후</th>';
-    html += '<th style="padding:10px;border:1px solid #c5cae9;">사유</th>';
+    html += '<th style="padding:10px;border-bottom:2px solid #3d5afe;width:50px;color:#3d5afe;">번호</th>';
+    html += '<th style="padding:10px;border-bottom:2px solid #3d5afe;width:100px;color:#3d5afe;">유형</th>';
+    html += '<th style="padding:10px;border-bottom:2px solid #3d5afe;color:#3d5afe;">수정 전</th>';
+    html += '<th style="padding:10px;border-bottom:2px solid #3d5afe;color:#3d5afe;">수정 후</th>';
+    html += '<th style="padding:10px;border-bottom:2px solid #3d5afe;color:#3d5afe;">사유</th>';
     html += '</tr>';
     html += '</thead>';
     html += '<tbody>';
     
     allErrors.forEach((err, idx) => {
-        html += '<tr class="error-row clickable-row" data-stage="' + stage + '" data-index="' + err.index + '" data-corrected="' + escapeHtml(err.corrected) + '" style="cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background=\'#e3f2fd\'" onmouseout="this.style.background=\'\'">';
-        html += '<td style="padding:8px;border:1px solid #e0e0e0;text-align:center;">' + (idx + 1) + '</td>';
-        html += '<td style="padding:8px;border:1px solid #e0e0e0;text-align:center;"><span class="error-type-badge" style="background:#' + getTypeColor(err.type) + ';color:white;padding:2px 8px;border-radius:10px;font-size:12px;">' + escapeHtml(err.type) + '</span></td>';
-        html += '<td style="padding:8px;border:1px solid #e0e0e0;color:#d32f2f;font-weight:bold;">' + escapeHtml(err.original) + '</td>';
-        html += '<td style="padding:8px;border:1px solid #e0e0e0;color:#388e3c;font-weight:bold;">' + escapeHtml(err.corrected) + '</td>';
-        html += '<td style="padding:8px;border:1px solid #e0e0e0;font-size:12px;color:#666;">' + escapeHtml(err.reason) + '</td>';
+        const rowBg = idx % 2 === 0 ? '#ffffff' : '#f5f7ff';
+        html += '<tr class="error-row clickable-row" data-stage="' + stage + '" data-index="' + err.index + '" data-corrected="' + escapeHtml(err.corrected) + '" style="cursor:pointer;background:' + rowBg + ';transition:background 0.2s;" onmouseover="this.style.background=\'#e3f2fd\'" onmouseout="this.style.background=\'' + rowBg + '\'">';
+        html += '<td style="padding:10px;border-bottom:1px solid #e8eaf6;text-align:center;font-weight:bold;color:#5c6bc0;">' + (idx + 1) + '</td>';
+        html += '<td style="padding:10px;border-bottom:1px solid #e8eaf6;text-align:center;"><span style="background:#' + getTypeColor(err.type) + ';color:white;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:bold;">' + escapeHtml(err.type) + '</span></td>';
+        html += '<td style="padding:10px;border-bottom:1px solid #e8eaf6;color:#d32f2f;font-weight:bold;">' + escapeHtml(err.original) + '</td>';
+        html += '<td style="padding:10px;border-bottom:1px solid #e8eaf6;color:#2e7d32;font-weight:bold;">' + escapeHtml(err.corrected) + '</td>';
+        html += '<td style="padding:10px;border-bottom:1px solid #e8eaf6;font-size:13px;color:#666;">' + escapeHtml(err.reason) + '</td>';
         html += '</tr>';
     });
     
@@ -763,7 +750,6 @@ function renderAnalysisResult(stage, allErrors) {
     
     container.innerHTML = html;
     
-    // 클릭 이벤트 바인딩
     container.querySelectorAll('.clickable-row').forEach(row => {
         row.addEventListener('click', () => {
             const stg = row.getAttribute('data-stage');
@@ -776,7 +762,7 @@ function renderAnalysisResult(stage, allErrors) {
 
 function getTypeColor(type) {
     const colors = {
-        '시대적 고증 오류': '9c27b0',
+        '시대적 고증 오류': '7c4dff',
         '맞춤법': 'f44336',
         '띄어쓰기': '2196f3',
         '문장부호': 'ff9800',
@@ -786,17 +772,16 @@ function getTypeColor(type) {
     return colors[type] || '607d8b';
 }
 
-// ===================== 수정본 렌더링 (마커 표시) =====================
+// ===================== 수정본 렌더링 =====================
 function renderRevisedWithMarkers(script, allErrors, container, stage) {
     if (!script) { 
         container.innerHTML = '<p class="placeholder">수정본이 없습니다.</p>'; 
         return; 
     }
     
-    let html = '<div class="script-scroll-wrapper" style="max-height:400px;overflow-y:auto;padding:15px;background:#f1f8e9;border-radius:8px;">';
+    let html = '<div class="script-scroll-wrapper" style="max-height:400px;overflow-y:auto;padding:15px;background:#fff;border:1px solid #e0e0e0;border-radius:8px;">';
     html += '<div class="revised-script">';
     
-    // 수정된 부분에 마커 표시
     let markedScript = escapeHtml(script);
     
     if (allErrors && allErrors.length > 0) {
@@ -805,7 +790,7 @@ function renderRevisedWithMarkers(script, allErrors, container, stage) {
                 const escapedCorrected = escapeHtml(err.corrected).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 const regex = new RegExp(escapedCorrected, 'g');
                 markedScript = markedScript.replace(regex, 
-                    '<mark class="corrected-mark" data-error-index="' + err.index + '" style="background:#c8e6c9;padding:2px 4px;border-radius:3px;cursor:pointer;" title="수정됨: ' + escapeHtml(err.original) + ' → ' + escapeHtml(err.corrected) + '">' + escapeHtml(err.corrected) + '</mark>');
+                    '<mark class="corrected-mark" data-error-index="' + err.index + '" style="background:#e8f5e9;padding:1px 3px;border-radius:3px;cursor:pointer;" title="' + escapeHtml(err.original) + ' → ' + escapeHtml(err.corrected) + '">' + escapeHtml(err.corrected) + '</mark>');
             }
         }
     }
@@ -818,39 +803,36 @@ function renderRevisedWithMarkers(script, allErrors, container, stage) {
     container.innerHTML = html;
 }
 
-// ===================== 검수 결과 클릭 시 수정본으로 이동 =====================
+// ===================== 클릭 시 수정본으로 이동 =====================
 function scrollToErrorInRevised(stage, errorIndex, correctedText) {
     console.log('🔍 이동: stage=' + stage + ', index=' + errorIndex + ', text=' + correctedText);
     
     const revisedContainer = document.getElementById('revised-' + stage);
     if (!revisedContainer) return;
     
-    // 수정 후 보기로 전환
     const s = state[stage];
     if (s.revisedScript) {
         renderRevisedWithMarkers(s.revisedScript, s.allErrors, revisedContainer, stage);
-        document.getElementById('btn-revert-before-' + stage).style.opacity = '1';
-        document.getElementById('btn-revert-after-' + stage).style.opacity = '0.5';
+        const btnBefore = document.getElementById('btn-revert-before-' + stage);
+        const btnAfter = document.getElementById('btn-revert-after-' + stage);
+        if (btnBefore) btnBefore.style.opacity = '1';
+        if (btnAfter) btnAfter.style.opacity = '0.5';
     }
     
-    // 해당 마커 찾기
     setTimeout(() => {
         const marks = revisedContainer.querySelectorAll('.corrected-mark[data-error-index="' + errorIndex + '"]');
         
         if (marks.length > 0) {
             const mark = marks[0];
             
-            // 기존 하이라이트 제거
             revisedContainer.querySelectorAll('.corrected-mark').forEach(m => {
-                m.style.background = '#c8e6c9';
+                m.style.background = '#e8f5e9';
                 m.style.boxShadow = 'none';
             });
             
-            // 새 하이라이트 적용
-            mark.style.background = '#81c784';
-            mark.style.boxShadow = '0 0 10px rgba(76, 175, 80, 0.8)';
+            mark.style.background = '#a5d6a7';
+            mark.style.boxShadow = '0 0 8px rgba(76, 175, 80, 0.6)';
             
-            // 스크롤 이동
             const wrapper = revisedContainer.querySelector('.script-scroll-wrapper');
             if (wrapper) {
                 const markTop = mark.offsetTop;
@@ -858,25 +840,22 @@ function scrollToErrorInRevised(stage, errorIndex, correctedText) {
                 wrapper.scrollTop = markTop - (wrapperHeight / 2) + (mark.clientHeight / 2);
             }
             
-            // 깜빡임 효과
             let blink = 0;
             const blinkInterval = setInterval(() => {
-                mark.style.background = blink % 2 === 0 ? '#ffeb3b' : '#81c784';
+                mark.style.background = blink % 2 === 0 ? '#fff59d' : '#a5d6a7';
                 blink++;
                 if (blink > 5) {
                     clearInterval(blinkInterval);
-                    mark.style.background = '#81c784';
+                    mark.style.background = '#a5d6a7';
                 }
             }, 200);
             
         } else {
-            // 텍스트로 직접 검색
             const scrollWrapper = revisedContainer.querySelector('.script-scroll-wrapper');
             if (scrollWrapper && correctedText) {
                 const text = scrollWrapper.textContent;
                 const pos = text.indexOf(correctedText);
                 if (pos !== -1) {
-                    // 대략적인 스크롤 위치 계산
                     const ratio = pos / text.length;
                     scrollWrapper.scrollTop = scrollWrapper.scrollHeight * ratio - scrollWrapper.clientHeight / 2;
                 }
