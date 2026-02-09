@@ -419,7 +419,7 @@ function initRevertButtons() {
     console.log('✅ 수정 전 버튼 초기화됨');
 }
 
-// ===================== "수정 전" 버튼 추가 함수 =====================
+// ===================== "수정 전/후" 버튼 추가 함수 =====================
 function addRevertButton(container, stage) {
     const parent = container.parentElement;
     
@@ -428,25 +428,39 @@ function addRevertButton(container, stage) {
     
     const btnWrapper = document.createElement('div');
     btnWrapper.className = 'revert-btn-wrapper';
-    btnWrapper.style.cssText = 'text-align: center; padding: 10px; border-top: 1px solid #ddd;';
+    btnWrapper.style.cssText = 'text-align: center; padding: 10px; border-top: 1px solid #ddd; display: flex; justify-content: center; gap: 10px;';
     
-    const btn = document.createElement('button');
-    btn.id = `btn-revert-${stage}`;
-    btn.className = 'btn-revert';
-    btn.innerHTML = '🔄 수정 전';
-    btn.style.cssText = 'background: #ff9800; color: white; border: none; padding: 8px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 14px;';
-    btn.disabled = true;
+    // 수정 전 버튼
+    const btnBefore = document.createElement('button');
+    btnBefore.id = `btn-revert-before-${stage}`;
+    btnBefore.className = 'btn-revert-before';
+    btnBefore.innerHTML = '🔄 수정 전';
+    btnBefore.style.cssText = 'background: #ff9800; color: white; border: none; padding: 8px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 14px;';
+    btnBefore.disabled = true;
     
-    btn.addEventListener('click', () => revertToOriginal(stage));
-    btn.addEventListener('mouseover', () => { if (!btn.disabled) btn.style.background = '#f57c00'; });
-    btn.addEventListener('mouseout', () => { if (!btn.disabled) btn.style.background = '#ff9800'; });
+    btnBefore.addEventListener('click', () => showOriginal(stage));
+    btnBefore.addEventListener('mouseover', () => { if (!btnBefore.disabled) btnBefore.style.background = '#f57c00'; });
+    btnBefore.addEventListener('mouseout', () => { if (!btnBefore.disabled) btnBefore.style.background = '#ff9800'; });
     
-    btnWrapper.appendChild(btn);
+    // 수정 후 버튼
+    const btnAfter = document.createElement('button');
+    btnAfter.id = `btn-revert-after-${stage}`;
+    btnAfter.className = 'btn-revert-after';
+    btnAfter.innerHTML = '✅ 수정 후';
+    btnAfter.style.cssText = 'background: #4CAF50; color: white; border: none; padding: 8px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 14px; opacity: 0.5;';
+    btnAfter.disabled = true;
+    
+    btnAfter.addEventListener('click', () => showRevised(stage));
+    btnAfter.addEventListener('mouseover', () => { if (!btnAfter.disabled) btnAfter.style.background = '#388E3C'; });
+    btnAfter.addEventListener('mouseout', () => { if (!btnAfter.disabled) btnAfter.style.background = '#4CAF50'; });
+    
+    btnWrapper.appendChild(btnBefore);
+    btnWrapper.appendChild(btnAfter);
     parent.appendChild(btnWrapper);
 }
 
-// ===================== 원문 복원 함수 =====================
-function revertToOriginal(stage) {
+// ===================== 원문 보기 함수 =====================
+function showOriginal(stage) {
     const stageState = state[stage];
     if (!stageState.originalScript) {
         alert('원본 대본이 없습니다.');
@@ -454,24 +468,39 @@ function revertToOriginal(stage) {
     }
     
     const container = document.getElementById(`revised-${stage}`);
-    const btn = document.getElementById(`btn-revert-${stage}`);
+    const btnBefore = document.getElementById(`btn-revert-before-${stage}`);
+    const btnAfter = document.getElementById(`btn-revert-after-${stage}`);
     
-    // 현재 수정본인지 원본인지 확인
-    const isShowingRevised = btn.innerHTML.includes('수정 전');
+    // 원본 표시
+    renderPlainScript(stageState.originalScript, container);
     
-    if (isShowingRevised) {
-        // 원본으로 복원
-        renderPlainScript(stageState.originalScript, container);
-        btn.innerHTML = '🔄 수정 후';
-        btn.style.background = '#4CAF50';
-        console.log(`🔄 ${stage} 원문으로 복원됨`);
-    } else {
-        // 수정본으로 다시 표시
-        renderFullScriptWithHighlight(stageState.revisedScript, stageState.analysis, container);
-        btn.innerHTML = '🔄 수정 전';
-        btn.style.background = '#ff9800';
-        console.log(`🔄 ${stage} 수정본으로 복원됨`);
+    // 버튼 상태 변경
+    btnBefore.style.opacity = '0.5';
+    btnAfter.style.opacity = '1';
+    
+    console.log(`🔄 ${stage} 원문 보기`);
+}
+
+// ===================== 수정본 보기 함수 =====================
+function showRevised(stage) {
+    const stageState = state[stage];
+    if (!stageState.revisedScript) {
+        alert('수정본이 없습니다.');
+        return;
     }
+    
+    const container = document.getElementById(`revised-${stage}`);
+    const btnBefore = document.getElementById(`btn-revert-before-${stage}`);
+    const btnAfter = document.getElementById(`btn-revert-after-${stage}`);
+    
+    // 수정본 표시
+    renderFullScriptWithHighlight(stageState.revisedScript, stageState.analysis, container);
+    
+    // 버튼 상태 변경
+    btnBefore.style.opacity = '1';
+    btnAfter.style.opacity = '0.5';
+    
+    console.log(`🔄 ${stage} 수정본 보기`);
 }
 
 // ===================== 원본 스크립트 렌더링 (하이라이트 없이) =====================
@@ -645,9 +674,11 @@ async function startAnalysis(stage) {
             state.stage1.revisionCount = mergedAnalysis ? mergedAnalysis.length : 0;
             document.getElementById('btn-analyze-stage2').disabled = false;
             
-            // 수정 전 버튼 활성화
-            const revertBtn1 = document.getElementById('btn-revert-stage1');
-            if (revertBtn1) revertBtn1.disabled = false;
+            // 수정 전/후 버튼 활성화
+const revertBtnBefore1 = document.getElementById('btn-revert-before-stage1');
+const revertBtnAfter1 = document.getElementById('btn-revert-after-stage1');
+if (revertBtnBefore1) revertBtnBefore1.disabled = false;
+if (revertBtnAfter1) revertBtnAfter1.disabled = false;
         } else {
             state.stage2.analysis = mergedAnalysis;
             state.stage2.revisedScript = verified.revisedScript;
@@ -658,8 +689,11 @@ async function startAnalysis(stage) {
             renderScores(verified.scores, historicalIssues.length);
             
             // 수정 전 버튼 활성화
-            const revertBtn2 = document.getElementById('btn-revert-stage2');
-            if (revertBtn2) revertBtn2.disabled = false;
+            // 수정 전/후 버튼 활성화
+const revertBtnBefore2 = document.getElementById('btn-revert-before-stage2');
+const revertBtnAfter2 = document.getElementById('btn-revert-after-stage2');
+if (revertBtnBefore2) revertBtnBefore2.disabled = false;
+if (revertBtnAfter2) revertBtnAfter2.disabled = false;
         }
 
         updateProgress(100, '분석 완료!');
