@@ -197,7 +197,7 @@ let currentAbortController = null;
 // ===================== API 설정 (v4.16 변경) =====================
 const API_CONFIG = {
     TIMEOUT: 300000, // 5분 (300초)
-    MODEL: 'gemini-2.5-flash-preview-05-20',
+    MODEL: 'gemini-2.5-flash',
     ENDPOINT: 'https://generativelanguage.googleapis.com/v1beta/models'
 };
 
