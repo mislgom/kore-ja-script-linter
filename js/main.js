@@ -1,10 +1,10 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.22 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.22: 다크 테마 통일 + 클릭 이동 수정 + 수정 반영 강화
+ * main.js v4.23 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.23: 수정 반영 강화 + 대본 픽스 버튼 + 2차 분석 시작 버튼
  */
 
-console.log('🚀 main.js v4.22 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
+console.log('🚀 main.js v4.23 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
 
 // ===================== 조선시대 고증 DB =====================
 const HISTORICAL_RULES = {
@@ -156,8 +156,8 @@ const HISTORICAL_RULES = {
 
 // ===================== 전역 상태 =====================
 const state = {
-    stage1: { originalScript: '', analysis: null, revisedScript: '', historicalIssues: [], allErrors: [], revisionCount: 0, scrollPosition: 0 },
-    stage2: { originalScript: '', analysis: null, revisedScript: '', historicalIssues: [], allErrors: [], revisionCount: 0, scrollPosition: 0 }
+    stage1: { originalScript: '', analysis: null, revisedScript: '', historicalIssues: [], allErrors: [], revisionCount: 0, scrollPosition: 0, fixedScript: '' },
+    stage2: { originalScript: '', analysis: null, revisedScript: '', historicalIssues: [], allErrors: [], revisionCount: 0, scrollPosition: 0, fixedScript: '' }
 };
 
 let currentAbortController = null;
@@ -187,10 +187,12 @@ function initApp() {
     initAnalysisButtons();
     initDownloadButton();
     initRevertButtons();
+    initFixButtons();
+    initStage2AnalysisButton();
     console.log('✅ 고증 DB 로드됨: ' + getTotalHistoricalRules() + '개 규칙');
     console.log('✅ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('✅ 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.22 초기화 완료');
+    console.log('✅ main.js v4.23 초기화 완료');
 }
 
 function getTotalHistoricalRules() {
@@ -241,9 +243,7 @@ function initApiKeyPanel() {
 
 function validateApiKey(apiKey) {
     if (!apiKey) return { valid: false, message: 'API 키가 설정되지 않았습니다.' };
-    console.log('🔑 API 키 검증: ' + apiKey.substring(0, 10) + '...');
     if (apiKey.length < 20) return { valid: false, message: 'API 키가 너무 짧습니다.' };
-    console.log('✅ API 키 확인 완료');
     return { valid: true, message: 'OK' };
 }
 
@@ -260,7 +260,6 @@ function initClearButton() {
         document.getElementById('original-script').value = '';
         document.getElementById('char-count').textContent = '0';
         document.getElementById('file-name-display').textContent = '';
-        console.log('🗑️ 대본 삭제됨');
     });
     console.log('✅ 지우기 버튼 초기화됨');
 }
@@ -293,7 +292,6 @@ function initDragAndDrop() {
         if (file && file.name.endsWith('.txt')) {
             handleFile(file);
             document.getElementById('file-name-display').textContent = '📎 ' + file.name;
-            console.log('📄 드래그 업로드:', file.name);
         } else alert('TXT 파일만 업로드 가능합니다.');
     });
     console.log('✅ 드래그 앤 드롭 초기화됨');
@@ -311,7 +309,7 @@ function handleFile(file) {
 // ===================== 분석 버튼 =====================
 function initAnalysisButtons() {
     document.getElementById('btn-analyze-stage1').addEventListener('click', () => startAnalysis('stage1'));
-    document.getElementById('btn-analyze-stage2').addEventListener('click', () => startAnalysis('stage2'));
+    document.getElementById('btn-analyze-stage2').addEventListener('click', () => startStage2Analysis());
     document.getElementById('btn-stop-analysis').addEventListener('click', () => {
         if (currentAbortController) {
             currentAbortController.abort();
@@ -332,7 +330,7 @@ function initDownloadButton() {
     const btn = document.getElementById('btn-download');
     if (btn) {
         btn.addEventListener('click', () => {
-            const finalScript = state.stage2.revisedScript || state.stage1.revisedScript;
+            const finalScript = state.stage2.fixedScript || state.stage2.revisedScript || state.stage1.fixedScript || state.stage1.revisedScript;
             if (!finalScript) return alert('다운로드할 수정본이 없습니다.');
             const blob = new Blob([finalScript], { type: 'text/plain;charset=utf-8' });
             const url = URL.createObjectURL(blob);
@@ -360,25 +358,110 @@ function addRevertButton(container, stage) {
     if (parent.querySelector('.revert-btn-wrapper')) return;
     const wrapper = document.createElement('div');
     wrapper.className = 'revert-btn-wrapper';
-    wrapper.style.cssText = 'text-align:center;padding:10px;border-top:1px solid #444;display:flex;justify-content:center;gap:10px;';
+    wrapper.style.cssText = 'text-align:center;padding:10px;border-top:1px solid #444;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;';
 
     const btnBefore = document.createElement('button');
     btnBefore.id = 'btn-revert-before-' + stage;
     btnBefore.innerHTML = '🔄 수정 전';
-    btnBefore.style.cssText = 'background:#ff9800;color:white;border:none;padding:8px 20px;border-radius:5px;cursor:pointer;font-weight:bold;';
+    btnBefore.style.cssText = 'background:#ff9800;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
     btnBefore.disabled = true;
     btnBefore.addEventListener('click', () => showOriginal(stage));
 
     const btnAfter = document.createElement('button');
     btnAfter.id = 'btn-revert-after-' + stage;
     btnAfter.innerHTML = '✅ 수정 후';
-    btnAfter.style.cssText = 'background:#4CAF50;color:white;border:none;padding:8px 20px;border-radius:5px;cursor:pointer;font-weight:bold;opacity:0.5;';
+    btnAfter.style.cssText = 'background:#4CAF50;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;opacity:0.5;';
     btnAfter.disabled = true;
     btnAfter.addEventListener('click', () => showRevised(stage));
 
     wrapper.appendChild(btnBefore);
     wrapper.appendChild(btnAfter);
+    
+    // 대본 픽스 버튼 추가 (stage1만)
+    if (stage === 'stage1') {
+        const btnFix = document.createElement('button');
+        btnFix.id = 'btn-fix-script';
+        btnFix.innerHTML = '📌 대본 픽스';
+        btnFix.style.cssText = 'background:#2196F3;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
+        btnFix.disabled = true;
+        btnFix.addEventListener('click', () => fixScript());
+        wrapper.appendChild(btnFix);
+    }
+    
     parent.appendChild(wrapper);
+}
+
+// ===================== 대본 픽스 버튼 초기화 =====================
+function initFixButtons() {
+    console.log('✅ 대본 픽스 버튼 초기화됨');
+}
+
+// ===================== 대본 픽스 기능 =====================
+function fixScript() {
+    const s = state.stage1;
+    if (!s.revisedScript) {
+        alert('픽스할 대본이 없습니다. 1차 분석을 먼저 진행해주세요.');
+        return;
+    }
+    
+    s.fixedScript = s.revisedScript;
+    
+    const btn = document.getElementById('btn-fix-script');
+    if (btn) {
+        btn.innerHTML = '✅ 픽스 완료';
+        btn.style.background = '#1565C0';
+    }
+    
+    // 2차 분석 시작 버튼 활성화
+    const btn2 = document.getElementById('btn-start-stage2');
+    if (btn2) {
+        btn2.disabled = false;
+        btn2.style.opacity = '1';
+    }
+    
+    alert('대본이 픽스되었습니다!\n\n이제 "2차 분석 시작" 버튼을 눌러 2차 분석을 진행하세요.');
+    console.log('📌 대본 픽스 완료: ' + s.fixedScript.length + '자');
+}
+
+// ===================== 2차 분석 시작 버튼 =====================
+function initStage2AnalysisButton() {
+    const analysisContainer = document.getElementById('analysis-stage2');
+    if (!analysisContainer) return;
+    
+    const parent = analysisContainer.parentElement;
+    
+    // 기존 버튼 있으면 제거
+    const existingBtn = parent.querySelector('.stage2-start-wrapper');
+    if (existingBtn) existingBtn.remove();
+    
+    const wrapper = document.createElement('div');
+    wrapper.className = 'stage2-start-wrapper';
+    wrapper.style.cssText = 'text-align:center;padding:15px;';
+    
+    const btn = document.createElement('button');
+    btn.id = 'btn-start-stage2';
+    btn.innerHTML = '🔍 2차 분석 시작';
+    btn.style.cssText = 'background:#9c27b0;color:white;border:none;padding:12px 30px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:15px;opacity:0.5;';
+    btn.disabled = true;
+    btn.addEventListener('click', () => startStage2Analysis());
+    
+    wrapper.appendChild(btn);
+    parent.appendChild(wrapper);
+    
+    console.log('✅ 2차 분석 시작 버튼 초기화됨');
+}
+
+// ===================== 2차 분석 시작 =====================
+function startStage2Analysis() {
+    const fixedScript = state.stage1.fixedScript;
+    
+    if (!fixedScript) {
+        alert('픽스된 대본이 없습니다.\n\n1차 분석 후 "대본 픽스" 버튼을 먼저 눌러주세요.');
+        return;
+    }
+    
+    console.log('🔍 2차 분석 시작 (픽스된 대본 사용): ' + fixedScript.length + '자');
+    startAnalysis('stage2', fixedScript);
 }
 
 function showOriginal(stage) {
@@ -430,13 +513,13 @@ function renderPlainScript(script, container, allErrors, mode) {
         for (const err of allErrors) {
             if (err.original && err.original.trim()) {
                 const regex = new RegExp(escapeRegex(err.original), 'g');
-                content = content.replace(regex, '[[MARK_ERR_' + err.index + ']]' + err.original + '[[/MARK_ERR]]');
+                content = content.replace(regex, '<<<ERR_' + err.index + '>>>' + err.original + '<<</ERR>>>');
             }
         }
     }
     
     content = escapeHtml(content);
-    content = content.replace(/\[\[MARK_ERR_(\d+)\]\](.*?)\[\[\/MARK_ERR\]\]/g, '<mark class="error-original" data-error-index="$1" style="background:#ffcdd2;color:#b71c1c;padding:1px 4px;border-radius:3px;cursor:pointer;">$2</mark>');
+    content = content.replace(/&lt;&lt;&lt;ERR_(\d+)&gt;&gt;&gt;(.*?)&lt;&lt;&lt;\/ERR&gt;&gt;&gt;/g, '<mark class="error-original" data-error-index="$1" style="background:#ffcdd2;color:#b71c1c;padding:1px 4px;border-radius:3px;cursor:pointer;">$2</mark>');
     
     content.split('\n').forEach(line => {
         html += '<p style="margin:5px 0;">' + (line || '&nbsp;') + '</p>';
@@ -462,7 +545,10 @@ function checkAndFixHistoricalAccuracy(scriptText) {
             const matches = scriptText.match(regex);
             if (matches) {
                 const replacement = rule.historical[0] !== '없음' ? rule.historical[0] : null;
-                if (replacement) fixedScript = fixedScript.replace(regex, replacement);
+                if (replacement) {
+                    fixedScript = fixedScript.replace(regex, replacement);
+                    console.log('   📜 고증수정: "' + rule.modern + '" → "' + replacement + '" (' + matches.length + '회)');
+                }
                 issues.push({
                     type: '시대적 고증 오류',
                     category: categoryNames[category],
@@ -482,9 +568,7 @@ function checkAndFixHistoricalAccuracy(scriptText) {
 // ===================== API 호출 =====================
 async function callGeminiAPI(prompt, apiKey) {
     const url = API_CONFIG.ENDPOINT + '/' + API_CONFIG.MODEL + ':generateContent?key=' + apiKey;
-    console.log('📡 API 호출 시작');
-    console.log('   - 모델: ' + API_CONFIG.MODEL);
-    console.log('   - 프롬프트: ' + prompt.length + '자');
+    console.log('📡 API 호출 시작 (모델: ' + API_CONFIG.MODEL + ')');
 
     currentAbortController = new AbortController();
     const timeoutId = setTimeout(() => { if (currentAbortController) currentAbortController.abort(); }, API_CONFIG.TIMEOUT);
@@ -500,12 +584,12 @@ async function callGeminiAPI(prompt, apiKey) {
             signal: currentAbortController.signal
         });
         clearTimeout(timeoutId);
-        console.log('📡 응답: ' + response.status);
+        console.log('📡 응답 상태: ' + response.status);
         if (!response.ok) throw new Error('API 오류: ' + response.status);
         const data = await response.json();
         if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0].text) {
             const text = data.candidates[0].content.parts[0].text;
-            console.log('   - 응답 길이: ' + text.length + '자');
+            console.log('📡 응답 길이: ' + text.length + '자');
             return text;
         }
         throw new Error('응답 형식 오류');
@@ -521,7 +605,7 @@ function buildAnalysisPrompt(scriptText) {
 
 검사 항목:
 1. 맞춤법 오류
-2. 띄어쓰기 오류
+2. 띄어쓰기 오류  
 3. 문장부호 누락/오류
 4. 어색한 표현
 5. 문법 오류
@@ -537,7 +621,7 @@ ${scriptText}`;
 
 // ===================== 응답 파싱 =====================
 function parseAnalysisResponse(response) {
-    console.log('📝 응답 파싱 시작, 길이: ' + response.length);
+    console.log('📝 응답 파싱 시작');
     
     try {
         let jsonStr = '';
@@ -545,32 +629,32 @@ function parseAnalysisResponse(response) {
         if (codeBlockMatch) {
             jsonStr = codeBlockMatch[1].trim();
         } else {
-            const arrayMatch = response.match(/\[[\s\S]*\]/);
+            const arrayMatch = response.match(/\[[\s\S]*?\]/);
             if (arrayMatch) jsonStr = arrayMatch[0];
         }
         
         if (!jsonStr) {
-            console.log('⚠️ JSON을 찾을 수 없음');
+            console.log('⚠️ JSON 없음');
             return [];
         }
         
         try {
             const parsed = JSON.parse(jsonStr);
-            console.log('✅ JSON 파싱 성공: ' + parsed.length + '개');
+            console.log('✅ 파싱 성공: ' + parsed.length + '개');
             return Array.isArray(parsed) ? parsed : [];
         } catch (e) {
-            console.log('⚠️ JSON 파싱 실패, 복구 시도...');
+            console.log('⚠️ 파싱 실패, 복구 시도');
             const objects = [];
-            const regex = /\{\s*"line"\s*:\s*"[^"]*"\s*,\s*"type"\s*:\s*"[^"]*"\s*,\s*"original"\s*:\s*"[^"]*"\s*,\s*"corrected"\s*:\s*"[^"]*"\s*,\s*"reason"\s*:\s*"[^"]*"\s*\}/g;
+            const regex = /\{[^{}]*"original"\s*:\s*"([^"]+)"[^{}]*"corrected"\s*:\s*"([^"]+)"[^{}]*\}/g;
             let match;
-            while ((match = regex.exec(jsonStr)) !== null) {
-                try { objects.push(JSON.parse(match[0])); } catch (e2) {}
+            while ((match = regex.exec(response)) !== null) {
+                try { 
+                    const obj = JSON.parse(match[0]); 
+                    objects.push(obj); 
+                } catch (e2) {}
             }
-            if (objects.length > 0) {
-                console.log('✅ 복구 성공: ' + objects.length + '개');
-                return objects;
-            }
-            return [];
+            console.log('✅ 복구: ' + objects.length + '개');
+            return objects;
         }
     } catch (error) {
         console.error('❌ 파싱 오류:', error);
@@ -578,39 +662,32 @@ function parseAnalysisResponse(response) {
     }
 }
 
-// ===================== 수정 적용 =====================
-function applyAllCorrections(script, errors) {
-    let result = script;
-    let appliedCount = 0;
-    
-    for (const err of errors) {
-        if (err.original && err.corrected && err.original !== err.corrected && err.corrected !== '(대체어 없음)') {
-            const regex = new RegExp(escapeRegex(err.original), 'g');
-            const before = result;
-            result = result.replace(regex, err.corrected);
-            if (before !== result) {
-                appliedCount++;
-                console.log('   ✏️ "' + err.original + '" → "' + err.corrected + '"');
-            }
-        }
-    }
-    
-    console.log('📝 수정 적용: ' + appliedCount + '건');
-    return result;
-}
-
 // ===================== 분석 시작 =====================
-async function startAnalysis(stage) {
+async function startAnalysis(stage, customScript) {
     const apiKey = localStorage.getItem('GEMINI_API_KEY');
     const validation = validateApiKey(apiKey);
     if (!validation.valid) return alert(validation.message);
 
-    const textarea = document.getElementById('original-script');
-    const scriptText = stage === 'stage1' ? textarea.value.trim() : state.stage1.revisedScript;
-    if (!scriptText) return alert(stage === 'stage1' ? '대본을 입력해주세요.' : '1차 분석을 먼저 진행해주세요.');
+    let scriptText;
+    if (customScript) {
+        scriptText = customScript;
+    } else if (stage === 'stage1') {
+        scriptText = document.getElementById('original-script').value.trim();
+    } else {
+        scriptText = state.stage1.fixedScript || state.stage1.revisedScript;
+    }
+    
+    if (!scriptText) {
+        if (stage === 'stage1') {
+            return alert('대본을 입력해주세요.');
+        } else {
+            return alert('1차 분석 후 대본 픽스를 먼저 진행해주세요.');
+        }
+    }
 
     console.log('\n' + '='.repeat(50));
     console.log('🔍 ' + (stage === 'stage1' ? '1차' : '2차') + ' 분석 시작 (' + scriptText.length + '자)');
+    console.log('='.repeat(50));
 
     state[stage].originalScript = scriptText;
     const progressContainer = document.getElementById('progress-container');
@@ -620,17 +697,24 @@ async function startAnalysis(stage) {
 
     try {
         updateProgress(10, '준비 중...');
+        
+        // 1단계: 고증 검사 및 수정
         updateProgress(20, '고증 검사 중...');
         const histResult = checkAndFixHistoricalAccuracy(scriptText);
         state[stage].historicalIssues = histResult.issues;
+        console.log('📜 고증 수정 후 대본 길이: ' + histResult.fixedScript.length + '자');
 
+        // 2단계: AI 분석
         updateProgress(40, 'AI 분석 중... (최대 5분)');
         const prompt = buildAnalysisPrompt(histResult.fixedScript);
         const response = await callGeminiAPI(prompt, apiKey);
 
+        // 3단계: 응답 파싱
         updateProgress(70, '응답 분석 중...');
         const aiErrors = parseAnalysisResponse(response);
+        console.log('🤖 AI 오류 발견: ' + aiErrors.length + '개');
 
+        // 4단계: 통합 오류 목록 생성
         const allErrors = [];
         let errorIndex = 0;
         
@@ -645,42 +729,61 @@ async function startAnalysis(stage) {
             });
         }
         for (const e of aiErrors) {
-            allErrors.push({
-                index: errorIndex++,
-                line: e.line || '-',
-                type: e.type || '기타',
-                original: e.original || '',
-                corrected: e.corrected || '',
-                reason: e.reason || ''
-            });
+            if (e.original && e.corrected && e.original !== e.corrected) {
+                allErrors.push({
+                    index: errorIndex++,
+                    line: e.line || '-',
+                    type: e.type || '기타',
+                    original: e.original,
+                    corrected: e.corrected,
+                    reason: e.reason || ''
+                });
+            }
         }
 
         state[stage].analysis = { errors: aiErrors };
         state[stage].allErrors = allErrors;
+        console.log('📋 총 오류: ' + allErrors.length + '개');
 
+        // 5단계: 수정본 생성 (강화된 수정 적용)
         updateProgress(80, '수정본 생성 중...');
         let revisedScript = histResult.fixedScript;
+        
+        // AI 오류 수정 적용
         for (const err of aiErrors) {
             if (err.original && err.corrected && err.original !== err.corrected) {
+                const beforeLen = revisedScript.length;
                 const regex = new RegExp(escapeRegex(err.original), 'g');
                 revisedScript = revisedScript.replace(regex, err.corrected);
+                if (revisedScript.length !== beforeLen || revisedScript.includes(err.corrected)) {
+                    console.log('   ✏️ "' + err.original + '" → "' + err.corrected + '"');
+                }
             }
         }
+        
         state[stage].revisedScript = revisedScript;
         state[stage].revisionCount = allErrors.length;
+        console.log('📝 수정본 생성 완료: ' + revisedScript.length + '자');
 
+        // 6단계: 결과 표시
         updateProgress(90, '결과 표시 중...');
         renderAnalysisResult(stage, allErrors);
         renderRevisedWithMarkers(revisedScript, allErrors, document.getElementById('revised-' + stage), stage);
 
+        // 버튼 활성화
         const btnBefore = document.getElementById('btn-revert-before-' + stage);
         const btnAfter = document.getElementById('btn-revert-after-' + stage);
         if (btnBefore) { btnBefore.disabled = false; btnBefore.style.opacity = '1'; }
         if (btnAfter) { btnAfter.disabled = false; btnAfter.style.opacity = '0.5'; }
+        
+        if (stage === 'stage1') {
+            const btnFix = document.getElementById('btn-fix-script');
+            if (btnFix) { btnFix.disabled = false; }
+        }
 
         updateProgress(100, '분석 완료!');
         setTimeout(() => progressContainer.style.display = 'none', 1500);
-        console.log('✅ ' + stage + ' 분석 완료: ' + allErrors.length + '건');
+        console.log('✅ ' + stage + ' 분석 완료!');
 
     } catch (error) {
         console.error('❌ 분석 오류:', error);
@@ -724,7 +827,7 @@ function renderAnalysisResult(stage, allErrors) {
         const rowBg = idx % 2 === 0 ? '#2d2d2d' : '#333333';
         html += '<tr class="clickable-error-row" data-stage="' + stage + '" data-index="' + err.index + '" data-corrected="' + escapeAttr(err.corrected) + '" style="cursor:pointer;background:' + rowBg + ';" onmouseover="this.style.background=\'#404040\'" onmouseout="this.style.background=\'' + rowBg + '\'">';
         html += '<td style="padding:10px 8px;border-bottom:1px solid #444;text-align:center;color:#888;">' + (idx + 1) + '</td>';
-        html += '<td style="padding:10px 8px;border-bottom:1px solid #444;text-align:center;"><span style="background:#' + getTypeColor(err.type) + ';color:white;padding:3px 8px;border-radius:10px;font-size:11px;">' + escapeHtml(err.type) + '</span></td>';
+        html += '<td style="padding:10px 8px;border-bottom:1px solid #444;text-align:center;color:' + getTypeTextColor(err.type) + ';font-weight:bold;font-size:12px;">' + escapeHtml(err.type) + '</td>';
         html += '<td style="padding:10px 8px;border-bottom:1px solid #444;color:#ff8a80;">' + escapeHtml(err.original) + '</td>';
         html += '<td style="padding:10px 8px;border-bottom:1px solid #444;color:#b9f6ca;">' + escapeHtml(err.corrected) + '</td>';
         html += '<td style="padding:10px 8px;border-bottom:1px solid #444;color:#888;font-size:12px;">' + escapeHtml(err.reason) + '</td>';
@@ -736,28 +839,26 @@ function renderAnalysisResult(stage, allErrors) {
     container.innerHTML = html;
     
     // 클릭 이벤트 바인딩
-    const rows = container.querySelectorAll('.clickable-error-row');
-    rows.forEach(row => {
+    container.querySelectorAll('.clickable-error-row').forEach(row => {
         row.addEventListener('click', function() {
             const stg = this.getAttribute('data-stage');
             const idx = parseInt(this.getAttribute('data-index'));
             const corrected = this.getAttribute('data-corrected');
-            console.log('🖱️ 클릭: stage=' + stg + ', index=' + idx);
             scrollToErrorInRevised(stg, idx, corrected);
         });
     });
 }
 
-function getTypeColor(type) {
+function getTypeTextColor(type) {
     const colors = {
-        '시대적 고증 오류': '7c4dff',
-        '맞춤법': 'f44336',
-        '띄어쓰기': '2196f3',
-        '문장부호': 'ff9800',
-        '문법': 'e91e63',
-        '어색한 표현': '795548'
+        '시대적 고증 오류': '#ce93d8',
+        '맞춤법': '#ef9a9a',
+        '띄어쓰기': '#90caf9',
+        '문장부호': '#ffcc80',
+        '문법': '#f48fb1',
+        '어색한 표현': '#bcaaa4'
     };
-    return colors[type] || '607d8b';
+    return colors[type] || '#b0bec5';
 }
 
 // ===================== 수정본 렌더링 =====================
@@ -772,19 +873,27 @@ function renderRevisedWithMarkers(script, allErrors, container, stage) {
     
     let content = script;
     
-    // 수정된 부분에 마커 삽입
+    // 수정된 부분에 마커 삽입 (더 강력한 방식)
     if (allErrors && allErrors.length > 0) {
-        for (const err of allErrors) {
+        // 긴 텍스트부터 처리 (겹침 방지)
+        const sortedErrors = [...allErrors].sort((a, b) => (b.corrected?.length || 0) - (a.corrected?.length || 0));
+        
+        for (const err of sortedErrors) {
             if (err.corrected && err.corrected.trim() && err.corrected !== '(대체어 없음)') {
+                const marker = '<<<OK_' + err.index + '>>>' + err.corrected + '<<</OK>>>';
                 const regex = new RegExp(escapeRegex(err.corrected), 'g');
-                content = content.replace(regex, '[[MARK_OK_' + err.index + ']]' + err.corrected + '[[/MARK_OK]]');
+                
+                // 이미 마커가 있는 부분은 건너뛰기
+                if (!content.includes(marker)) {
+                    content = content.replace(regex, marker);
+                }
             }
         }
     }
     
     content = escapeHtml(content);
-    // 연한 녹색 하이라이트
-    content = content.replace(/\[\[MARK_OK_(\d+)\]\](.*?)\[\[\/MARK_OK\]\]/g, '<mark class="corrected-mark" data-error-index="$1" style="background:#a5d6a7;color:#1b5e20;padding:1px 4px;border-radius:3px;cursor:pointer;">$2</mark>');
+    // 연한 녹색 하이라이트로 변환
+    content = content.replace(/&lt;&lt;&lt;OK_(\d+)&gt;&gt;&gt;(.*?)&lt;&lt;&lt;\/OK&gt;&gt;&gt;/g, '<mark class="corrected-mark" data-error-index="$1" style="background:#a5d6a7;color:#1b5e20;padding:1px 4px;border-radius:3px;cursor:pointer;">$2</mark>');
     
     content.split('\n').forEach(line => {
         html += '<p style="margin:5px 0;">' + (line || '&nbsp;') + '</p>';
@@ -796,11 +905,10 @@ function renderRevisedWithMarkers(script, allErrors, container, stage) {
 
 // ===================== 클릭 시 수정본으로 이동 =====================
 function scrollToErrorInRevised(stage, errorIndex, correctedText) {
+    console.log('🖱️ 클릭: stage=' + stage + ', index=' + errorIndex + ', text=' + correctedText);
+    
     const revisedContainer = document.getElementById('revised-' + stage);
-    if (!revisedContainer) {
-        console.log('❌ 컨테이너 없음: revised-' + stage);
-        return;
-    }
+    if (!revisedContainer) return;
     
     const s = state[stage];
     
@@ -815,8 +923,18 @@ function scrollToErrorInRevised(stage, errorIndex, correctedText) {
     
     setTimeout(() => {
         // 해당 마커 찾기
-        const marks = revisedContainer.querySelectorAll('.corrected-mark[data-error-index="' + errorIndex + '"]');
-        console.log('🔍 마커 검색: index=' + errorIndex + ', 발견=' + marks.length);
+        let marks = revisedContainer.querySelectorAll('.corrected-mark[data-error-index="' + errorIndex + '"]');
+        
+        // 마커를 못 찾으면 텍스트로 검색
+        if (marks.length === 0 && correctedText) {
+            const allMarks = revisedContainer.querySelectorAll('.corrected-mark');
+            for (const m of allMarks) {
+                if (m.textContent === correctedText) {
+                    marks = [m];
+                    break;
+                }
+            }
+        }
         
         if (marks.length > 0) {
             const mark = marks[0];
@@ -839,7 +957,7 @@ function scrollToErrorInRevised(stage, errorIndex, correctedText) {
                 const markRect = mark.getBoundingClientRect();
                 const wrapperRect = wrapper.getBoundingClientRect();
                 const scrollTop = wrapper.scrollTop + (markRect.top - wrapperRect.top) - (wrapper.clientHeight / 2) + (mark.clientHeight / 2);
-                wrapper.scrollTo({ top: scrollTop, behavior: 'smooth' });
+                wrapper.scrollTo({ top: Math.max(0, scrollTop), behavior: 'smooth' });
             }
             
             // 깜빡임 효과
@@ -853,16 +971,18 @@ function scrollToErrorInRevised(stage, errorIndex, correctedText) {
                 }
             }, 200);
             
-        } else if (correctedText) {
-            // 텍스트로 직접 검색
-            console.log('⚠️ 마커 없음, 텍스트 검색: ' + correctedText);
+            console.log('✅ 마커 찾음, 이동 완료');
+            
+        } else {
+            // 텍스트로 직접 검색하여 스크롤
+            console.log('⚠️ 마커 없음, 텍스트 검색');
             const wrapper = revisedContainer.querySelector('.script-scroll-wrapper');
-            if (wrapper) {
+            if (wrapper && correctedText) {
                 const text = wrapper.textContent;
                 const pos = text.indexOf(correctedText);
                 if (pos !== -1) {
                     const ratio = pos / text.length;
-                    wrapper.scrollTop = wrapper.scrollHeight * ratio - wrapper.clientHeight / 2;
+                    wrapper.scrollTo({ top: wrapper.scrollHeight * ratio - wrapper.clientHeight / 2, behavior: 'smooth' });
                 }
             }
         }
@@ -888,7 +1008,7 @@ function escapeHtml(text) {
 
 function escapeAttr(text) {
     if (!text) return '';
-    return text.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    return text.replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function escapeRegex(str) {
