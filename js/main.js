@@ -1,11 +1,11 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.40 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.40: 개별 수정사항 토글 기능 (수정 전/후 개별 선택)
+ * main.js v4.41 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.41: 수정 전/후 버튼 개별 토글, 테이블 선택란 제거, 스크롤 고정
  */
 
-console.log('🚀 main.js v4.40 로드됨');
-console.log('📌 v4.40: 개별 수정사항 토글 기능 추가');
+console.log('🚀 main.js v4.41 로드됨');
+console.log('📌 v4.41: 수정 전/후 버튼 개별 토글, 스크롤 고정');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -161,7 +161,7 @@ var state = {
         revisedScript: '',
         allErrors: [],
         fixedScript: '',
-        showingOriginal: false
+        currentErrorIndex: -1
     },
     stage2: {
         originalScript: '',
@@ -169,7 +169,7 @@ var state = {
         revisedScript: '',
         allErrors: [],
         fixedScript: '',
-        showingOriginal: false
+        currentErrorIndex: -1
     },
     finalScript: '',
     scores: null
@@ -203,7 +203,7 @@ function initApp() {
     initStopButton();
     ensureScoreSection();
     addStyles();
-    console.log('✅ main.js v4.40 초기화 완료');
+    console.log('✅ main.js v4.41 초기화 완료');
 }
 
 function addStyles() {
@@ -216,14 +216,7 @@ function addStyles() {
         '.highlight-active{animation:blink 0.4s ease-in-out 4!important;}' +
         '.highlight-active-orange{animation:blinkOrange 0.4s ease-in-out 4!important;}' +
         '.marker-revised{background:#69f0ae;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;}' +
-        '.marker-original{background:#ff9800;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;}' +
-        '.toggle-btn{padding:4px 8px;margin:0 2px;border:none;border-radius:3px;cursor:pointer;font-size:11px;font-weight:bold;}' +
-        '.toggle-btn-before{background:#ff9800;color:#fff;}' +
-        '.toggle-btn-before.active{background:#ff9800;opacity:1;}' +
-        '.toggle-btn-before:not(.active){background:#666;opacity:0.6;}' +
-        '.toggle-btn-after{background:#4CAF50;color:#fff;}' +
-        '.toggle-btn-after.active{background:#4CAF50;opacity:1;}' +
-        '.toggle-btn-after:not(.active){background:#666;opacity:0.6;}';
+        '.marker-original{background:#ff9800;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;}';
     document.head.appendChild(style);
 }
 
@@ -391,7 +384,7 @@ function initDownloadButton() {
     btn.addEventListener('click', function() {
         var scriptToDownload = state.finalScript;
         if (!scriptToDownload || scriptToDownload.trim() === '') {
-            scriptToDownload = state.stage2.fixedScript || state.stage2.revisedScript || state.stage1.fixedScript || state.stage1.revisedScript;
+            scriptToDownload = state.stage2.fixedScript || state.stage1.fixedScript;
         }
         if (!scriptToDownload || scriptToDownload.trim() === '') {
             alert('다운로드할 수정본이 없습니다.\n\n분석 후 "대본 픽스" 버튼을 먼저 눌러주세요.');
@@ -440,17 +433,17 @@ function addRevertButton(container, stage) {
 
     var btnBefore = document.createElement('button');
     btnBefore.id = 'btn-revert-before-' + stage;
-    btnBefore.innerHTML = '🔄 전체 수정 전';
+    btnBefore.innerHTML = '🔄 수정 전';
     btnBefore.style.cssText = 'background:#ff9800;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
     btnBefore.disabled = true;
-    btnBefore.addEventListener('click', function() { setAllErrorsState(stage, false); });
+    btnBefore.addEventListener('click', function() { toggleCurrentError(stage, false); });
 
     var btnAfter = document.createElement('button');
     btnAfter.id = 'btn-revert-after-' + stage;
-    btnAfter.innerHTML = '✅ 전체 수정 후';
+    btnAfter.innerHTML = '✅ 수정 후';
     btnAfter.style.cssText = 'background:#4CAF50;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
     btnAfter.disabled = true;
-    btnAfter.addEventListener('click', function() { setAllErrorsState(stage, true); });
+    btnAfter.addEventListener('click', function() { toggleCurrentError(stage, true); });
 
     wrapper.appendChild(btnBefore);
     wrapper.appendChild(btnAfter);
@@ -466,31 +459,47 @@ function addRevertButton(container, stage) {
     parent.appendChild(wrapper);
 }
 
-function setAllErrorsState(stage, useRevised) {
+function toggleCurrentError(stage, useRevised) {
     var s = state[stage];
     var errors = s.allErrors || [];
-    errors.forEach(function(err) {
-        err.useRevised = useRevised;
-    });
+    
+    if (s.currentErrorIndex < 0 || s.currentErrorIndex >= errors.length) {
+        alert('먼저 분석 결과 테이블에서 수정할 항목을 클릭해주세요.');
+        return;
+    }
+    
+    var err = errors[s.currentErrorIndex];
+    err.useRevised = useRevised;
+    
     renderScriptWithMarkers(stage);
-    updateAnalysisTableButtons(stage);
 }
 
-function toggleSingleError(stage, errorId, useRevised) {
-    var s = state[stage];
-    var errors = s.allErrors || [];
-    errors.forEach(function(err) {
-        if (err.id === errorId) {
-            err.useRevised = useRevised;
+function setCurrentError(stage, errorIndex) {
+    state[stage].currentErrorIndex = errorIndex;
+    highlightCurrentRow(stage, errorIndex);
+}
+
+function highlightCurrentRow(stage, errorIndex) {
+    var tableContainer = document.getElementById('analysis-' + stage);
+    if (!tableContainer) return;
+    
+    var rows = tableContainer.querySelectorAll('tbody tr');
+    rows.forEach(function(row, idx) {
+        if (idx === errorIndex) {
+            row.style.background = '#3a3a3a';
+            row.style.outline = '2px solid #69f0ae';
+        } else {
+            row.style.background = '';
+            row.style.outline = '';
         }
     });
-    renderScriptWithMarkers(stage);
-    updateAnalysisTableButtons(stage);
 }
 
 function renderScriptWithMarkers(stage) {
     var container = document.getElementById('revised-' + stage);
     if (!container) return;
+
+    var scrollTop = container.scrollTop;
 
     var s = state[stage];
     var text = s.originalScript;
@@ -513,39 +522,28 @@ function renderScriptWithMarkers(stage) {
 
     container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + text + '</div>';
 
+    container.scrollTop = scrollTop;
+
     container.querySelectorAll('.correction-marker').forEach(function(marker) {
         marker.addEventListener('click', function() {
             var markerId = this.getAttribute('data-marker-id');
-            scrollToTableRow(stage, markerId);
-            var isRevised = this.classList.contains('marker-revised');
-            this.classList.add(isRevised ? 'highlight-active' : 'highlight-active-orange');
-            var self = this;
-            setTimeout(function() {
-                self.classList.remove('highlight-active');
-                self.classList.remove('highlight-active-orange');
-            }, 1600);
+            var errorIndex = findErrorIndexById(stage, markerId);
+            if (errorIndex >= 0) {
+                setCurrentError(stage, errorIndex);
+                scrollToTableRow(stage, markerId);
+            }
         });
     });
 }
 
-function updateAnalysisTableButtons(stage) {
-    var s = state[stage];
-    var errors = s.allErrors || [];
-    
-    errors.forEach(function(err) {
-        var btnBefore = document.querySelector('.toggle-btn-before[data-error-id="' + err.id + '"]');
-        var btnAfter = document.querySelector('.toggle-btn-after[data-error-id="' + err.id + '"]');
-        
-        if (btnBefore && btnAfter) {
-            if (err.useRevised) {
-                btnBefore.classList.remove('active');
-                btnAfter.classList.add('active');
-            } else {
-                btnBefore.classList.add('active');
-                btnAfter.classList.remove('active');
-            }
+function findErrorIndexById(stage, markerId) {
+    var errors = state[stage].allErrors || [];
+    for (var i = 0; i < errors.length; i++) {
+        if (errors[i].id === markerId) {
+            return i;
         }
-    });
+    }
+    return -1;
 }
 
 function scrollToTableRow(stage, markerId) {
@@ -557,7 +555,7 @@ function scrollToTableRow(stage, markerId) {
             row.scrollIntoView({ behavior: 'smooth', block: 'center' });
             row.style.transition = 'background 0.3s';
             row.style.background = '#ffeb3b';
-            setTimeout(function() { row.style.background = ''; }, 2000);
+            setTimeout(function() { row.style.background = '#3a3a3a'; }, 1000);
         }
     });
 }
@@ -565,6 +563,9 @@ function scrollToTableRow(stage, markerId) {
 function scrollToMarker(stage, markerId) {
     var container = document.getElementById('revised-' + stage);
     if (!container) return;
+    
+    var scrollTop = container.scrollTop;
+    
     var marker = container.querySelector('.correction-marker[data-marker-id="' + markerId + '"]');
     if (marker) {
         marker.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -681,6 +682,7 @@ function startAnalysis(stage) {
 
     state[stage].originalScript = scriptText;
     state[stage].allErrors = [];
+    state[stage].currentErrorIndex = -1;
 
     analyzeScript(scriptText, stage, apiKey);
 }
@@ -701,6 +703,7 @@ function startStage2Analysis() {
 
     state.stage2.originalScript = scriptText;
     state.stage2.allErrors = [];
+    state.stage2.currentErrorIndex = -1;
 
     analyzeScript(scriptText, 'stage2', apiKey);
 }
@@ -864,34 +867,35 @@ function displayAnalysisTable(stage, errors) {
 
     var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;">';
     html += '<thead><tr style="background:#333;">';
-    html += '<th style="padding:10px;border:1px solid #555;width:12%;">유형</th>';
-    html += '<th style="padding:10px;border:1px solid #555;width:22%;">원문</th>';
-    html += '<th style="padding:10px;border:1px solid #555;width:22%;">수정안</th>';
-    html += '<th style="padding:10px;border:1px solid #555;width:28%;">이유</th>';
-    html += '<th style="padding:10px;border:1px solid #555;width:16%;">선택</th>';
+    html += '<th style="padding:10px;border:1px solid #555;width:15%;">유형</th>';
+    html += '<th style="padding:10px;border:1px solid #555;width:28%;">원문</th>';
+    html += '<th style="padding:10px;border:1px solid #555;width:28%;">수정안</th>';
+    html += '<th style="padding:10px;border:1px solid #555;width:29%;">이유</th>';
     html += '</tr></thead>';
     html += '<tbody>';
 
-    errors.forEach(function(err) {
-        var beforeActive = !err.useRevised ? 'active' : '';
-        var afterActive = err.useRevised ? 'active' : '';
-        
-        html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;">';
-        html += '<td style="padding:8px;border:1px solid #555;text-align:center;" onclick="scrollToMarker(\'' + stage + '\', \'' + err.id + '\')">' + escapeHtml(err.type) + '</td>';
-        html += '<td style="padding:8px;border:1px solid #555;background:#ffebee;color:#c62828;" onclick="scrollToMarker(\'' + stage + '\', \'' + err.id + '\')">' + escapeHtml(err.original) + '</td>';
-        html += '<td style="padding:8px;border:1px solid #555;background:#e8f5e9;color:#2e7d32;" onclick="scrollToMarker(\'' + stage + '\', \'' + err.id + '\')">' + escapeHtml(err.revised) + '</td>';
-        html += '<td style="padding:8px;border:1px solid #555;" onclick="scrollToMarker(\'' + stage + '\', \'' + err.id + '\')">' + escapeHtml(err.reason) + '</td>';
-        html += '<td style="padding:8px;border:1px solid #555;text-align:center;">';
-        html += '<button class="toggle-btn toggle-btn-before ' + beforeActive + '" data-error-id="' + err.id + '" onclick="toggleSingleError(\'' + stage + '\', \'' + err.id + '\', false)">수정 전</button>';
-        html += '<button class="toggle-btn toggle-btn-after ' + afterActive + '" data-error-id="' + err.id + '" onclick="toggleSingleError(\'' + stage + '\', \'' + err.id + '\', true)">수정 후</button>';
-        html += '</td>';
+    errors.forEach(function(err, index) {
+        html += '<tr data-marker-id="' + err.id + '" data-index="' + index + '" style="cursor:pointer;">';
+        html += '<td style="padding:8px;border:1px solid #555;text-align:center;">' + escapeHtml(err.type) + '</td>';
+        html += '<td style="padding:8px;border:1px solid #555;background:#ffebee;color:#c62828;">' + escapeHtml(err.original) + '</td>';
+        html += '<td style="padding:8px;border:1px solid #555;background:#e8f5e9;color:#2e7d32;">' + escapeHtml(err.revised) + '</td>';
+        html += '<td style="padding:8px;border:1px solid #555;">' + escapeHtml(err.reason) + '</td>';
         html += '</tr>';
     });
 
     html += '</tbody></table>';
-    html += '<div style="text-align:center;padding:10px;color:#aaa;">총 ' + errors.length + '개 오류 발견 (각 항목별로 수정 전/후 선택 가능)</div>';
+    html += '<div style="text-align:center;padding:10px;color:#aaa;">총 ' + errors.length + '개 오류 발견 (항목 클릭 후 수정 전/후 버튼으로 개별 변경)</div>';
 
     container.innerHTML = html;
+
+    container.querySelectorAll('tbody tr').forEach(function(row) {
+        row.addEventListener('click', function() {
+            var index = parseInt(this.getAttribute('data-index'));
+            var markerId = this.getAttribute('data-marker-id');
+            setCurrentError(stage, index);
+            scrollToMarker(stage, markerId);
+        });
+    });
 }
 
 function enableStageButtons(stage) {
