@@ -1,11 +1,11 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.37 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.37: 수정 전 버튼 색상 유지 버그 수정, 프롬프트 강화
+ * main.js v4.38 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.38: 프롬프트 대폭 강화, 오류 검출 정확도 향상
  */
 
-console.log('🚀 main.js v4.37 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
-console.log('📌 v4.37 업데이트: 수정 전 버튼 색상 유지 버그 수정, 프롬프트 강화');
+console.log('🚀 main.js v4.38 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
+console.log('📌 v4.38 업데이트: 프롬프트 대폭 강화, 오류 검출 정확도 향상');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -216,7 +216,7 @@ function initApp() {
     console.log('✅ 고증 DB 로드됨: ' + getTotalHistoricalRules() + '개 규칙');
     console.log('✅ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('✅ 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.37 초기화 완료');
+    console.log('✅ main.js v4.38 초기화 완료');
 }
 
 function ensureScoreSection() {
@@ -513,14 +513,12 @@ function displayOriginalWithMarkers(stage) {
     var text = s.originalScript;
     var errors = s.allErrors || [];
     
-    // 에러를 원본 텍스트에서의 위치 순서대로 정렬 (뒤에서부터 처리하기 위해 역순)
     var sortedErrors = errors.slice().sort(function(a, b) {
         var posA = text.indexOf(a.original);
         var posB = text.indexOf(b.original);
-        return posB - posA; // 역순 정렬
+        return posB - posA;
     });
     
-    // 각 에러에 대해 마커 삽입
     sortedErrors.forEach(function(err, index) {
         if (err.original && text.includes(err.original)) {
             var markerId = err.id || ('marker-' + index);
@@ -531,16 +529,15 @@ function displayOriginalWithMarkers(stage) {
     
     container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + text + '</div>';
     
-    // 마커 클릭 이벤트 바인딩
     container.querySelectorAll('.correction-marker').forEach(function(marker) {
         marker.addEventListener('click', function() {
             var markerId = this.getAttribute('data-marker-id');
             scrollToTableRow(stage, markerId);
             
-            // 클릭된 마커 강조
             this.classList.add('highlight-active-orange');
+            var self = this;
             setTimeout(function() {
-                marker.classList.remove('highlight-active-orange');
+                self.classList.remove('highlight-active-orange');
             }, 1600);
         });
     });
@@ -554,14 +551,12 @@ function displayRevisedWithMarkers(stage) {
     var text = s.revisedScript;
     var errors = s.allErrors || [];
     
-    // 에러를 수정본 텍스트에서의 위치 순서대로 정렬 (뒤에서부터 처리하기 위해 역순)
     var sortedErrors = errors.slice().sort(function(a, b) {
         var posA = text.indexOf(a.revised);
         var posB = text.indexOf(b.revised);
-        return posB - posA; // 역순 정렬
+        return posB - posA;
     });
     
-    // 각 에러에 대해 마커 삽입
     sortedErrors.forEach(function(err, index) {
         if (err.revised && text.includes(err.revised)) {
             var markerId = err.id || ('marker-' + index);
@@ -572,16 +567,15 @@ function displayRevisedWithMarkers(stage) {
     
     container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + text + '</div>';
     
-    // 마커 클릭 이벤트 바인딩
     container.querySelectorAll('.correction-marker').forEach(function(marker) {
         marker.addEventListener('click', function() {
             var markerId = this.getAttribute('data-marker-id');
             scrollToTableRow(stage, markerId);
             
-            // 클릭된 마커 강조
             this.classList.add('highlight-active');
+            var self = this;
             setTimeout(function() {
-                marker.classList.remove('highlight-active');
+                self.classList.remove('highlight-active');
             }, 1600);
         });
     });
@@ -666,7 +660,6 @@ function fixScript(stage) {
         return;
     }
     
-    // 현재 표시 상태에 따라 고정할 스크립트 결정
     if (s.showingOriginal) {
         s.fixedScript = s.originalScript;
         console.log('📌 원본 상태로 대본 픽스됨');
@@ -675,12 +668,10 @@ function fixScript(stage) {
         console.log('📌 수정본 상태로 대본 픽스됨');
     }
     
-    // 2차 분석인 경우 최종 스크립트로 저장
     if (stage === 'stage2') {
         state.finalScript = s.fixedScript;
         console.log('📌 최종 스크립트 저장됨, 길이:', state.finalScript.length);
         
-        // 다운로드 버튼 활성화
         var downloadBtn = document.getElementById('btn-download');
         if (downloadBtn) {
             downloadBtn.disabled = false;
@@ -688,7 +679,6 @@ function fixScript(stage) {
         }
     }
     
-    // 2차 분석 버튼 활성화 (1차 픽스 완료 시)
     if (stage === 'stage1') {
         var stage2Btn = document.getElementById('btn-start-stage2');
         if (stage2Btn) {
@@ -788,39 +778,58 @@ function analyzeScript(scriptText, stage, apiKey) {
         });
 }
 
+function buildModernWordsList() {
+    var words = [];
+    for (var category in HISTORICAL_RULES) {
+        HISTORICAL_RULES[category].forEach(function(rule) {
+            words.push(rule.modern);
+        });
+    }
+    return words.join(', ');
+}
+
 function getAnalysisPrompt(scriptText, stage) {
+    var modernWords = buildModernWordsList();
     var stageDesc = stage === 'stage1' ? '1차 고증 분석' : '2차 정밀 분석';
     
-    return '당신은 조선시대 사극 대본 전문 검수자입니다. ' + stageDesc + '을 수행합니다.\n\n' +
-        '=== 절대 준수 규칙 ===\n' +
-        '1. 나레이션(N: 또는 나레이션:으로 시작하는 줄)은 현대어로 작성되어야 하며, 절대 수정하지 마세요.\n' +
-        '2. 나레이션을 조선시대 어투로 바꾸는 것은 금지입니다.\n' +
-        '3. 대사(캐릭터명: 으로 시작하는 줄)만 고증 검토 대상입니다.\n' +
-        '4. 작은 차이나 애매한 경우는 오류로 판단하지 마세요.\n' +
-        '5. 확실한 현대어/외래어/시대착오적 표현만 오류로 지적하세요.\n\n' +
-        '=== 반드시 찾아야 할 오류 유형 ===\n' +
-        '1. 현대 물건: 펜, 노트, 시계, 안경, 우산, 가방, 휴대폰, 컴퓨터, 자동차 등\n' +
-        '2. 현대 시설: 병원, 학교, 경찰서, 은행, 회사, 공장, 백화점, 카페 등\n' +
-        '3. 현대 직업: 의사, 간호사, 경찰, 판사, 변호사, 회사원, 기자 등\n' +
-        '4. 현대 단위: 원(화폐), 미터, 킬로그램, 퍼센트 등\n' +
-        '5. 외래어: 커피, 초콜릿, 피자, 햄버거, 콜라 등\n' +
-        '6. 현대 생활: 출근, 퇴근, 월급, 연봉, 야근, 미팅, 데이트 등\n' +
-        '7. 현대 의복: 양복, 청바지, 티셔츠, 운동화, 하이힐 등\n\n' +
-        '=== 출력 형식 (JSON) ===\n' +
-        '반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.\n' +
+    return '당신은 조선시대 사극 대본 전문 고증 검수자입니다. 매우 엄격하게 ' + stageDesc + '을 수행합니다.\n\n' +
+        '=== 핵심 임무 ===\n' +
+        '이 대본은 조선시대를 배경으로 합니다. 조선시대에 존재하지 않았던 현대어, 외래어, 근대 이후 용어를 모두 찾아내야 합니다.\n' +
+        '**반드시 하나 이상의 오류를 찾아내세요. 오류가 없다고 판단하지 마세요.**\n\n' +
+        '=== 절대 금지 사항 ===\n' +
+        '1. 나레이션(N: 또는 나레이션:으로 시작하는 줄)은 현대어로 작성되어야 하며, 절대 수정 대상이 아닙니다.\n' +
+        '2. 나레이션을 조선시대 어투로 바꾸지 마세요.\n' +
+        '3. 대사(캐릭터명: 으로 시작하는 줄)만 고증 검토 대상입니다.\n\n' +
+        '=== 반드시 찾아야 할 현대어/외래어 목록 ===\n' +
+        modernWords + '\n\n' +
+        '=== 추가로 찾아야 할 오류 유형 ===\n' +
+        '1. 현대적 표현: "알겠습니다" → "알겠사옵니다", "네" → "예", "아니요" → "아니옵니다"\n' +
+        '2. 한자어 중 근대 이후 조어: 사회, 경제, 문화, 과학, 철학, 민주, 자유, 평등\n' +
+        '3. 일본식 한자어: 장면, 입장, 수속, 취소, 할인\n' +
+        '4. 영어 외래어: 모든 영어 기원 단어\n' +
+        '5. 시대착오적 개념: 인권, 민주주의, 자본주의, 사회주의\n' +
+        '6. 근대 도입 물건: 성냥, 양초(서양식), 유리창, 거울(서양식 대형거울)\n' +
+        '7. 현대식 감탄사/추임새: "와", "헐", "대박", "진짜?"\n\n' +
+        '=== 출력 형식 (JSON만 출력) ===\n' +
+        '```json\n' +
         '{\n' +
         '  "errors": [\n' +
         '    {\n' +
-        '      "type": "오류 유형",\n' +
-        '      "original": "원문 텍스트",\n' +
-        '      "revised": "수정 텍스트",\n' +
-        '      "reason": "수정 이유"\n' +
+        '      "type": "오류 유형(현대물건/현대시설/현대직업/현대단위/외래어/현대표현/시대착오)",\n' +
+        '      "original": "원문에서 발견된 정확한 텍스트",\n' +
+        '      "revised": "조선시대에 맞게 수정한 텍스트",\n' +
+        '      "reason": "수정 이유 설명"\n' +
         '    }\n' +
         '  ],\n' +
-        '  "revisedScript": "전체 수정된 대본",\n' +
-        '  "summary": "분석 요약"\n' +
-        '}\n\n' +
-        '오류가 없으면 errors를 빈 배열 []로, revisedScript는 원본 그대로 반환하세요.\n\n' +
+        '  "revisedScript": "모든 오류가 수정된 전체 대본",\n' +
+        '  "summary": "총 N개의 고증 오류를 발견하여 수정했습니다."\n' +
+        '}\n' +
+        '```\n\n' +
+        '=== 중요 ===\n' +
+        '- 위 JSON 형식으로만 응답하세요. 다른 설명은 포함하지 마세요.\n' +
+        '- errors 배열에는 최소 1개 이상의 오류가 있어야 합니다.\n' +
+        '- 대본을 꼼꼼히 읽고 모든 현대어를 찾아내세요.\n' +
+        '- 애매한 경우에도 오류로 판단하세요.\n\n' +
         '=== 분석할 대본 ===\n' +
         scriptText;
 }
@@ -862,18 +871,24 @@ function callGeminiAPI(prompt, apiKey, signal) {
 
 function processAnalysisResult(response, stage, originalScript) {
     console.log('📝 분석 결과 처리 시작');
+    console.log('📝 AI 응답:', response.substring(0, 500) + '...');
     
     var result;
     try {
-        // JSON 추출
-        var jsonMatch = response.match(/\{[\s\S]*\}/);
+        var jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
         if (jsonMatch) {
-            result = JSON.parse(jsonMatch[0]);
+            result = JSON.parse(jsonMatch[1]);
         } else {
-            throw new Error('JSON을 찾을 수 없습니다');
+            var jsonMatch2 = response.match(/\{[\s\S]*\}/);
+            if (jsonMatch2) {
+                result = JSON.parse(jsonMatch2[0]);
+            } else {
+                throw new Error('JSON을 찾을 수 없습니다');
+            }
         }
     } catch (e) {
         console.error('JSON 파싱 오류:', e);
+        console.log('원본 응답:', response);
         result = {
             errors: [],
             revisedScript: originalScript,
@@ -884,7 +899,6 @@ function processAnalysisResult(response, stage, originalScript) {
     var errors = result.errors || [];
     var revisedScript = result.revisedScript || originalScript;
     
-    // 에러에 ID 부여
     errors.forEach(function(err, index) {
         err.id = 'marker-' + stage + '-' + index;
     });
@@ -895,16 +909,10 @@ function processAnalysisResult(response, stage, originalScript) {
     
     console.log('📊 발견된 오류 수:', errors.length);
     
-    // 분석 결과 표시
     displayAnalysisTable(stage, errors);
-    
-    // 수정본 표시 (기본값: 수정 후)
     displayRevisedWithMarkers(stage);
-    
-    // 버튼 활성화
     enableStageButtons(stage);
     
-    // 2차 분석 완료 시 점수 표시
     if (stage === 'stage2') {
         displayScores(errors);
     }
@@ -951,7 +959,6 @@ function enableStageButtons(stage) {
 function displayScores(errors) {
     var scoreSection = ensureScoreSection();
     
-    // 점수 계산 (예시 로직)
     var baseScore = 100;
     var errorPenalty = Math.min(errors.length * 5, 50);
     
