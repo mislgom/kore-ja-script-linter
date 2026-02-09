@@ -1,11 +1,11 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.34 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.34: 기존 기능 복원 + 개별 마커 토글 + 나레이션 보호 (필터링 완화)
+ * main.js v4.35 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.35: 테이블 레이아웃 수정, 마커 유지 개선
  */
 
-console.log('🚀 main.js v4.34 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
-console.log('📌 v4.34 업데이트: 기존 기능 복원 + 개별 토글 + 나레이션 보호');
+console.log('🚀 main.js v4.35 (Vertex AI API 키 + Gemini 2.5 Flash) 로드됨');
+console.log('📌 v4.35 업데이트: 테이블 레이아웃 수정 + 마커 유지 개선');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -216,7 +216,7 @@ function initApp() {
     console.log('✅ 고증 DB 로드됨: ' + getTotalHistoricalRules() + '개 규칙');
     console.log('✅ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('✅ 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.34 초기화 완료');
+    console.log('✅ main.js v4.35 초기화 완료');
 }
 
 function ensureScoreSection() {
@@ -476,6 +476,7 @@ function addRevertButton(container, stage) {
     parent.appendChild(wrapper);
 }
 
+// v4.35: 수정 전/후 토글 시 마커 유지
 function toggleView(stage, viewType) {
     var container = document.getElementById('revised-' + stage);
     var s = state[stage];
@@ -492,7 +493,8 @@ function toggleView(stage, viewType) {
     
     if (viewType === 'original') {
         s.showingOriginal = true;
-        container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + escapeHtml(s.originalScript) + '</div>';
+        // v4.35: 원본에도 마커 표시 (주황색)
+        displayOriginalWithMarkers(stage);
         if (btnBefore) btnBefore.style.opacity = '0.5';
         if (btnAfter) btnAfter.style.opacity = '1';
     } else {
@@ -503,6 +505,36 @@ function toggleView(stage, viewType) {
     }
     
     container.scrollTop = currentScroll;
+}
+
+// v4.35: 원본 대본에도 마커 표시
+function displayOriginalWithMarkers(stage) {
+    var container = document.getElementById('revised-' + stage);
+    if (!container) return;
+    
+    var s = state[stage];
+    var text = s.originalScript;
+    var errors = s.allErrors || [];
+    
+    // 원본 텍스트에 마커 삽입 (원문 기준)
+    errors.forEach(function(err) {
+        var markerId = err.id;
+        
+        if (err.original && text.includes(err.original)) {
+            var markerHtml = '<span class="correction-marker" data-marker-id="' + markerId + '" style="background:#ff9800;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;" title="원문 (클릭하여 테이블로 이동)">' + escapeHtml(err.original) + '</span>';
+            text = text.replace(err.original, markerHtml);
+        }
+    });
+    
+    container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + text + '</div>';
+    
+    // 마커 클릭 이벤트
+    container.querySelectorAll('.correction-marker').forEach(function(marker) {
+        marker.addEventListener('click', function() {
+            var markerId = this.getAttribute('data-marker-id');
+            scrollToTableRow(stage, markerId);
+        });
+    });
 }
 
 function initStage1AnalysisButton() {
@@ -549,7 +581,6 @@ function fixScript(stage) {
         return;
     }
     
-    // 현재 마커 상태 기준 최종 텍스트 생성
     var finalText = generateFinalTextFromMarkers(stage);
     s.fixedScript = finalText;
     
@@ -792,7 +823,8 @@ function displayResults(stage, result) {
     s.allErrors = errors;
     s.revisedScript = result.revisedScript || s.originalScript;
     
-    displayAnalysisWithToggle(stage, s.allErrors);
+    // v4.35: 테이블 레이아웃 수정 (상태 선택 열 제거)
+    displayAnalysisTable(stage, s.allErrors);
     displayRevisedWithMarkers(stage);
     
     var btnBefore = document.getElementById('btn-revert-before-' + stage);
@@ -812,7 +844,8 @@ function displayResults(stage, result) {
     }
 }
 
-function displayAnalysisWithToggle(stage, errors) {
+// v4.35: 테이블 레이아웃 수정 - 유형 | 원문 | 수정안 | 이유
+function displayAnalysisTable(stage, errors) {
     var container = document.getElementById('analysis-' + stage);
     if (!container) return;
     
@@ -823,120 +856,34 @@ function displayAnalysisWithToggle(stage, errors) {
     
     var html = '<table style="width:100%;border-collapse:collapse;color:white;">';
     html += '<thead><tr style="background:#1a1a2e;">';
-    html += '<th style="padding:10px;border:1px solid #444;text-align:left;width:12%;">유형</th>';
-    html += '<th style="padding:10px;border:1px solid #444;text-align:left;width:18%;">원문</th>';
-    html += '<th style="padding:10px;border:1px solid #444;text-align:left;width:18%;">수정안</th>';
-    html += '<th style="padding:10px;border:1px solid #444;text-align:left;width:27%;">이유</th>';
-    html += '<th style="padding:10px;border:1px solid #444;text-align:center;width:25%;">상태 선택</th>';
+    html += '<th style="padding:10px;border:1px solid #444;text-align:left;width:15%;">유형</th>';
+    html += '<th style="padding:10px;border:1px solid #444;text-align:left;width:20%;">원문</th>';
+    html += '<th style="padding:10px;border:1px solid #444;text-align:left;width:20%;">수정안</th>';
+    html += '<th style="padding:10px;border:1px solid #444;text-align:left;width:45%;">이유</th>';
     html += '</tr></thead><tbody>';
     
     errors.forEach(function(err, idx) {
         var markerId = err.id || (stage + '-marker-' + idx);
-        html += '<tr class="error-row" data-marker-id="' + markerId + '" data-stage="' + stage + '" style="transition:background 0.2s;">';
-        html += '<td style="padding:8px;border:1px solid #444;cursor:pointer;" class="clickable-cell">' + escapeHtml(err.type || '일반') + '</td>';
-        html += '<td style="padding:8px;border:1px solid #444;color:#ff6b6b;cursor:pointer;" class="clickable-cell">' + escapeHtml(err.original || '') + '</td>';
-        html += '<td style="padding:8px;border:1px solid #444;color:#69f0ae;cursor:pointer;" class="clickable-cell">' + escapeHtml(err.suggestion || '') + '</td>';
-        html += '<td style="padding:8px;border:1px solid #444;cursor:pointer;" class="clickable-cell">' + escapeHtml(err.reason || '') + '</td>';
-        html += '<td style="padding:8px;border:1px solid #444;text-align:center;">';
-        html += '<button class="toggle-btn btn-before" data-marker-id="' + markerId + '" data-stage="' + stage + '" style="background:#555;color:#aaa;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;margin-right:5px;">수정 전</button>';
-        html += '<button class="toggle-btn btn-after active" data-marker-id="' + markerId + '" data-stage="' + stage + '" style="background:#69f0ae;color:#000;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">수정 후</button>';
-        html += '</td>';
+        html += '<tr class="error-row" data-marker-id="' + markerId + '" data-stage="' + stage + '" style="cursor:pointer;transition:background 0.2s;" ';
+        html += 'onmouseover="this.style.background=\'#333\'" onmouseout="this.style.background=\'transparent\'">';
+        html += '<td style="padding:10px;border:1px solid #444;">' + escapeHtml(err.type || '일반') + '</td>';
+        html += '<td style="padding:10px;border:1px solid #444;color:#ff6b6b;">' + escapeHtml(err.original || '') + '</td>';
+        html += '<td style="padding:10px;border:1px solid #444;color:#69f0ae;">' + escapeHtml(err.suggestion || '') + '</td>';
+        html += '<td style="padding:10px;border:1px solid #444;">' + escapeHtml(err.reason || '') + '</td>';
         html += '</tr>';
     });
     
     html += '</tbody></table>';
     container.innerHTML = html;
     
-    container.querySelectorAll('.clickable-cell').forEach(function(cell) {
-        cell.addEventListener('click', function() {
-            var row = this.closest('.error-row');
-            var markerId = row.getAttribute('data-marker-id');
-            var stg = row.getAttribute('data-stage');
+    // 행 클릭 시 해당 마커로 이동
+    container.querySelectorAll('.error-row').forEach(function(row) {
+        row.addEventListener('click', function() {
+            var markerId = this.getAttribute('data-marker-id');
+            var stg = this.getAttribute('data-stage');
             scrollToMarkerAndHighlight(stg, markerId);
         });
     });
-    
-    container.querySelectorAll('.toggle-btn').forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            var markerId = this.getAttribute('data-marker-id');
-            var stg = this.getAttribute('data-stage');
-            var useRevised = this.classList.contains('btn-after');
-            toggleErrorState(stg, markerId, useRevised);
-        });
-    });
-}
-
-function toggleErrorState(stage, markerId, useRevised) {
-    var s = state[stage];
-    var errors = s.allErrors || [];
-    
-    var targetError = null;
-    for (var i = 0; i < errors.length; i++) {
-        if (errors[i].id === markerId) {
-            targetError = errors[i];
-            break;
-        }
-    }
-    
-    if (!targetError) return;
-    
-    targetError.useRevised = useRevised;
-    
-    console.log('📝 상태 변경:', markerId, useRevised ? '수정 후' : '수정 전');
-    
-    updateTableButtons(stage, markerId, useRevised);
-    updateMarkerInRevised(stage, markerId, targetError);
-}
-
-function updateTableButtons(stage, markerId, useRevised) {
-    var container = document.getElementById('analysis-' + stage);
-    if (!container) return;
-    
-    var btnBefore = container.querySelector('.btn-before[data-marker-id="' + markerId + '"]');
-    var btnAfter = container.querySelector('.btn-after[data-marker-id="' + markerId + '"]');
-    
-    if (btnBefore && btnAfter) {
-        if (useRevised) {
-            btnBefore.style.background = '#555';
-            btnBefore.style.color = '#aaa';
-            btnBefore.style.fontWeight = 'normal';
-            btnAfter.style.background = '#69f0ae';
-            btnAfter.style.color = '#000';
-            btnAfter.style.fontWeight = 'bold';
-        } else {
-            btnBefore.style.background = '#ff9800';
-            btnBefore.style.color = '#000';
-            btnBefore.style.fontWeight = 'bold';
-            btnAfter.style.background = '#555';
-            btnAfter.style.color = '#aaa';
-            btnAfter.style.fontWeight = 'normal';
-        }
-    }
-}
-
-function updateMarkerInRevised(stage, markerId, error) {
-    var container = document.getElementById('revised-' + stage);
-    if (!container) return;
-    
-    var marker = container.querySelector('.correction-marker[data-marker-id="' + markerId + '"]');
-    if (!marker) return;
-    
-    var scrollTop = container.scrollTop;
-    
-    if (error.useRevised) {
-        marker.innerHTML = escapeHtml(error.suggestion);
-        marker.style.background = '#69f0ae';
-        marker.style.color = '#000';
-        marker.title = '수정 후 (클릭하여 이동)';
-    } else {
-        marker.innerHTML = escapeHtml(error.original);
-        marker.style.background = '#ff9800';
-        marker.style.color = '#000';
-        marker.title = '수정 전 (클릭하여 이동)';
-    }
-    
-    container.scrollTop = scrollTop;
 }
 
 function displayRevisedWithMarkers(stage) {
@@ -951,7 +898,7 @@ function displayRevisedWithMarkers(stage) {
         var markerId = err.id;
         var displayText = err.useRevised ? err.suggestion : err.original;
         var bgColor = err.useRevised ? '#69f0ae' : '#ff9800';
-        var title = err.useRevised ? '수정 후 (클릭하여 이동)' : '수정 전 (클릭하여 이동)';
+        var title = err.useRevised ? '수정 후 (클릭하여 테이블로 이동)' : '수정 전 (클릭하여 테이블로 이동)';
         
         if (err.suggestion && text.includes(err.suggestion)) {
             var markerHtml = '<span class="correction-marker" data-marker-id="' + markerId + '" style="background:' + bgColor + ';color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;" title="' + title + '">' + escapeHtml(displayText) + '</span>';
