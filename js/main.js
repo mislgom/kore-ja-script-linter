@@ -1269,16 +1269,126 @@ async function callGeminiAPI(prompt) {
 }
 
 function parseApiResponse(responseText) {
+    console.log('📥 API 응답 파싱 시작...');
+    
+    var jsonText = '';
+    
+    // 방법 1: ```json ... ``` 블록에서 추출
     var jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
     if (jsonMatch) {
-        return JSON.parse(jsonMatch[1]);
+        jsonText = jsonMatch[1];
+        console.log('✅ JSON 블록 발견');
+    } else {
+        // 방법 2: { } 사이 추출
+        var jsonStart = responseText.indexOf('{');
+        var jsonEnd = responseText.lastIndexOf('}');
+        if (jsonStart !== -1 && jsonEnd !== -1) {
+            jsonText = responseText.substring(jsonStart, jsonEnd + 1);
+            console.log('✅ JSON 객체 발견');
+        }
     }
-    var jsonStart = responseText.indexOf('{');
-    var jsonEnd = responseText.lastIndexOf('}');
-    if (jsonStart !== -1 && jsonEnd !== -1) {
-        return JSON.parse(responseText.substring(jsonStart, jsonEnd + 1));
+    
+    if (!jsonText) {
+        console.error('❌ JSON을 찾을 수 없음');
+        throw new Error('JSON 파싱 실패: JSON 형식을 찾을 수 없습니다.');
     }
-    throw new Error('JSON 파싱 실패');
+    
+    // JSON 정리 및 복구 시도
+    try {
+        // 1차 시도: 그대로 파싱
+        return JSON.parse(jsonText);
+    } catch (e1) {
+        console.warn('⚠️ 1차 파싱 실패, 복구 시도 중...', e1.message);
+        
+        try {
+            // 2차 시도: 흔한 오류 수정
+            var fixedJson = jsonText
+                // 잘못된 줄바꿈 제거
+                .replace(/\n/g, '\\n')
+                .replace(/\r/g, '\\r')
+                .replace(/\t/g, '\\t')
+                // 이스케이프 안된 따옴표 처리
+                .replace(/([^\\])"/g, '$1\\"')
+                .replace(/^"/g, '\\"')
+                // 다시 원래대로 (JSON 구조용 따옴표는 살림)
+                .replace(/\\"{/g, '{"')
+                .replace(/}\\"/g, '}"')
+                .replace(/\\":}/g, '":}')
+                .replace(/\\"\[/g, '"[')
+                .replace(/\]\\"/g, ']"')
+                .replace(/,\\"/g, ',"')
+                .replace(/\\":/g, '":')
+                .replace(/:\\"/g, ':"')
+                .replace(/\\"}/g, '"}')
+                .replace(/{\\":/g, '{"');
+            
+            return JSON.parse(fixedJson);
+        } catch (e2) {
+            console.warn('⚠️ 2차 파싱 실패, 부분 추출 시도...', e2.message);
+            
+            try {
+                // 3차 시도: 필수 필드만 추출
+                var result = { errors: [], scores: null, perfectScript: '', changePoints: [] };
+                
+                // errors 배열 추출
+                var errorsMatch = jsonText.match(/"errors"\s*:\s*\[([\s\S]*?)\]/);
+                if (errorsMatch) {
+                    try {
+                        result.errors = JSON.parse('[' + errorsMatch[1] + ']');
+                    } catch (e) {
+                        result.errors = [];
+                    }
+                }
+                
+                // scores 추출
+                var scoresMatch = jsonText.match(/"scores"\s*:\s*\{([^}]+)\}/);
+                if (scoresMatch) {
+                    try {
+                        result.scores = JSON.parse('{' + scoresMatch[1] + '}');
+                    } catch (e) {
+                        // 개별 점수 추출 시도
+                        var seniorMatch = jsonText.match(/"senior"\s*:\s*(\d+)/);
+                        var funMatch = jsonText.match(/"fun"\s*:\s*(\d+)/);
+                        var flowMatch = jsonText.match(/"flow"\s*:\s*(\d+)/);
+                        var retentionMatch = jsonText.match(/"retention"\s*:\s*(\d+)/);
+                        
+                        if (seniorMatch || funMatch || flowMatch || retentionMatch) {
+                            result.scores = {
+                                senior: seniorMatch ? parseInt(seniorMatch[1]) : 70,
+                                fun: funMatch ? parseInt(funMatch[1]) : 70,
+                                flow: flowMatch ? parseInt(flowMatch[1]) : 70,
+                                retention: retentionMatch ? parseInt(retentionMatch[1]) : 70
+                            };
+                        }
+                    }
+                }
+                
+                // perfectScript 추출
+                var perfectMatch = jsonText.match(/"perfectScript"\s*:\s*"([\s\S]*?)(?:"\s*[,}]|"$)/);
+                if (perfectMatch) {
+                    result.perfectScript = perfectMatch[1]
+                        .replace(/\\n/g, '\n')
+                        .replace(/\\r/g, '')
+                        .replace(/\\t/g, '\t')
+                        .replace(/\\"/g, '"');
+                }
+                
+                console.log('✅ 부분 추출 성공:', result);
+                return result;
+                
+            } catch (e3) {
+                console.error('❌ 모든 파싱 시도 실패');
+                
+                // 최소한의 결과 반환 (오류 방지)
+                return {
+                    errors: [],
+                    scores: { senior: 70, fun: 70, flow: 70, retention: 70 },
+                    perfectScript: '⚠️ AI 응답 파싱 실패. 다시 분석해주세요.',
+                    changePoints: []
+                };
+            }
+        }
+    }
 }
 
 function showProgress(message) {
