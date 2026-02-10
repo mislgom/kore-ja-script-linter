@@ -1,14 +1,14 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.45 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.45: 표 레이아웃 개선 (유형 2줄, 원문/수정 좁힘, 사유 넓힘)
+ * main.js v4.46 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.46: 품질 평가 + 100점 수정 대본 좌우 분할
  * - ENDPOINT: generativelanguage.googleapis.com
  * - TIMEOUT: 300000 ms
  * - MAX_OUTPUT_TOKENS: 16384
  */
 
-console.log('🚀 main.js v4.45 로드됨');
-console.log('📌 v4.45: 표 레이아웃 개선 (유형 2줄, 원문/수정 좁힘, 사유 넓힘)');
+console.log('🚀 main.js v4.46 로드됨');
+console.log('📌 v4.46: 품질 평가 + 100점 수정 대본 좌우 분할');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -177,6 +177,7 @@ var state = {
         isFixed: false
     },
     finalScript: '',
+    perfectScript: '',
     scores: null
 };
 
@@ -214,7 +215,7 @@ function initApp() {
     console.log('📊 총 ' + getTotalRulesCount() + '개 시대고증 규칙 로드됨');
     console.log('⏱️ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('🤖 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.45 초기화 완료');
+    console.log('✅ main.js v4.46 초기화 완료');
 }
 
 function initEscKeyHandler() {
@@ -261,7 +262,10 @@ function addStyles() {
         '.analysis-table th:nth-child(2),.analysis-table td:nth-child(2){width:25%;}' +
         '.analysis-table th:nth-child(3),.analysis-table td:nth-child(3){width:25%;}' +
         '.analysis-table th:nth-child(4),.analysis-table td:nth-child(4){width:calc(50% - 45px);}' +
-        '.type-cell{font-size:11px;line-height:1.3;word-break:keep-all;}';
+        '.type-cell{font-size:11px;line-height:1.3;word-break:keep-all;}' +
+        '.score-perfect-container{display:flex;gap:20px;margin-top:20px;}' +
+        '.score-panel,.perfect-panel{flex:1;background:#1e1e1e;border-radius:10px;padding:20px;min-height:400px;}' +
+        '.perfect-script-content{background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#69f0ae;max-height:500px;overflow-y:auto;}';
     document.head.appendChild(style);
 }
 
@@ -282,12 +286,6 @@ function formatTypeText(type) {
         '역사적사실': '역사<br>사실'
     };
     return typeMap[type] || type.replace(/(.{2})/g, '$1<br>').replace(/<br>$/, '');
-}
-
-function summarizeReason(reason) {
-    if (!reason) return '';
-    if (reason.length <= 30) return reason;
-    return reason.substring(0, 28) + '...';
 }
 
 function createFullViewModal() {
@@ -530,7 +528,7 @@ function ensureScoreSection() {
         scoreSection.style.display = 'none';
         var revisedStage2 = document.getElementById('revised-stage2');
         if (revisedStage2 && revisedStage2.parentElement) {
-            revisedStage2.parentElement.appendChild(scoreSection);
+            revisedStage2.parentElement.parentElement.appendChild(scoreSection);
         } else {
             document.body.appendChild(scoreSection);
         }
@@ -684,7 +682,7 @@ function initDownloadButton() {
     var btn = document.getElementById('btn-download');
     if (!btn) return;
     btn.addEventListener('click', function() {
-        var scriptToDownload = state.finalScript;
+        var scriptToDownload = state.perfectScript || state.finalScript;
         if (!scriptToDownload || scriptToDownload.trim() === '') {
             scriptToDownload = state.stage2.fixedScript || state.stage1.fixedScript;
         }
@@ -960,118 +958,43 @@ function buildStage1Prompt(script) {
         '다음 현대어가 대본에 있으면 반드시 오류로 검출하세요:\n' +
         rulesString + '\n\n' +
         '### 2. 인물 설정 오류\n' +
-        '- 신분에 맞지 않는 행동이나 언어\n' +
-        '- 양반이 상민처럼 말하거나 그 반대의 경우\n' +
-        '- 남녀 간의 부적절한 호칭\n' +
-        '- 왕이나 왕비에 대한 불경한 표현\n\n' +
         '### 3. 시간 왜곡\n' +
-        '- 시간 순서가 맞지 않는 대화\n' +
-        '- 아직 일어나지 않은 일을 언급\n' +
-        '- 과거/현재/미래 시제 오류\n\n' +
         '### 4. 이야기 흐름 오류\n' +
-        '- 앞뒤 문맥과 맞지 않는 대사\n' +
-        '- 갑작스러운 감정 변화\n' +
-        '- 논리적 비약\n\n' +
         '### 5. 쌩뚱맞은 표현\n' +
-        '- 상황에 어울리지 않는 대사\n' +
-        '- 분위기를 깨는 표현\n' +
-        '- 갑작스러운 주제 전환\n\n' +
         '### 6. 캐릭터 일관성\n' +
-        '- 같은 인물의 말투 변화\n' +
-        '- 성격과 맞지 않는 행동\n' +
-        '- 호칭의 일관성\n\n' +
-        '### 7. 장면 연결성\n' +
-        '- 장면 전환 시 어색함\n' +
-        '- 복선 미회수\n' +
-        '- 설정 충돌\n\n' +
-        '## 분석 대상 대본:\n' +
-        '```\n' + script + '\n```\n\n' +
+        '### 7. 장면 연결성\n\n' +
+        '## 분석 대상 대본:\n```\n' + script + '\n```\n\n' +
         '## 중요 지시사항\n' +
-        '- "나레이션:" 또는 "(나레이션)"으로 시작하는 부분은 현대어 해설이므로 오류로 처리하지 마세요.\n' +
-        '- 대사 속 현대어만 검출하세요.\n' +
-        '- 위 시대착오 목록의 현대어가 대본에 있으면 반드시 오류로 검출하세요.\n' +
-        '- 오류가 없으면 빈 배열을 반환하세요.\n' +
+        '- "나레이션:" 또는 "(나레이션)"으로 시작하는 부분은 오류로 처리하지 마세요.\n' +
         '- reason(사유)은 15자 이내로 간결하게 작성하세요.\n\n' +
         '## 응답 형식 (JSON만 반환):\n' +
-        '```json\n' +
-        '{\n' +
-        '  "errors": [\n' +
-        '    {\n' +
-        '      "type": "시대착오|인물설정|시간왜곡|이야기흐름|쌩뚱맞은표현|캐릭터일관성|장면연결성",\n' +
-        '      "original": "오류가 있는 원문 (정확히 복사)",\n' +
-        '      "revised": "수정된 문장",\n' +
-        '      "reason": "수정 이유 (15자 이내)",\n' +
-        '      "severity": "high|medium|low"\n' +
-        '    }\n' +
-        '  ]\n' +
-        '}\n' +
-        '```';
+        '```json\n{"errors": [{"type": "시대착오", "original": "원문", "revised": "수정문", "reason": "사유", "severity": "high"}]}\n```';
 }
 
 function buildStage2Prompt(script) {
     var rulesString = getHistoricalRulesString();
     
-    return '당신은 조선시대 사극 대본 최종 검수 전문가입니다.\n' +
-        '1차 분석 후 수정된 대본을 다시 정밀 검토하여 놓친 오류를 찾아내세요.\n\n' +
-        '## 2차 분석 중점 검토 항목\n\n' +
-        '### 1. 미세한 시대착오\n' +
-        '다음 현대어가 대본에 있으면 반드시 오류로 검출:\n' +
-        rulesString + '\n\n' +
-        '### 2. 대사 자연스러움\n' +
-        '- 조선시대 말투로 어색한 부분\n' +
-        '- 너무 현대적인 문장 구조\n\n' +
-        '### 3. 호칭 일관성\n' +
-        '- 같은 인물을 다르게 부르는 경우\n' +
-        '- 신분에 맞지 않는 호칭\n\n' +
-        '### 4. 감정선 연결\n' +
-        '- 감정 변화의 자연스러움\n' +
-        '- 동기 부여의 적절성\n\n' +
-        '### 5. 복선/떡밥 회수\n' +
-        '- 미회수된 복선\n' +
-        '- 어색한 떡밥 처리\n\n' +
-        '### 6. 역사적 사실 오류\n' +
-        '- 실제 역사와 충돌하는 설정\n' +
-        '- 시대 배경과 맞지 않는 요소\n\n' +
-        '## 분석 대상 대본:\n' +
-        '```\n' + script + '\n```\n\n' +
+    return '당신은 조선시대 사극 대본 최종 검수 전문가입니다.\n\n' +
+        '## 분석 대상 대본:\n```\n' + script + '\n```\n\n' +
         '## 중요 지시사항\n' +
-        '- "나레이션:" 또는 "(나레이션)"으로 시작하는 부분은 현대어 해설이므로 오류로 처리하지 마세요.\n' +
-        '- 대사 속 현대어만 검출하세요.\n' +
-        '- 1차 분석에서 놓쳤을 수 있는 미세한 오류까지 찾아주세요.\n' +
-        '- 오류가 없으면 빈 배열을 반환하세요.\n' +
-        '- reason(사유)은 15자 이내로 간결하게 작성하세요.\n\n' +
-        '## 점수 평가 (각 100점 만점)\n' +
-        '- 시니어 적합도: 어르신 시청자가 이해하기 쉬운 정도\n' +
-        '- 재미 요소: 흥미와 몰입도\n' +
-        '- 이야기 흐름: 서사 구조와 논리성\n' +
-        '- 시청자 이탈 방지: 지루함 없이 끝까지 볼 수 있는 정도\n\n' +
+        '- "나레이션:" 부분은 오류로 처리하지 마세요.\n' +
+        '- reason은 15자 이내로 작성하세요.\n' +
+        '- 각 항목 100점 만점으로 점수를 평가하세요.\n' +
+        '- improvements에 각 항목별 100점 달성을 위한 구체적 개선안을 작성하세요.\n' +
+        '- perfectScript에 모든 개선안을 반영한 100점짜리 전체 대본을 작성하세요.\n\n' +
         '## 응답 형식 (JSON만 반환):\n' +
         '```json\n' +
         '{\n' +
-        '  "errors": [\n' +
-        '    {\n' +
-        '      "type": "시대착오|대사자연스러움|호칭일관성|감정선연결|복선회수|역사적사실",\n' +
-        '      "original": "오류가 있는 원문 (정확히 복사)",\n' +
-        '      "revised": "수정된 문장",\n' +
-        '      "reason": "수정 이유 (15자 이내)",\n' +
-        '      "severity": "high|medium|low"\n' +
-        '    }\n' +
-        '  ],\n' +
-        '  "scores": {\n' +
-        '    "senior": 85,\n' +
-        '    "fun": 80,\n' +
-        '    "flow": 90,\n' +
-        '    "retention": 85\n' +
-        '  },\n' +
+        '  "errors": [{"type": "시대착오", "original": "원문", "revised": "수정문", "reason": "사유", "severity": "high"}],\n' +
+        '  "scores": {"senior": 85, "fun": 80, "flow": 90, "retention": 85},\n' +
         '  "improvements": [\n' +
-        '    {\n' +
-        '      "category": "시니어적합도|재미요소|이야기흐름|시청자이탈방지",\n' +
-        '      "currentScore": 85,\n' +
-        '      "suggestion": "구체적인 개선 방안"\n' +
-        '    }\n' +
-        '  ]\n' +
-        '}\n' +
-        '```';
+        '    {"category": "시니어적합도", "currentScore": 85, "suggestion": "구체적 개선안"},\n' +
+        '    {"category": "재미요소", "currentScore": 80, "suggestion": "구체적 개선안"},\n' +
+        '    {"category": "이야기흐름", "currentScore": 90, "suggestion": "구체적 개선안"},\n' +
+        '    {"category": "시청자이탈방지", "currentScore": 85, "suggestion": "구체적 개선안"}\n' +
+        '  ],\n' +
+        '  "perfectScript": "모든 개선안을 반영하여 4개 항목 모두 100점이 되도록 수정한 전체 대본"\n' +
+        '}\n```';
 }
 
 async function callGeminiAPI(prompt) {
@@ -1089,15 +1012,9 @@ async function callGeminiAPI(prompt) {
 
     var response = await fetch(url, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            contents: [{
-                parts: [{
-                    text: prompt
-                }]
-            }],
+            contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
                 temperature: 0.1,
                 topK: 40,
@@ -1114,14 +1031,12 @@ async function callGeminiAPI(prompt) {
     }
 
     var data = await response.json();
-    
     if (stopBtn) stopBtn.disabled = true;
     currentAbortController = null;
 
     if (data.candidates && data.candidates[0] && data.candidates[0].content) {
         return data.candidates[0].content.parts[0].text;
     }
-    
     throw new Error('API 응답 형식 오류');
 }
 
@@ -1130,13 +1045,11 @@ function parseApiResponse(responseText) {
     if (jsonMatch) {
         return JSON.parse(jsonMatch[1]);
     }
-    
     var jsonStart = responseText.indexOf('{');
     var jsonEnd = responseText.lastIndexOf('}');
     if (jsonStart !== -1 && jsonEnd !== -1) {
         return JSON.parse(responseText.substring(jsonStart, jsonEnd + 1));
     }
-    
     throw new Error('JSON 파싱 실패');
 }
 
@@ -1157,23 +1070,14 @@ function updateProgress(percent, message) {
 
 function hideProgress() {
     var container = document.getElementById('progress-container');
-    if (container) {
-        container.style.display = 'none';
-    }
+    if (container) container.style.display = 'none';
 }
 
 async function startStage1Analysis() {
     var script = document.getElementById('original-script').value.trim();
-    if (!script) {
-        alert('분석할 대본을 입력해주세요.');
-        return;
-    }
-
+    if (!script) { alert('분석할 대본을 입력해주세요.'); return; }
     var apiKey = localStorage.getItem('GEMINI_API_KEY');
-    if (!apiKey) {
-        alert('API 키를 먼저 설정해주세요.');
-        return;
-    }
+    if (!apiKey) { alert('API 키를 먼저 설정해주세요.'); return; }
 
     showProgress('1차 분석 시작...');
     updateProgress(10, 'AI 분석 요청 중...');
@@ -1181,57 +1085,30 @@ async function startStage1Analysis() {
     try {
         state.stage1.originalScript = script;
         state.stage1.isFixed = false;
-        
         var prompt = buildStage1Prompt(script);
         updateProgress(30, 'Gemini API 응답 대기 중...');
-        
         var response = await callGeminiAPI(prompt);
         updateProgress(70, '분석 결과 처리 중...');
-        
         var result = parseApiResponse(response);
-        
         state.stage1.analysis = result;
         state.stage1.allErrors = (result.errors || []).map(function(err, idx) {
-            return {
-                id: 'stage1-error-' + idx,
-                type: err.type,
-                original: err.original,
-                revised: err.revised,
-                reason: err.reason,
-                severity: err.severity,
-                useRevised: true
-            };
+            return { id: 'stage1-error-' + idx, type: err.type, original: err.original, revised: err.revised, reason: err.reason, severity: err.severity, useRevised: true };
         });
-        
         updateProgress(90, '결과 표시 중...');
         displayStage1Results();
-        
         updateProgress(100, '1차 분석 완료!');
         setTimeout(hideProgress, 1000);
-        
     } catch (error) {
-        if (error.name === 'AbortError') {
-            console.log('분석이 사용자에 의해 중지되었습니다.');
-        } else {
-            alert('분석 중 오류가 발생했습니다: ' + error.message);
-            console.error(error);
-        }
+        if (error.name !== 'AbortError') { alert('분석 중 오류가 발생했습니다: ' + error.message); }
         hideProgress();
     }
 }
 
 async function startStage2Analysis() {
     var script = state.stage1.fixedScript || state.stage1.originalScript;
-    if (!script) {
-        alert('1차 분석을 먼저 완료해주세요.');
-        return;
-    }
-
+    if (!script) { alert('1차 분석을 먼저 완료해주세요.'); return; }
     var apiKey = localStorage.getItem('GEMINI_API_KEY');
-    if (!apiKey) {
-        alert('API 키를 먼저 설정해주세요.');
-        return;
-    }
+    if (!apiKey) { alert('API 키를 먼저 설정해주세요.'); return; }
 
     showProgress('2차 분석 시작...');
     updateProgress(10, 'AI 정밀 분석 요청 중...');
@@ -1239,49 +1116,24 @@ async function startStage2Analysis() {
     try {
         state.stage2.originalScript = script;
         state.stage2.isFixed = false;
-        
         var prompt = buildStage2Prompt(script);
         updateProgress(30, 'Gemini API 응답 대기 중...');
-        
         var response = await callGeminiAPI(prompt);
         updateProgress(70, '분석 결과 처리 중...');
-        
         var result = parseApiResponse(response);
-        
         state.stage2.analysis = result;
         state.stage2.allErrors = (result.errors || []).map(function(err, idx) {
-            return {
-                id: 'stage2-error-' + idx,
-                type: err.type,
-                original: err.original,
-                revised: err.revised,
-                reason: err.reason,
-                severity: err.severity,
-                useRevised: true
-            };
+            return { id: 'stage2-error-' + idx, type: err.type, original: err.original, revised: err.revised, reason: err.reason, severity: err.severity, useRevised: true };
         });
-        
-        if (result.scores) {
-            state.scores = result.scores;
-        }
-        
+        if (result.scores) state.scores = result.scores;
+        if (result.perfectScript) state.perfectScript = result.perfectScript;
         updateProgress(90, '결과 표시 중...');
         displayStage2Results();
-        
-        if (result.scores) {
-            displayScores(result.scores, result.improvements);
-        }
-        
+        if (result.scores) displayScoresAndPerfectScript(result.scores, result.improvements, result.perfectScript);
         updateProgress(100, '2차 분석 완료!');
         setTimeout(hideProgress, 1000);
-        
     } catch (error) {
-        if (error.name === 'AbortError') {
-            console.log('분석이 사용자에 의해 중지되었습니다.');
-        } else {
-            alert('분석 중 오류가 발생했습니다: ' + error.message);
-            console.error(error);
-        }
+        if (error.name !== 'AbortError') { alert('분석 중 오류가 발생했습니다: ' + error.message); }
         hideProgress();
     }
 }
@@ -1289,46 +1141,29 @@ async function startStage2Analysis() {
 function displayStage1Results() {
     var container = document.getElementById('analysis-stage1');
     if (!container) return;
-    
     var errors = state.stage1.allErrors;
-    
     if (!errors || errors.length === 0) {
         container.innerHTML = '<div style="text-align:center;padding:30px;color:#69f0ae;font-size:18px;">✅ 오류가 발견되지 않았습니다.</div>';
     } else {
-        var html = '<table class="analysis-table">' +
-            '<thead><tr>' +
-            '<th>유형</th>' +
-            '<th>원문</th>' +
-            '<th>수정</th>' +
-            '<th>사유</th>' +
-            '</tr></thead><tbody>';
-        
-        errors.forEach(function(err, idx) {
+        var html = '<table class="analysis-table"><thead><tr><th>유형</th><th>원문</th><th>수정</th><th>사유</th></tr></thead><tbody>';
+        errors.forEach(function(err) {
             var severityColor = err.severity === 'high' ? '#ff5555' : (err.severity === 'medium' ? '#ffaa00' : '#69f0ae');
-            html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;transition:background 0.2s;" ' +
-                'onmouseover="this.style.background=\'#3a3a3a\'" onmouseout="this.style.background=\'\'">' +
+            html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;" onmouseover="this.style.background=\'#3a3a3a\'" onmouseout="this.style.background=\'\'">' +
                 '<td class="type-cell" style="color:' + severityColor + ';font-weight:bold;">' + formatTypeText(err.type) + '</td>' +
                 '<td style="color:#ff9800;font-size:11px;">' + escapeHtml(err.original) + '</td>' +
                 '<td style="color:#69f0ae;font-size:11px;">' + escapeHtml(err.revised) + '</td>' +
-                '<td style="color:#aaa;font-size:11px;" title="' + escapeHtml(err.reason) + '">' + escapeHtml(err.reason) + '</td>' +
-                '</tr>';
+                '<td style="color:#aaa;font-size:11px;">' + escapeHtml(err.reason) + '</td></tr>';
         });
-        
         html += '</tbody></table>';
         container.innerHTML = html;
-        
         container.querySelectorAll('tr[data-marker-id]').forEach(function(row) {
             row.addEventListener('click', function() {
                 var markerId = this.getAttribute('data-marker-id');
                 var errorIndex = findErrorIndexById('stage1', markerId);
-                if (errorIndex >= 0) {
-                    setCurrentError('stage1', errorIndex);
-                    scrollToMarker('stage1', markerId);
-                }
+                if (errorIndex >= 0) { setCurrentError('stage1', errorIndex); scrollToMarker('stage1', markerId); }
             });
         });
     }
-    
     renderScriptWithMarkers('stage1');
     enableStage1Buttons(errors && errors.length > 0);
 }
@@ -1336,51 +1171,34 @@ function displayStage1Results() {
 function displayStage2Results() {
     var container = document.getElementById('analysis-stage2');
     if (!container) return;
-    
     var errors = state.stage2.allErrors;
-    
     if (!errors || errors.length === 0) {
         container.innerHTML = '<div style="text-align:center;padding:30px;color:#69f0ae;font-size:18px;">✅ 추가 오류가 발견되지 않았습니다.</div>';
     } else {
-        var html = '<table class="analysis-table">' +
-            '<thead><tr>' +
-            '<th>유형</th>' +
-            '<th>원문</th>' +
-            '<th>수정</th>' +
-            '<th>사유</th>' +
-            '</tr></thead><tbody>';
-        
-        errors.forEach(function(err, idx) {
+        var html = '<table class="analysis-table"><thead><tr><th>유형</th><th>원문</th><th>수정</th><th>사유</th></tr></thead><tbody>';
+        errors.forEach(function(err) {
             var severityColor = err.severity === 'high' ? '#ff5555' : (err.severity === 'medium' ? '#ffaa00' : '#69f0ae');
-            html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;transition:background 0.2s;" ' +
-                'onmouseover="this.style.background=\'#3a3a3a\'" onmouseout="this.style.background=\'\'">' +
+            html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;" onmouseover="this.style.background=\'#3a3a3a\'" onmouseout="this.style.background=\'\'">' +
                 '<td class="type-cell" style="color:' + severityColor + ';font-weight:bold;">' + formatTypeText(err.type) + '</td>' +
                 '<td style="color:#ff9800;font-size:11px;">' + escapeHtml(err.original) + '</td>' +
                 '<td style="color:#69f0ae;font-size:11px;">' + escapeHtml(err.revised) + '</td>' +
-                '<td style="color:#aaa;font-size:11px;" title="' + escapeHtml(err.reason) + '">' + escapeHtml(err.reason) + '</td>' +
-                '</tr>';
+                '<td style="color:#aaa;font-size:11px;">' + escapeHtml(err.reason) + '</td></tr>';
         });
-        
         html += '</tbody></table>';
         container.innerHTML = html;
-        
         container.querySelectorAll('tr[data-marker-id]').forEach(function(row) {
             row.addEventListener('click', function() {
                 var markerId = this.getAttribute('data-marker-id');
                 var errorIndex = findErrorIndexById('stage2', markerId);
-                if (errorIndex >= 0) {
-                    setCurrentError('stage2', errorIndex);
-                    scrollToMarker('stage2', markerId);
-                }
+                if (errorIndex >= 0) { setCurrentError('stage2', errorIndex); scrollToMarker('stage2', markerId); }
             });
         });
     }
-    
     renderScriptWithMarkers('stage2');
     enableStage2Buttons(errors && errors.length > 0);
 }
 
-function displayScores(scores, improvements) {
+function displayScoresAndPerfectScript(scores, improvements, perfectScript) {
     var section = ensureScoreSection();
     if (!section) return;
     
@@ -1391,49 +1209,65 @@ function displayScores(scores, improvements) {
     var average = Math.round((senior + fun + flow + retention) / 4);
     var passed = average >= 95;
     
-    var html = '<div style="background:#1e1e1e;border-radius:10px;padding:20px;margin-top:20px;">' +
+    var html = '<div class="score-perfect-container">' +
+        '<div class="score-panel">' +
         '<h3 style="color:#fff;margin-bottom:15px;text-align:center;">📊 품질 평가 점수</h3>' +
-        '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:15px;margin-bottom:20px;">' +
+        '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:15px;">' +
         createScoreCard('시니어 적합도', senior, '#4CAF50') +
-        createScoreCard('재미 요소', fun, '#FF9800') +
         createScoreCard('이야기 흐름', flow, '#2196F3') +
+        createScoreCard('재미 요소', fun, '#FF9800') +
         createScoreCard('시청자 이탈 방지', retention, '#9C27B0') +
         '</div>' +
-        '<div style="text-align:center;padding:20px;background:#2d2d2d;border-radius:8px;">' +
-        '<div style="font-size:24px;color:#fff;margin-bottom:10px;">평균 점수: <span style="color:' + (passed ? '#69f0ae' : '#ff5555') + ';font-weight:bold;">' + average + '점</span></div>' +
-        '<div style="font-size:20px;font-weight:bold;color:' + (passed ? '#69f0ae' : '#ff5555') + ';">' + (passed ? '✅ 합격' : '❌ 미합격 (95점 이상 필요)') + '</div>' +
+        '<div style="text-align:center;padding:15px;background:#2d2d2d;border-radius:8px;margin-bottom:15px;">' +
+        '<div style="font-size:20px;color:#fff;">평균: <span style="color:' + (passed ? '#69f0ae' : '#ff5555') + ';font-weight:bold;">' + average + '점</span></div>' +
+        '<div style="font-size:16px;color:' + (passed ? '#69f0ae' : '#ff5555') + ';">' + (passed ? '✅ 합격' : '❌ 미합격') + '</div>' +
         '</div>';
     
     if (improvements && improvements.length > 0) {
-        html += '<div style="margin-top:20px;"><h4 style="color:#ffaa00;margin-bottom:10px;">💡 개선 제안</h4>';
+        html += '<div><h4 style="color:#ffaa00;margin-bottom:10px;font-size:14px;">💡 개선 제안</h4>';
         improvements.forEach(function(imp) {
-            html += '<div style="background:#2d2d2d;padding:15px;border-radius:8px;margin-bottom:10px;border-left:4px solid #ffaa00;">' +
-                '<div style="color:#fff;font-weight:bold;margin-bottom:5px;">' + escapeHtml(imp.category) + ' (현재: ' + imp.currentScore + '점)</div>' +
-                '<div style="color:#aaa;font-size:14px;">' + escapeHtml(imp.suggestion) + '</div>' +
-                '</div>';
+            html += '<div style="background:#2d2d2d;padding:10px;border-radius:6px;margin-bottom:8px;border-left:3px solid #ffaa00;">' +
+                '<div style="color:#fff;font-weight:bold;font-size:12px;">' + escapeHtml(imp.category) + ' (' + imp.currentScore + '점)</div>' +
+                '<div style="color:#aaa;font-size:11px;margin-top:5px;">' + escapeHtml(imp.suggestion) + '</div></div>';
         });
         html += '</div>';
     }
-    
     html += '</div>';
+    
+    html += '<div class="perfect-panel">' +
+        '<h3 style="color:#69f0ae;margin-bottom:15px;text-align:center;">💯 100점 수정 대본</h3>' +
+        '<div class="perfect-script-content">' + escapeHtml(perfectScript || '100점 수정 대본이 생성되지 않았습니다.') + '</div>' +
+        '<div style="text-align:center;margin-top:15px;">' +
+        '<button id="btn-download-perfect" style="background:#69f0ae;color:#000;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-weight:bold;">📥 100점 대본 다운로드</button>' +
+        '</div></div></div>';
+    
     section.innerHTML = html;
     section.style.display = 'block';
+    
+    var downloadBtn = document.getElementById('btn-download-perfect');
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', function() {
+            if (perfectScript) {
+                downloadScript(perfectScript);
+            } else {
+                alert('100점 수정 대본이 없습니다.');
+            }
+        });
+    }
 }
 
 function createScoreCard(label, score, color) {
-    return '<div style="background:#2d2d2d;padding:15px;border-radius:8px;text-align:center;">' +
-        '<div style="color:#aaa;font-size:12px;margin-bottom:5px;">' + label + '</div>' +
-        '<div style="font-size:32px;font-weight:bold;color:' + color + ';">' + score + '</div>' +
-        '<div style="width:100%;background:#444;height:8px;border-radius:4px;margin-top:10px;">' +
-        '<div style="width:' + score + '%;background:' + color + ';height:100%;border-radius:4px;transition:width 0.5s;"></div>' +
-        '</div></div>';
+    return '<div style="background:#2d2d2d;padding:10px;border-radius:6px;text-align:center;">' +
+        '<div style="color:#aaa;font-size:10px;margin-bottom:3px;">' + label + '</div>' +
+        '<div style="font-size:24px;font-weight:bold;color:' + color + ';">' + score + '</div>' +
+        '<div style="width:100%;background:#444;height:6px;border-radius:3px;margin-top:5px;">' +
+        '<div style="width:' + score + '%;background:' + color + ';height:100%;border-radius:3px;"></div></div></div>';
 }
 
 function enableStage1Buttons(hasErrors) {
     var btnBefore = document.getElementById('btn-revert-before-stage1');
     var btnAfter = document.getElementById('btn-revert-after-stage1');
     var btnFix = document.getElementById('btn-fix-script-stage1');
-    
     if (btnBefore) btnBefore.disabled = !hasErrors;
     if (btnAfter) btnAfter.disabled = !hasErrors;
     if (btnFix) btnFix.disabled = false;
@@ -1443,7 +1277,6 @@ function enableStage2Buttons(hasErrors) {
     var btnBefore = document.getElementById('btn-revert-before-stage2');
     var btnAfter = document.getElementById('btn-revert-after-stage2');
     var btnFix = document.getElementById('btn-fix-script-stage2');
-    
     if (btnBefore) btnBefore.disabled = !hasErrors;
     if (btnAfter) btnAfter.disabled = !hasErrors;
     if (btnFix) btnFix.disabled = false;
@@ -1453,21 +1286,14 @@ function fixScript(stage) {
     var s = state[stage];
     var text = s.originalScript;
     var errors = s.allErrors || [];
-    
     errors.forEach(function(err) {
         if (err.useRevised && err.original && err.revised) {
             text = text.split(err.original).join(err.revised);
         }
     });
-    
     s.fixedScript = text;
     s.isFixed = true;
-    
-    if (stage === 'stage2') {
-        state.finalScript = text;
-    }
-    
+    if (stage === 'stage2') state.finalScript = text;
     renderScriptWithMarkers(stage);
-    
-    alert((stage === 'stage1' ? '1차' : '최종') + ' 수정본이 적용되었습니다.\n\n"수정 전/수정 후" 버튼으로 개별 항목을 다시 변경할 수 있습니다.\n"다운로드" 버튼으로 수정본을 저장할 수 있습니다.');
+    alert((stage === 'stage1' ? '1차' : '최종') + ' 수정본이 적용되었습니다.');
 }
