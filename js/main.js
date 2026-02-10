@@ -1,14 +1,14 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.42 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.42: 전체 보기 모달, 개별 수정 토글, 스크롤 고정, 6가지 분석 기능
+ * main.js v4.43 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.43: 표 가독성 개선, ESC키 모달 닫기, 분석 버튼 위치 조정, 픽스 후 토글 유지
  * - ENDPOINT: generativelanguage.googleapis.com
  * - TIMEOUT: 300000 ms
  * - MAX_OUTPUT_TOKENS: 16384
  */
 
-console.log('🚀 main.js v4.42 로드됨');
-console.log('📌 v4.42: 전체 보기 모달, 개별 수정 토글, 스크롤 고정, 6가지 분석 기능');
+console.log('🚀 main.js v4.43 로드됨');
+console.log('📌 v4.43: 표 가독성 개선, ESC키 모달 닫기, 분석 버튼 위치 조정');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -164,7 +164,8 @@ var state = {
         revisedScript: '',
         allErrors: [],
         fixedScript: '',
-        currentErrorIndex: -1
+        currentErrorIndex: -1,
+        isFixed: false
     },
     stage2: {
         originalScript: '',
@@ -172,7 +173,8 @@ var state = {
         revisedScript: '',
         allErrors: [],
         fixedScript: '',
-        currentErrorIndex: -1
+        currentErrorIndex: -1,
+        isFixed: false
     },
     finalScript: '',
     scores: null
@@ -208,10 +210,19 @@ function initApp() {
     addStyles();
     addFullViewButtons();
     createFullViewModal();
+    initEscKeyHandler();
     console.log('📊 총 ' + getTotalRulesCount() + '개 시대고증 규칙 로드됨');
     console.log('⏱️ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('🤖 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.42 초기화 완료');
+    console.log('✅ main.js v4.43 초기화 완료');
+}
+
+function initEscKeyHandler() {
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeFullViewModal();
+        }
+    });
 }
 
 function getTotalRulesCount() {
@@ -242,7 +253,14 @@ function addStyles() {
         '.fullview-close{position:fixed;top:20px;right:30px;font-size:40px;color:#fff;cursor:pointer;z-index:10001;}' +
         '.fullview-close:hover{color:#ff5555;}' +
         '.btn-fullview{background:#9c27b0;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;margin-left:10px;}' +
-        '.btn-fullview:hover{background:#7b1fa2;}';
+        '.btn-fullview:hover{background:#7b1fa2;}' +
+        '.analysis-table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}' +
+        '.analysis-table th{padding:10px 8px;border:1px solid #444;background:#333;font-weight:bold;text-align:center;}' +
+        '.analysis-table td{padding:10px 8px;border:1px solid #444;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word;}' +
+        '.analysis-table th:nth-child(1),.analysis-table td:nth-child(1){width:70px;}' +
+        '.analysis-table th:nth-child(2),.analysis-table td:nth-child(2){width:35%;}' +
+        '.analysis-table th:nth-child(3),.analysis-table td:nth-child(3){width:35%;}' +
+        '.analysis-table th:nth-child(4),.analysis-table td:nth-child(4){width:calc(30% - 70px);}';
     document.head.appendChild(style);
 }
 
@@ -421,21 +439,20 @@ function closeFullViewModal() {
 
 function addFullViewButtons() {
     var revised1 = document.getElementById('revised-stage1');
-    var revised2 = document.getElementById('revised-stage2');
     
-    if (revised1) addFullViewButtonToContainer(revised1, 'stage1');
-    if (revised2) addFullViewButtonToContainer(revised2, 'stage2');
+    if (revised1) addFullViewButtonToHeader(revised1, 'stage1');
 }
 
-function addFullViewButtonToContainer(container, stage) {
+function addFullViewButtonToHeader(container, stage) {
     var parent = container.parentElement;
     var header = parent.querySelector('h3, .section-title, .panel-header');
     
     if (!header) {
-        var children = parent.children;
-        for (var i = 0; i < children.length; i++) {
-            if (children[i].tagName === 'DIV' && children[i].style.fontWeight === 'bold') {
-                header = children[i];
+        var allElements = parent.querySelectorAll('*');
+        for (var i = 0; i < allElements.length; i++) {
+            var el = allElements[i];
+            if (el.textContent.includes('수정 반영') && el.tagName !== 'BUTTON') {
+                header = el;
                 break;
             }
         }
@@ -448,18 +465,10 @@ function addFullViewButtonToContainer(container, stage) {
         btn.addEventListener('click', function() {
             openFullViewModal(stage);
         });
+        header.style.display = 'flex';
+        header.style.justifyContent = 'space-between';
+        header.style.alignItems = 'center';
         header.appendChild(btn);
-    } else {
-        var wrapper = parent.querySelector('.revert-btn-wrapper');
-        if (wrapper && !wrapper.querySelector('.btn-fullview')) {
-            var btn = document.createElement('button');
-            btn.className = 'btn-fullview';
-            btn.innerHTML = '🔍 전체 보기';
-            btn.addEventListener('click', function() {
-                openFullViewModal(stage);
-            });
-            wrapper.appendChild(btn);
-        }
     }
 }
 
@@ -664,10 +673,10 @@ function initRevertButtons() {
     var r1 = document.getElementById('revised-stage1');
     var r2 = document.getElementById('revised-stage2');
     if (r1) addRevertButton(r1, 'stage1');
-    if (r2) addRevertButton(r2, 'stage2');
+    if (r2) addRevertButton(r2, 'stage2', true);
 }
 
-function addRevertButton(container, stage) {
+function addRevertButton(container, stage, hideFullViewBtn) {
     var parent = container.parentElement;
     if (parent.querySelector('.revert-btn-wrapper')) return;
     var wrapper = document.createElement('div');
@@ -699,11 +708,13 @@ function addRevertButton(container, stage) {
     btnFix.addEventListener('click', function() { fixScript(stage); });
     wrapper.appendChild(btnFix);
 
-    var btnFullView = document.createElement('button');
-    btnFullView.className = 'btn-fullview';
-    btnFullView.innerHTML = '🔍 전체 보기';
-    btnFullView.addEventListener('click', function() { openFullViewModal(stage); });
-    wrapper.appendChild(btnFullView);
+    if (!hideFullViewBtn) {
+        var btnFullView = document.createElement('button');
+        btnFullView.className = 'btn-fullview';
+        btnFullView.innerHTML = '🔍 전체 보기';
+        btnFullView.addEventListener('click', function() { openFullViewModal(stage); });
+        wrapper.appendChild(btnFullView);
+    }
 
     parent.appendChild(wrapper);
 }
@@ -858,7 +869,7 @@ function initStage1AnalysisButton() {
     });
     btn.addEventListener('click', startStage1Analysis);
     wrapper.appendChild(btn);
-    parent.insertBefore(wrapper, analysisContainer);
+    parent.appendChild(wrapper);
 }
 
 function initStage2AnalysisButton() {
@@ -884,7 +895,7 @@ function initStage2AnalysisButton() {
     });
     btn.addEventListener('click', startStage2Analysis);
     wrapper.appendChild(btn);
-    parent.insertBefore(wrapper, analysisContainer);
+    parent.appendChild(wrapper);
 }
 
 function getHistoricalRulesString() {
@@ -1125,6 +1136,7 @@ async function startStage1Analysis() {
 
     try {
         state.stage1.originalScript = script;
+        state.stage1.isFixed = false;
         
         var prompt = buildStage1Prompt(script);
         updateProgress(30, 'Gemini API 응답 대기 중...');
@@ -1182,6 +1194,7 @@ async function startStage2Analysis() {
 
     try {
         state.stage2.originalScript = script;
+        state.stage2.isFixed = false;
         
         var prompt = buildStage2Prompt(script);
         updateProgress(30, 'Gemini API 응답 대기 중...');
@@ -1238,22 +1251,22 @@ function displayStage1Results() {
     if (!errors || errors.length === 0) {
         container.innerHTML = '<div style="text-align:center;padding:30px;color:#69f0ae;font-size:18px;">✅ 오류가 발견되지 않았습니다.</div>';
     } else {
-        var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;">' +
-            '<thead><tr style="background:#333;">' +
-            '<th style="padding:12px;border:1px solid #444;width:100px;">유형</th>' +
-            '<th style="padding:12px;border:1px solid #444;">원문</th>' +
-            '<th style="padding:12px;border:1px solid #444;">수정</th>' +
-            '<th style="padding:12px;border:1px solid #444;width:200px;">사유</th>' +
+        var html = '<table class="analysis-table">' +
+            '<thead><tr>' +
+            '<th>유형</th>' +
+            '<th>원문</th>' +
+            '<th>수정</th>' +
+            '<th>사유</th>' +
             '</tr></thead><tbody>';
         
         errors.forEach(function(err, idx) {
             var severityColor = err.severity === 'high' ? '#ff5555' : (err.severity === 'medium' ? '#ffaa00' : '#69f0ae');
             html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;transition:background 0.2s;" ' +
                 'onmouseover="this.style.background=\'#3a3a3a\'" onmouseout="this.style.background=\'\'">' +
-                '<td style="padding:10px;border:1px solid #444;color:' + severityColor + ';font-weight:bold;">' + escapeHtml(err.type) + '</td>' +
-                '<td style="padding:10px;border:1px solid #444;color:#ff9800;">' + escapeHtml(err.original) + '</td>' +
-                '<td style="padding:10px;border:1px solid #444;color:#69f0ae;">' + escapeHtml(err.revised) + '</td>' +
-                '<td style="padding:10px;border:1px solid #444;color:#aaa;font-size:12px;">' + escapeHtml(err.reason) + '</td>' +
+                '<td style="color:' + severityColor + ';font-weight:bold;text-align:center;">' + escapeHtml(err.type) + '</td>' +
+                '<td style="color:#ff9800;">' + escapeHtml(err.original) + '</td>' +
+                '<td style="color:#69f0ae;">' + escapeHtml(err.revised) + '</td>' +
+                '<td style="color:#aaa;font-size:12px;">' + escapeHtml(err.reason) + '</td>' +
                 '</tr>';
         });
         
@@ -1285,22 +1298,22 @@ function displayStage2Results() {
     if (!errors || errors.length === 0) {
         container.innerHTML = '<div style="text-align:center;padding:30px;color:#69f0ae;font-size:18px;">✅ 추가 오류가 발견되지 않았습니다.</div>';
     } else {
-        var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;">' +
-            '<thead><tr style="background:#333;">' +
-            '<th style="padding:12px;border:1px solid #444;width:100px;">유형</th>' +
-            '<th style="padding:12px;border:1px solid #444;">원문</th>' +
-            '<th style="padding:12px;border:1px solid #444;">수정</th>' +
-            '<th style="padding:12px;border:1px solid #444;width:200px;">사유</th>' +
+        var html = '<table class="analysis-table">' +
+            '<thead><tr>' +
+            '<th>유형</th>' +
+            '<th>원문</th>' +
+            '<th>수정</th>' +
+            '<th>사유</th>' +
             '</tr></thead><tbody>';
         
         errors.forEach(function(err, idx) {
             var severityColor = err.severity === 'high' ? '#ff5555' : (err.severity === 'medium' ? '#ffaa00' : '#69f0ae');
             html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;transition:background 0.2s;" ' +
                 'onmouseover="this.style.background=\'#3a3a3a\'" onmouseout="this.style.background=\'\'">' +
-                '<td style="padding:10px;border:1px solid #444;color:' + severityColor + ';font-weight:bold;">' + escapeHtml(err.type) + '</td>' +
-                '<td style="padding:10px;border:1px solid #444;color:#ff9800;">' + escapeHtml(err.original) + '</td>' +
-                '<td style="padding:10px;border:1px solid #444;color:#69f0ae;">' + escapeHtml(err.revised) + '</td>' +
-                '<td style="padding:10px;border:1px solid #444;color:#aaa;font-size:12px;">' + escapeHtml(err.reason) + '</td>' +
+                '<td style="color:' + severityColor + ';font-weight:bold;text-align:center;">' + escapeHtml(err.type) + '</td>' +
+                '<td style="color:#ff9800;">' + escapeHtml(err.original) + '</td>' +
+                '<td style="color:#69f0ae;">' + escapeHtml(err.revised) + '</td>' +
+                '<td style="color:#aaa;font-size:12px;">' + escapeHtml(err.reason) + '</td>' +
                 '</tr>';
         });
         
@@ -1404,18 +1417,13 @@ function fixScript(stage) {
     });
     
     s.fixedScript = text;
+    s.isFixed = true;
     
     if (stage === 'stage2') {
         state.finalScript = text;
     }
     
-    var container = document.getElementById('revised-' + stage);
-    if (container) {
-        container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#69f0ae;border:2px solid #69f0ae;">' +
-            '<div style="text-align:center;margin-bottom:15px;font-size:18px;font-weight:bold;">✅ 수정 완료!</div>' +
-            escapeHtml(text) +
-            '</div>';
-    }
+    renderScriptWithMarkers(stage);
     
-    alert((stage === 'stage1' ? '1차' : '최종') + ' 수정본이 적용되었습니다.\n\n"다운로드" 버튼으로 수정본을 저장할 수 있습니다.');
+    alert((stage === 'stage1' ? '1차' : '최종') + ' 수정본이 적용되었습니다.\n\n"수정 전/수정 후" 버튼으로 개별 항목을 다시 변경할 수 있습니다.\n"다운로드" 버튼으로 수정본을 저장할 수 있습니다.');
 }
