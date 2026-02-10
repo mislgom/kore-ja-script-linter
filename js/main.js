@@ -1,14 +1,14 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.43 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.43: 표 가독성 개선, ESC키 모달 닫기, 분석 버튼 위치 조정, 픽스 후 토글 유지
+ * main.js v4.44 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.44: 최종 수정 반영 헤더에 전체보기 추가, 하단 전체보기 삭제
  * - ENDPOINT: generativelanguage.googleapis.com
  * - TIMEOUT: 300000 ms
  * - MAX_OUTPUT_TOKENS: 16384
  */
 
-console.log('🚀 main.js v4.43 로드됨');
-console.log('📌 v4.43: 표 가독성 개선, ESC키 모달 닫기, 분석 버튼 위치 조정');
+console.log('🚀 main.js v4.44 로드됨');
+console.log('📌 v4.44: 최종 수정 반영 헤더에 전체보기 추가, 하단 전체보기 삭제');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -208,13 +208,13 @@ function initApp() {
     initStopButton();
     ensureScoreSection();
     addStyles();
-    addFullViewButtons();
+    addFullViewButtonsToHeaders();
     createFullViewModal();
     initEscKeyHandler();
     console.log('📊 총 ' + getTotalRulesCount() + '개 시대고증 규칙 로드됨');
     console.log('⏱️ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('🤖 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.43 초기화 완료');
+    console.log('✅ main.js v4.44 초기화 완료');
 }
 
 function initEscKeyHandler() {
@@ -437,39 +437,63 @@ function closeFullViewModal() {
     }
 }
 
-function addFullViewButtons() {
-    var revised1 = document.getElementById('revised-stage1');
-    
-    if (revised1) addFullViewButtonToHeader(revised1, 'stage1');
-}
-
-function addFullViewButtonToHeader(container, stage) {
-    var parent = container.parentElement;
-    var header = parent.querySelector('h3, .section-title, .panel-header');
-    
-    if (!header) {
-        var allElements = parent.querySelectorAll('*');
-        for (var i = 0; i < allElements.length; i++) {
-            var el = allElements[i];
-            if (el.textContent.includes('수정 반영') && el.tagName !== 'BUTTON') {
-                header = el;
-                break;
+function addFullViewButtonsToHeaders() {
+    setTimeout(function() {
+        var revised1Parent = document.getElementById('revised-stage1');
+        var revised2Parent = document.getElementById('revised-stage2');
+        
+        if (revised1Parent) {
+            var parent1 = revised1Parent.parentElement;
+            var header1 = parent1.querySelector('.section-header, .panel-title, h3, h4');
+            if (!header1) {
+                var allDivs = parent1.querySelectorAll('div');
+                for (var i = 0; i < allDivs.length; i++) {
+                    if (allDivs[i].textContent.includes('1차 수정 반영') && !allDivs[i].querySelector('button')) {
+                        header1 = allDivs[i];
+                        break;
+                    }
+                }
+            }
+            if (header1 && !header1.querySelector('.btn-fullview')) {
+                var btn1 = document.createElement('button');
+                btn1.className = 'btn-fullview';
+                btn1.innerHTML = '🔍 전체 보기';
+                btn1.addEventListener('click', function() {
+                    openFullViewModal('stage1');
+                });
+                header1.style.display = 'flex';
+                header1.style.justifyContent = 'space-between';
+                header1.style.alignItems = 'center';
+                header1.appendChild(btn1);
             }
         }
-    }
-    
-    if (header && !header.querySelector('.btn-fullview')) {
-        var btn = document.createElement('button');
-        btn.className = 'btn-fullview';
-        btn.innerHTML = '🔍 전체 보기';
-        btn.addEventListener('click', function() {
-            openFullViewModal(stage);
-        });
-        header.style.display = 'flex';
-        header.style.justifyContent = 'space-between';
-        header.style.alignItems = 'center';
-        header.appendChild(btn);
-    }
+        
+        if (revised2Parent) {
+            var parent2 = revised2Parent.parentElement;
+            var header2 = parent2.querySelector('.section-header, .panel-title, h3, h4');
+            if (!header2) {
+                var allDivs2 = parent2.querySelectorAll('div');
+                for (var j = 0; j < allDivs2.length; j++) {
+                    if (allDivs2[j].textContent.includes('최종 수정 반영') && !allDivs2[j].querySelector('button')) {
+                        header2 = allDivs2[j];
+                        break;
+                    }
+                }
+            }
+            if (header2 && !header2.querySelector('.btn-fullview')) {
+                var btn2 = document.createElement('button');
+                btn2.className = 'btn-fullview';
+                btn2.innerHTML = '🔍 전체 보기';
+                btn2.addEventListener('click', function() {
+                    openFullViewModal('stage2');
+                });
+                header2.style.display = 'flex';
+                header2.style.justifyContent = 'space-between';
+                header2.style.alignItems = 'center';
+                header2.appendChild(btn2);
+            }
+        }
+    }, 100);
 }
 
 function ensureScoreSection() {
@@ -673,10 +697,10 @@ function initRevertButtons() {
     var r1 = document.getElementById('revised-stage1');
     var r2 = document.getElementById('revised-stage2');
     if (r1) addRevertButton(r1, 'stage1');
-    if (r2) addRevertButton(r2, 'stage2', true);
+    if (r2) addRevertButton(r2, 'stage2');
 }
 
-function addRevertButton(container, stage, hideFullViewBtn) {
+function addRevertButton(container, stage) {
     var parent = container.parentElement;
     if (parent.querySelector('.revert-btn-wrapper')) return;
     var wrapper = document.createElement('div');
@@ -707,14 +731,6 @@ function addRevertButton(container, stage, hideFullViewBtn) {
     btnFix.disabled = true;
     btnFix.addEventListener('click', function() { fixScript(stage); });
     wrapper.appendChild(btnFix);
-
-    if (!hideFullViewBtn) {
-        var btnFullView = document.createElement('button');
-        btnFullView.className = 'btn-fullview';
-        btnFullView.innerHTML = '🔍 전체 보기';
-        btnFullView.addEventListener('click', function() { openFullViewModal(stage); });
-        wrapper.appendChild(btnFullView);
-    }
 
     parent.appendChild(wrapper);
 }
