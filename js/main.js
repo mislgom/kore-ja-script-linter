@@ -1,14 +1,15 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.46 - Vertex AI API 키 + Gemini 2.5 Flash
+ * main.js v4.47 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.47: 페이지 로드 시 품질 평가 + 100점 수정 대본 박스 즉시 표시
  * - v4.46: 품질 평가 + 100점 수정 대본 좌우 분할
  * - ENDPOINT: generativelanguage.googleapis.com
  * - TIMEOUT: 300000 ms
  * - MAX_OUTPUT_TOKENS: 16384
  */
 
-console.log('🚀 main.js v4.46 로드됨');
-console.log('📌 v4.46: 품질 평가 + 100점 수정 대본 좌우 분할');
+console.log('🚀 main.js v4.47 로드됨');
+console.log('📌 v4.47: 페이지 로드 시 품질 평가 + 100점 수정 대본 박스 즉시 표시');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -215,7 +216,7 @@ function initApp() {
     console.log('📊 총 ' + getTotalRulesCount() + '개 시대고증 규칙 로드됨');
     console.log('⏱️ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('🤖 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.46 초기화 완료');
+    console.log('✅ main.js v4.47 초기화 완료');
 }
 
 function initEscKeyHandler() {
@@ -520,12 +521,25 @@ function addFullViewButtonsToHeaders() {
     }, 100);
 }
 
+// ★★★ v4.47 변경: 페이지 로드 시 박스 즉시 표시 ★★★
 function ensureScoreSection() {
     var scoreSection = document.getElementById('score-section');
     if (!scoreSection) {
         scoreSection = document.createElement('div');
         scoreSection.id = 'score-section';
-        scoreSection.style.display = 'none';
+        scoreSection.style.display = 'block';
+        
+        // 초기 박스 HTML (대기 상태)
+        scoreSection.innerHTML = '<div class="score-perfect-container">' +
+            '<div class="score-panel">' +
+            '<h3 style="color:#fff;margin-bottom:15px;text-align:center;">📊 품질 평가 점수</h3>' +
+            '<div style="text-align:center;padding:50px 20px;color:#888;">2차 분석 완료 후 점수가 표시됩니다</div>' +
+            '</div>' +
+            '<div class="perfect-panel">' +
+            '<h3 style="color:#69f0ae;margin-bottom:15px;text-align:center;">💯 100점 수정 대본</h3>' +
+            '<div style="text-align:center;padding:50px 20px;color:#888;">2차 분석 완료 후 수정 대본이 표시됩니다</div>' +
+            '</div></div>';
+        
         var revisedStage2 = document.getElementById('revised-stage2');
         if (revisedStage2 && revisedStage2.parentElement) {
             revisedStage2.parentElement.parentElement.appendChild(scoreSection);
