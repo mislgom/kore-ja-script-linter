@@ -1,14 +1,14 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.44 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.44: 최종 수정 반영 헤더에 전체보기 추가, 하단 전체보기 삭제
+ * main.js v4.45 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.45: 표 레이아웃 개선 (유형 2줄, 원문/수정 좁힘, 사유 넓힘)
  * - ENDPOINT: generativelanguage.googleapis.com
  * - TIMEOUT: 300000 ms
  * - MAX_OUTPUT_TOKENS: 16384
  */
 
-console.log('🚀 main.js v4.44 로드됨');
-console.log('📌 v4.44: 최종 수정 반영 헤더에 전체보기 추가, 하단 전체보기 삭제');
+console.log('🚀 main.js v4.45 로드됨');
+console.log('📌 v4.45: 표 레이아웃 개선 (유형 2줄, 원문/수정 좁힘, 사유 넓힘)');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -214,7 +214,7 @@ function initApp() {
     console.log('📊 총 ' + getTotalRulesCount() + '개 시대고증 규칙 로드됨');
     console.log('⏱️ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('🤖 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.44 초기화 완료');
+    console.log('✅ main.js v4.45 초기화 완료');
 }
 
 function initEscKeyHandler() {
@@ -254,14 +254,40 @@ function addStyles() {
         '.fullview-close:hover{color:#ff5555;}' +
         '.btn-fullview{background:#9c27b0;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;margin-left:10px;}' +
         '.btn-fullview:hover{background:#7b1fa2;}' +
-        '.analysis-table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}' +
-        '.analysis-table th{padding:10px 8px;border:1px solid #444;background:#333;font-weight:bold;text-align:center;}' +
-        '.analysis-table td{padding:10px 8px;border:1px solid #444;vertical-align:top;word-wrap:break-word;overflow-wrap:break-word;}' +
-        '.analysis-table th:nth-child(1),.analysis-table td:nth-child(1){width:70px;}' +
-        '.analysis-table th:nth-child(2),.analysis-table td:nth-child(2){width:35%;}' +
-        '.analysis-table th:nth-child(3),.analysis-table td:nth-child(3){width:35%;}' +
-        '.analysis-table th:nth-child(4),.analysis-table td:nth-child(4){width:calc(30% - 70px);}';
+        '.analysis-table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}' +
+        '.analysis-table th{padding:8px 4px;border:1px solid #444;background:#333;font-weight:bold;text-align:center;word-break:keep-all;}' +
+        '.analysis-table td{padding:8px 4px;border:1px solid #444;vertical-align:middle;word-wrap:break-word;overflow-wrap:break-word;}' +
+        '.analysis-table th:nth-child(1),.analysis-table td:nth-child(1){width:45px;text-align:center;line-height:1.2;}' +
+        '.analysis-table th:nth-child(2),.analysis-table td:nth-child(2){width:25%;}' +
+        '.analysis-table th:nth-child(3),.analysis-table td:nth-child(3){width:25%;}' +
+        '.analysis-table th:nth-child(4),.analysis-table td:nth-child(4){width:calc(50% - 45px);}' +
+        '.type-cell{font-size:11px;line-height:1.3;word-break:keep-all;}';
     document.head.appendChild(style);
+}
+
+function formatTypeText(type) {
+    if (!type) return '';
+    var typeMap = {
+        '시대착오': '시대<br>착오',
+        '인물설정': '인물<br>설정',
+        '시간왜곡': '시간<br>왜곡',
+        '이야기흐름': '이야기<br>흐름',
+        '쌩뚱맞은표현': '쌩뚱<br>표현',
+        '캐릭터일관성': '캐릭터<br>일관성',
+        '장면연결성': '장면<br>연결',
+        '대사자연스러움': '대사<br>자연',
+        '호칭일관성': '호칭<br>일관',
+        '감정선연결': '감정선<br>연결',
+        '복선회수': '복선<br>회수',
+        '역사적사실': '역사<br>사실'
+    };
+    return typeMap[type] || type.replace(/(.{2})/g, '$1<br>').replace(/<br>$/, '');
+}
+
+function summarizeReason(reason) {
+    if (!reason) return '';
+    if (reason.length <= 30) return reason;
+    return reason.substring(0, 28) + '...';
 }
 
 function createFullViewModal() {
@@ -964,7 +990,8 @@ function buildStage1Prompt(script) {
         '- "나레이션:" 또는 "(나레이션)"으로 시작하는 부분은 현대어 해설이므로 오류로 처리하지 마세요.\n' +
         '- 대사 속 현대어만 검출하세요.\n' +
         '- 위 시대착오 목록의 현대어가 대본에 있으면 반드시 오류로 검출하세요.\n' +
-        '- 오류가 없으면 빈 배열을 반환하세요.\n\n' +
+        '- 오류가 없으면 빈 배열을 반환하세요.\n' +
+        '- reason(사유)은 15자 이내로 간결하게 작성하세요.\n\n' +
         '## 응답 형식 (JSON만 반환):\n' +
         '```json\n' +
         '{\n' +
@@ -973,7 +1000,7 @@ function buildStage1Prompt(script) {
         '      "type": "시대착오|인물설정|시간왜곡|이야기흐름|쌩뚱맞은표현|캐릭터일관성|장면연결성",\n' +
         '      "original": "오류가 있는 원문 (정확히 복사)",\n' +
         '      "revised": "수정된 문장",\n' +
-        '      "reason": "수정 이유",\n' +
+        '      "reason": "수정 이유 (15자 이내)",\n' +
         '      "severity": "high|medium|low"\n' +
         '    }\n' +
         '  ]\n' +
@@ -1011,7 +1038,8 @@ function buildStage2Prompt(script) {
         '- "나레이션:" 또는 "(나레이션)"으로 시작하는 부분은 현대어 해설이므로 오류로 처리하지 마세요.\n' +
         '- 대사 속 현대어만 검출하세요.\n' +
         '- 1차 분석에서 놓쳤을 수 있는 미세한 오류까지 찾아주세요.\n' +
-        '- 오류가 없으면 빈 배열을 반환하세요.\n\n' +
+        '- 오류가 없으면 빈 배열을 반환하세요.\n' +
+        '- reason(사유)은 15자 이내로 간결하게 작성하세요.\n\n' +
         '## 점수 평가 (각 100점 만점)\n' +
         '- 시니어 적합도: 어르신 시청자가 이해하기 쉬운 정도\n' +
         '- 재미 요소: 흥미와 몰입도\n' +
@@ -1025,7 +1053,7 @@ function buildStage2Prompt(script) {
         '      "type": "시대착오|대사자연스러움|호칭일관성|감정선연결|복선회수|역사적사실",\n' +
         '      "original": "오류가 있는 원문 (정확히 복사)",\n' +
         '      "revised": "수정된 문장",\n' +
-        '      "reason": "수정 이유",\n' +
+        '      "reason": "수정 이유 (15자 이내)",\n' +
         '      "severity": "high|medium|low"\n' +
         '    }\n' +
         '  ],\n' +
@@ -1279,10 +1307,10 @@ function displayStage1Results() {
             var severityColor = err.severity === 'high' ? '#ff5555' : (err.severity === 'medium' ? '#ffaa00' : '#69f0ae');
             html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;transition:background 0.2s;" ' +
                 'onmouseover="this.style.background=\'#3a3a3a\'" onmouseout="this.style.background=\'\'">' +
-                '<td style="color:' + severityColor + ';font-weight:bold;text-align:center;">' + escapeHtml(err.type) + '</td>' +
-                '<td style="color:#ff9800;">' + escapeHtml(err.original) + '</td>' +
-                '<td style="color:#69f0ae;">' + escapeHtml(err.revised) + '</td>' +
-                '<td style="color:#aaa;font-size:12px;">' + escapeHtml(err.reason) + '</td>' +
+                '<td class="type-cell" style="color:' + severityColor + ';font-weight:bold;">' + formatTypeText(err.type) + '</td>' +
+                '<td style="color:#ff9800;font-size:11px;">' + escapeHtml(err.original) + '</td>' +
+                '<td style="color:#69f0ae;font-size:11px;">' + escapeHtml(err.revised) + '</td>' +
+                '<td style="color:#aaa;font-size:11px;" title="' + escapeHtml(err.reason) + '">' + escapeHtml(err.reason) + '</td>' +
                 '</tr>';
         });
         
@@ -1326,10 +1354,10 @@ function displayStage2Results() {
             var severityColor = err.severity === 'high' ? '#ff5555' : (err.severity === 'medium' ? '#ffaa00' : '#69f0ae');
             html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;transition:background 0.2s;" ' +
                 'onmouseover="this.style.background=\'#3a3a3a\'" onmouseout="this.style.background=\'\'">' +
-                '<td style="color:' + severityColor + ';font-weight:bold;text-align:center;">' + escapeHtml(err.type) + '</td>' +
-                '<td style="color:#ff9800;">' + escapeHtml(err.original) + '</td>' +
-                '<td style="color:#69f0ae;">' + escapeHtml(err.revised) + '</td>' +
-                '<td style="color:#aaa;font-size:12px;">' + escapeHtml(err.reason) + '</td>' +
+                '<td class="type-cell" style="color:' + severityColor + ';font-weight:bold;">' + formatTypeText(err.type) + '</td>' +
+                '<td style="color:#ff9800;font-size:11px;">' + escapeHtml(err.original) + '</td>' +
+                '<td style="color:#69f0ae;font-size:11px;">' + escapeHtml(err.revised) + '</td>' +
+                '<td style="color:#aaa;font-size:11px;" title="' + escapeHtml(err.reason) + '">' + escapeHtml(err.reason) + '</td>' +
                 '</tr>';
         });
         
