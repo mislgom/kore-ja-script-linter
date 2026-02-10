@@ -911,7 +911,7 @@ function downloadScript(script) {
         alert('다운로드할 내용이 없습니다.');
         return;
     }
-    var cleanScript = script.replace(/★/g, '');
+     var cleanScript = script;
     try {
         var blob = new Blob([cleanScript], { type: 'text/plain;charset=utf-8' });
         var url = URL.createObjectURL(blob);
@@ -1364,7 +1364,7 @@ function buildStage2Prompt(script) {
         '  "changePoints": [\n' +
         '    {"location": "S#1", "description": "변경 내용", "category": "개선항목"}\n' +
         '  ],\n' +
-        '  "perfectScript": "★수정된 부분은 앞에 ★표시를 붙인 전체 대본"\n' +
+        '  "perfectScript": "수정된 부분을 반영한 전체 대본"\n' +
         '}\n' +
         '```\n\n' +
         '⚠️ 최종 확인: 나레이션을 오류로 넣었다면 반드시 삭제하세요!';
@@ -1813,7 +1813,7 @@ function formatPerfectScript(script) {
     if (!script) return '';
     
     var escaped = escapeHtml(script);
-    var formatted = escaped.replace(/★([^\n]*)/g, '<span class="perfect-modified">★$1</span>');
+    var formatted = escaped;
     
     return formatted;
 }
