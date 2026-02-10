@@ -1,18 +1,19 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.54 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.54: 시대고증 오류 검출 대폭 강화 (현대물건 자동 검출 + 프롬프트 강화)
+ * main.js v4.53 - Vertex AI API 키 + Gemini 2.5 Flash
  * - v4.53: 2차 분석 테이블 클릭 → 최종 수정 반영 스크롤 이동 + 개별 오류 독립 토글
  * - v4.52: 개별 수정 전/후 토글 + 나레이션 오류 제외 강화
  * - v4.51: 1차/2차 분석 프롬프트 강화 (오류 검출 정확도 향상)
  * - v4.50: 나레이션 조선어투 허용 강화 + 클릭 이동/버튼 수정
+ * - v4.49: 100점 수정 대본 개선 (구체적 프롬프트 + 녹색 하이라이트)
+ * - v4.48: 대본 비교하기 기능 추가
  * - ENDPOINT: generativelanguage.googleapis.com
  * - TIMEOUT: 300000 ms
  * - MAX_OUTPUT_TOKENS: 16384
  */
 
-console.log('🚀 main.js v4.54 로드됨');
-console.log('📌 v4.54: 시대고증 오류 검출 대폭 강화 (현대물건 자동 검출 + 프롬프트 강화)');
+console.log('🚀 main.js v4.53 로드됨');
+console.log('📌 v4.53: 2차 분석 테이블 클릭 → 최종 수정 반영 스크롤 이동 + 개별 오류 독립 토글');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -42,41 +43,7 @@ var HISTORICAL_RULES = {
         { modern: '라디오', historical: ['없음'], confidence: '높음', reason: '현대 기기' },
         { modern: '냉장고', historical: ['석빙고', '얼음창고'], confidence: '높음', reason: '냉장고는 현대 가전' },
         { modern: '에어컨', historical: ['부채', '얼음'], confidence: '높음', reason: '현대 기기' },
-        { modern: '선풍기', historical: ['부채', '손풍기'], confidence: '높음', reason: '선풍기는 근대 이후' },
-        { modern: '전등', historical: ['촛불', '등잔', '횃불'], confidence: '높음', reason: '전등은 근대 이후' },
-        { modern: '전구', historical: ['촛불', '등잔'], confidence: '높음', reason: '전구는 근대 발명' },
-        { modern: '형광등', historical: ['촛불', '등잔'], confidence: '높음', reason: '현대 조명' },
-        { modern: '손전등', historical: ['횃불', '등롱'], confidence: '높음', reason: '현대 도구' },
-        { modern: '플래시', historical: ['횃불', '등롱'], confidence: '높음', reason: '현대 도구' },
-        { modern: '칫솔', historical: ['이쑤시개', '소금'], confidence: '높음', reason: '칫솔은 근대 도입' },
-        { modern: '치약', historical: ['소금', '재'], confidence: '높음', reason: '치약은 현대 제품' },
-        { modern: '비누', historical: ['잿물', '쌀뜨물'], confidence: '중간', reason: '비누는 근대 도입' },
-        { modern: '샴푸', historical: ['쌀뜨물', '비누'], confidence: '높음', reason: '현대 제품' },
-        { modern: '수건', historical: ['수건', '손수건'], confidence: '낮음', reason: '수건은 존재했으나 형태 다름' },
-        { modern: '거울', historical: ['동경', '수경'], confidence: '낮음', reason: '금속거울 존재' },
-        { modern: '유리', historical: ['없음'], confidence: '높음', reason: '유리창은 근대 이후' },
-        { modern: '유리창', historical: ['창호지', '문종이'], confidence: '높음', reason: '유리창은 근대 이후' },
-        { modern: '플라스틱', historical: ['없음'], confidence: '높음', reason: '현대 소재' },
-        { modern: '비닐', historical: ['없음'], confidence: '높음', reason: '현대 소재' },
-        { modern: '고무', historical: ['없음'], confidence: '높음', reason: '고무는 근대 도입' },
-        { modern: '지퍼', historical: ['끈', '단추', '매듭'], confidence: '높음', reason: '지퍼는 20세기' },
-        { modern: '단추', historical: ['매듭', '끈', '띠'], confidence: '중간', reason: '단추는 조선 후기 일부' },
-        { modern: '벨트', historical: ['띠', '허리띠', '대'], confidence: '높음', reason: '벨트는 서양식' },
-        { modern: '지갑', historical: ['전대', '돈주머니'], confidence: '높음', reason: '지갑은 근대 용어' },
-        { modern: '가위', historical: ['가위'], confidence: '낮음', reason: '가위는 존재' },
-        { modern: '칼', historical: ['칼', '도'], confidence: '낮음', reason: '칼은 존재' },
-        { modern: '포크', historical: ['젓가락', '숟가락'], confidence: '높음', reason: '포크는 서양 식기' },
-        { modern: '나이프', historical: ['칼', '식도'], confidence: '높음', reason: '나이프는 서양 식기' },
-        { modern: '접시', historical: ['접시', '사발', '대접'], confidence: '낮음', reason: '접시는 존재' },
-        { modern: '컵', historical: ['잔', '사발'], confidence: '높음', reason: '컵은 서양 용어' },
-        { modern: '머그컵', historical: ['잔', '사발'], confidence: '높음', reason: '머그컵은 현대' },
-        { modern: '텀블러', historical: ['물병', '호리병'], confidence: '높음', reason: '현대 용어' },
-        { modern: '보온병', historical: ['없음'], confidence: '높음', reason: '현대 발명' },
-        { modern: '냄비', historical: ['솥', '가마솥', '냄비'], confidence: '낮음', reason: '냄비 유사품 존재' },
-        { modern: '프라이팬', historical: ['번철', '석쇠'], confidence: '높음', reason: '프라이팬은 서양식' },
-        { modern: '전자레인지', historical: ['없음'], confidence: '높음', reason: '현대 가전' },
-        { modern: '가스레인지', historical: ['아궁이', '화덕'], confidence: '높음', reason: '현대 가전' },
-        { modern: '인덕션', historical: ['아궁이', '화덕'], confidence: '높음', reason: '현대 가전' }
+        { modern: '선풍기', historical: ['부채', '손풍기'], confidence: '높음', reason: '선풍기는 근대 이후' }
     ],
     facilities: [
         { modern: '병원', historical: ['의원', '약방', '혜민서'], confidence: '높음', reason: '병원은 근대 용어' },
@@ -111,17 +78,7 @@ var HISTORICAL_RULES = {
         { modern: '버스', historical: ['마차', '가마'], confidence: '높음', reason: '버스는 현대 교통수단' },
         { modern: '택시', historical: ['가마', '마차'], confidence: '높음', reason: '택시는 현대 교통수단' },
         { modern: '공항', historical: ['없음'], confidence: '높음', reason: '현대 시설' },
-        { modern: '역', historical: ['역참', '역원'], confidence: '중간', reason: '기차역은 근대 시설' },
-        { modern: '주유소', historical: ['없음'], confidence: '높음', reason: '현대 시설' },
-        { modern: '세탁소', historical: ['빨래터'], confidence: '높음', reason: '세탁소는 근대' },
-        { modern: '미용실', historical: ['없음'], confidence: '높음', reason: '현대 시설' },
-        { modern: '이발소', historical: ['없음'], confidence: '높음', reason: '근대 시설' },
-        { modern: '헬스장', historical: ['무예장', '연무장'], confidence: '높음', reason: '현대 시설' },
-        { modern: '수영장', historical: ['연못', '강'], confidence: '높음', reason: '현대 시설' },
-        { modern: '영화관', historical: ['없음'], confidence: '높음', reason: '현대 시설' },
-        { modern: '극장', historical: ['광대패 공연장'], confidence: '높음', reason: '근대 시설' },
-        { modern: '놀이공원', historical: ['없음'], confidence: '높음', reason: '현대 시설' },
-        { modern: '도서관', historical: ['서고', '장서각'], confidence: '높음', reason: '도서관은 근대' }
+        { modern: '역', historical: ['역참', '역원'], confidence: '중간', reason: '기차역은 근대 시설' }
     ],
     occupations: [
         { modern: '의사', historical: ['의원', '어의', '의녀'], confidence: '높음', reason: '의사는 근대 용어' },
@@ -147,15 +104,7 @@ var HISTORICAL_RULES = {
         { modern: '기사', historical: ['마부', '장인'], confidence: '중간', reason: '문맥에 따라 다름' },
         { modern: '엔지니어', historical: ['장인', '기술자'], confidence: '높음', reason: '현대 용어' },
         { modern: '프로그래머', historical: ['없음'], confidence: '높음', reason: '현대 직업' },
-        { modern: '디자이너', historical: ['화공', '장인'], confidence: '높음', reason: '현대 용어' },
-        { modern: '요리사', historical: ['수라간 나인', '주방장'], confidence: '높음', reason: '요리사는 근대' },
-        { modern: '셰프', historical: ['수라간 나인', '주방장'], confidence: '높음', reason: '셰프는 외래어' },
-        { modern: '바리스타', historical: ['없음'], confidence: '높음', reason: '현대 직업' },
-        { modern: '소방관', historical: ['화재진압꾼', '포졸'], confidence: '높음', reason: '소방관은 근대' },
-        { modern: '군인', historical: ['군졸', '병사', '무사'], confidence: '중간', reason: '군인은 근대 용어' },
-        { modern: '장교', historical: ['장수', '무관', '선전관'], confidence: '높음', reason: '장교는 근대 용어' },
-        { modern: '대통령', historical: ['임금', '왕', '전하'], confidence: '높음', reason: '대통령은 근대' },
-        { modern: '국회의원', historical: ['대신', '관원'], confidence: '높음', reason: '국회의원은 근대' }
+        { modern: '디자이너', historical: ['화공', '장인'], confidence: '높음', reason: '현대 용어' }
     ],
     systems: [
         { modern: '원', historical: ['냥', '푼', '전', '관'], confidence: '높음', reason: '원은 근대 화폐단위' },
@@ -167,11 +116,7 @@ var HISTORICAL_RULES = {
         { modern: '그램', historical: ['돈', '푼'], confidence: '높음', reason: '그램은 서양 단위' },
         { modern: '리터', historical: ['되', '말', '홉'], confidence: '높음', reason: '리터는 서양 단위' },
         { modern: '퍼센트', historical: ['할', '푼', '리'], confidence: '높음', reason: '퍼센트는 서양 표현' },
-        { modern: '%', historical: ['할', '푼', '리'], confidence: '높음', reason: '서양 기호' },
-        { modern: 'cm', historical: ['치', '푼'], confidence: '높음', reason: '서양 단위' },
-        { modern: 'kg', historical: ['근', '냥'], confidence: '높음', reason: '서양 단위' },
-        { modern: 'km', historical: ['리'], confidence: '높음', reason: '서양 단위' },
-        { modern: 'm', historical: ['자', '척'], confidence: '높음', reason: '서양 단위' }
+        { modern: '%', historical: ['할', '푼', '리'], confidence: '높음', reason: '서양 기호' }
     ],
     lifestyle: [
         { modern: '출근', historical: ['출사', '입궐', '등청'], confidence: '높음', reason: '출근은 현대 용어' },
@@ -186,17 +131,7 @@ var HISTORICAL_RULES = {
         { modern: '쇼핑', historical: ['장보기', '시장 나들이'], confidence: '높음', reason: '쇼핑은 외래어' },
         { modern: '해외여행', historical: ['없음'], confidence: '높음', reason: '조선시대 해외 이동 금지' },
         { modern: '비자', historical: ['통행증', '노인'], confidence: '높음', reason: '비자는 현대 용어' },
-        { modern: '여권', historical: ['통행증', '노인'], confidence: '높음', reason: '여권은 현대 용어' },
-        { modern: '전화하다', historical: ['전령을 보내다', '서신을 보내다'], confidence: '높음', reason: '전화는 근대' },
-        { modern: '문자하다', historical: ['서신을 보내다'], confidence: '높음', reason: '문자는 현대' },
-        { modern: '인터넷', historical: ['없음'], confidence: '높음', reason: '현대 기술' },
-        { modern: '검색하다', historical: ['찾아보다', '수소문하다'], confidence: '높음', reason: '검색은 현대' },
-        { modern: '다운로드', historical: ['없음'], confidence: '높음', reason: '현대 용어' },
-        { modern: '업로드', historical: ['없음'], confidence: '높음', reason: '현대 용어' },
-        { modern: '로그인', historical: ['없음'], confidence: '높음', reason: '현대 용어' },
-        { modern: '비밀번호', historical: ['암호', '암구호'], confidence: '높음', reason: '현대 용어' },
-        { modern: '예약하다', historical: ['미리 청하다', '자리를 잡다'], confidence: '중간', reason: '예약은 근대' },
-        { modern: '주문하다', historical: ['청하다', '부르다'], confidence: '중간', reason: '주문은 근대' }
+        { modern: '여권', historical: ['통행증', '노인'], confidence: '높음', reason: '여권은 현대 용어' }
     ],
     foods: [
         { modern: '라면', historical: ['국수', '온면'], confidence: '높음', reason: '라면은 현대 음식' },
@@ -211,24 +146,7 @@ var HISTORICAL_RULES = {
         { modern: '초콜릿', historical: ['없음'], confidence: '높음', reason: '근대 도입 식품' },
         { modern: '아이스크림', historical: ['빙수', '얼음과자'], confidence: '높음', reason: '현대 음식' },
         { modern: '맥주', historical: ['막걸리', '탁주'], confidence: '높음', reason: '맥주는 근대 도입' },
-        { modern: '와인', historical: ['포도주'], confidence: '중간', reason: '포도주는 일부 존재' },
-        { modern: '소시지', historical: ['순대'], confidence: '높음', reason: '소시지는 서양' },
-        { modern: '햄', historical: ['포', '육포'], confidence: '높음', reason: '햄은 서양' },
-        { modern: '베이컨', historical: ['없음'], confidence: '높음', reason: '서양 음식' },
-        { modern: '스테이크', historical: ['고기구이'], confidence: '높음', reason: '스테이크는 서양' },
-        { modern: '파스타', historical: ['없음'], confidence: '높음', reason: '서양 음식' },
-        { modern: '스파게티', historical: ['없음'], confidence: '높음', reason: '서양 음식' },
-        { modern: '샐러드', historical: ['나물'], confidence: '높음', reason: '샐러드는 서양' },
-        { modern: '샌드위치', historical: ['없음'], confidence: '높음', reason: '서양 음식' },
-        { modern: '토스트', historical: ['없음'], confidence: '높음', reason: '서양 음식' },
-        { modern: '시리얼', historical: ['죽'], confidence: '높음', reason: '시리얼은 현대' },
-        { modern: '요거트', historical: ['없음'], confidence: '높음', reason: '현대 음식' },
-        { modern: '아메리카노', historical: ['없음'], confidence: '높음', reason: '현대 음료' },
-        { modern: '라떼', historical: ['없음'], confidence: '높음', reason: '현대 음료' },
-        { modern: '에스프레소', historical: ['없음'], confidence: '높음', reason: '현대 음료' },
-        { modern: '주스', historical: ['과일즙', '과즙'], confidence: '높음', reason: '주스는 현대' },
-        { modern: '탄산수', historical: ['없음'], confidence: '높음', reason: '현대 음료' },
-        { modern: '에너지드링크', historical: ['없음'], confidence: '높음', reason: '현대 음료' }
+        { modern: '와인', historical: ['포도주'], confidence: '중간', reason: '포도주는 일부 존재' }
     ],
     clothing: [
         { modern: '양복', historical: ['도포', '두루마기', '한복'], confidence: '높음', reason: '양복은 서양 의복' },
@@ -240,79 +158,7 @@ var HISTORICAL_RULES = {
         { modern: '구두', historical: ['가죽신', '목화', '당혜'], confidence: '높음', reason: '구두는 서양식' },
         { modern: '운동화', historical: ['짚신', '미투리'], confidence: '높음', reason: '현대 신발' },
         { modern: '하이힐', historical: ['없음'], confidence: '높음', reason: '서양 신발' },
-        { modern: '슬리퍼', historical: ['짚신', '나막신'], confidence: '높음', reason: '현대 신발' },
-        { modern: '부츠', historical: ['목화', '가죽신'], confidence: '높음', reason: '부츠는 서양' },
-        { modern: '샌들', historical: ['짚신', '미투리'], confidence: '높음', reason: '샌들은 서양' },
-        { modern: '스니커즈', historical: ['짚신', '미투리'], confidence: '높음', reason: '현대 신발' },
-        { modern: '모자', historical: ['갓', '망건', '탕건'], confidence: '중간', reason: '모자는 근대' },
-        { modern: '캡', historical: ['갓', '패랭이'], confidence: '높음', reason: '캡은 현대' },
-        { modern: '비니', historical: ['없음'], confidence: '높음', reason: '현대 의복' },
-        { modern: '장갑', historical: ['토시', '장갑'], confidence: '낮음', reason: '장갑 유사품 존재' },
-        { modern: '목도리', historical: ['목도리', '털목도리'], confidence: '낮음', reason: '목도리 유사품 존재' },
-        { modern: '코트', historical: ['두루마기', '외투'], confidence: '높음', reason: '코트는 서양' },
-        { modern: '점퍼', historical: ['저고리', '배자'], confidence: '높음', reason: '점퍼는 현대' },
-        { modern: '패딩', historical: ['솜옷', '누비옷'], confidence: '높음', reason: '패딩은 현대' },
-        { modern: '브래지어', historical: ['가슴띠', '속적삼'], confidence: '높음', reason: '브래지어는 서양' },
-        { modern: '팬티', historical: ['속곳', '다리속곳'], confidence: '높음', reason: '팬티는 현대' },
-        { modern: '속옷', historical: ['속옷', '속적삼'], confidence: '낮음', reason: '속옷은 존재' },
-        { modern: '수영복', historical: ['없음'], confidence: '높음', reason: '수영복은 현대' },
-        { modern: '비키니', historical: ['없음'], confidence: '높음', reason: '비키니는 현대' }
-    ],
-    concepts: [
-        { modern: '민주주의', historical: ['없음'], confidence: '높음', reason: '근대 정치 개념' },
-        { modern: '공화국', historical: ['없음'], confidence: '높음', reason: '근대 정치 개념' },
-        { modern: '자유', historical: ['없음'], confidence: '중간', reason: '개념 자체는 있으나 근대적 의미 다름' },
-        { modern: '평등', historical: ['없음'], confidence: '높음', reason: '근대 개념' },
-        { modern: '인권', historical: ['없음'], confidence: '높음', reason: '근대 개념' },
-        { modern: '투표', historical: ['없음'], confidence: '높음', reason: '근대 제도' },
-        { modern: '선거', historical: ['없음'], confidence: '높음', reason: '근대 제도' },
-        { modern: '헌법', historical: ['없음'], confidence: '높음', reason: '근대 법률' },
-        { modern: '법률', historical: ['율법', '법전'], confidence: '중간', reason: '법률은 근대 용어' },
-        { modern: '계약', historical: ['문서', '증서', '각서'], confidence: '중간', reason: '계약은 근대 개념' },
-        { modern: '보험', historical: ['없음'], confidence: '높음', reason: '근대 제도' },
-        { modern: '연금', historical: ['없음'], confidence: '높음', reason: '현대 제도' },
-        { modern: '복지', historical: ['없음'], confidence: '높음', reason: '현대 개념' },
-        { modern: '노동자', historical: ['일꾼', '품팔이'], confidence: '높음', reason: '노동자는 근대' },
-        { modern: '파업', historical: ['없음'], confidence: '높음', reason: '파업은 근대' },
-        { modern: '시위', historical: ['상소', '민란'], confidence: '높음', reason: '시위는 근대' },
-        { modern: '데모', historical: ['없음'], confidence: '높음', reason: '데모는 외래어' },
-        { modern: '혁명', historical: ['반정', '역모'], confidence: '높음', reason: '혁명은 근대' },
-        { modern: '자본주의', historical: ['없음'], confidence: '높음', reason: '근대 경제 개념' },
-        { modern: '사회주의', historical: ['없음'], confidence: '높음', reason: '근대 사상' },
-        { modern: '공산주의', historical: ['없음'], confidence: '높음', reason: '근대 사상' }
-    ],
-    expressions: [
-        { modern: '오케이', historical: ['알겠소', '그리 하리다'], confidence: '높음', reason: '영어 표현' },
-        { modern: 'OK', historical: ['알겠소', '그리 하리다'], confidence: '높음', reason: '영어 표현' },
-        { modern: '바이', historical: ['안녕히', '편히 가시오'], confidence: '높음', reason: '영어 표현' },
-        { modern: '헬로', historical: ['안녕하시오'], confidence: '높음', reason: '영어 표현' },
-        { modern: '땡큐', historical: ['고맙소', '감사하오'], confidence: '높음', reason: '영어 표현' },
-        { modern: '소리', historical: ['쏘리', '죄송'], confidence: '높음', reason: '영어 표현' },
-        { modern: '노', historical: ['아니오', '그렇지 않소'], confidence: '높음', reason: '영어 표현' },
-        { modern: '예스', historical: ['그렇소', '옳소'], confidence: '높음', reason: '영어 표현' },
-        { modern: '굿', historical: ['좋소', '훌륭하오'], confidence: '높음', reason: '영어 표현' },
-        { modern: '베리굿', historical: ['아주 좋소'], confidence: '높음', reason: '영어 표현' },
-        { modern: '파이팅', historical: ['힘내시오', '분발하시오'], confidence: '높음', reason: '외래어' },
-        { modern: '화이팅', historical: ['힘내시오', '분발하시오'], confidence: '높음', reason: '외래어' },
-        { modern: '스트레스', historical: ['심화', '울화'], confidence: '높음', reason: '외래어' },
-        { modern: '멘탈', historical: ['정신', '마음'], confidence: '높음', reason: '외래어' },
-        { modern: '컨디션', historical: ['기력', '몸 상태'], confidence: '높음', reason: '외래어' },
-        { modern: '타이밍', historical: ['때', '시기'], confidence: '높음', reason: '외래어' },
-        { modern: '센스', historical: ['눈치', '재치'], confidence: '높음', reason: '외래어' },
-        { modern: '매너', historical: ['예의', '범절'], confidence: '높음', reason: '외래어' },
-        { modern: '이미지', historical: ['모습', '인상'], confidence: '높음', reason: '외래어' },
-        { modern: '스타일', historical: ['모양새', '차림새'], confidence: '높음', reason: '외래어' },
-        { modern: '포인트', historical: ['핵심', '요점'], confidence: '높음', reason: '외래어' },
-        { modern: '리스크', historical: ['위험', '모험'], confidence: '높음', reason: '외래어' },
-        { modern: '퀄리티', historical: ['품질', '질'], confidence: '높음', reason: '외래어' },
-        { modern: '케이스', historical: ['경우', '사례'], confidence: '높음', reason: '외래어' },
-        { modern: '미션', historical: ['임무', '소임'], confidence: '높음', reason: '외래어' },
-        { modern: '레벨', historical: ['수준', '급'], confidence: '높음', reason: '외래어' },
-        { modern: '메모', historical: ['기록', '적어두다'], confidence: '높음', reason: '외래어' },
-        { modern: '체크', historical: ['확인', '점검'], confidence: '높음', reason: '외래어' },
-        { modern: '리스트', historical: ['목록', '명부'], confidence: '높음', reason: '외래어' },
-        { modern: '스케줄', historical: ['일정', '계획'], confidence: '높음', reason: '외래어' },
-        { modern: '플랜', historical: ['계획', '방책'], confidence: '높음', reason: '외래어' }
+        { modern: '슬리퍼', historical: ['짚신', '나막신'], confidence: '높음', reason: '현대 신발' }
     ]
 };
 
@@ -376,8 +222,8 @@ function initApp() {
     console.log('📊 총 ' + getTotalRulesCount() + '개 시대고증 규칙 로드됨');
     console.log('⏱️ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('🤖 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.54 초기화 완료');
-    console.log('🆕 v4.54 신규: 시대고증 규칙 대폭 확장 (8개 카테고리, 300개+ 규칙)');
+    console.log('✅ main.js v4.53 초기화 완료');
+    console.log('🆕 v4.53 신규 기능: 테이블 클릭 → 대본 스크롤 이동, 개별 오류 독립 토글');
 }
 
 function initEscKeyHandler() {
@@ -465,12 +311,7 @@ function formatTypeText(type) {
         '호칭일관성': '호칭<br>일관',
         '감정선연결': '감정선<br>연결',
         '복선회수': '복선<br>회수',
-        '역사적사실': '역사<br>사실',
-        '현대물건': '현대<br>물건',
-        '현대시설': '현대<br>시설',
-        '현대직업': '현대<br>직업',
-        '현대개념': '현대<br>개념',
-        '외래어': '외래어'
+        '역사적사실': '역사<br>사실'
     };
     return typeMap[type] || type.replace(/(.{2})/g, '$1<br>').replace(/<br>$/, '');
 }
@@ -1402,143 +1243,124 @@ function getHistoricalRulesString() {
     return rules.join(', ');
 }
 
-function getModernWordsOnly() {
-    var words = [];
-    for (var category in HISTORICAL_RULES) {
-        HISTORICAL_RULES[category].forEach(function(rule) {
-            words.push(rule.modern);
-        });
-    }
-    return words;
-}
-
-function detectHistoricalErrors(script) {
-    var detectedErrors = [];
-    var lines = script.split('\n');
-    
-    for (var category in HISTORICAL_RULES) {
-        HISTORICAL_RULES[category].forEach(function(rule) {
-            var regex = new RegExp(rule.modern, 'g');
-            var match;
-            
-            while ((match = regex.exec(script)) !== null) {
-                var lineIndex = script.substring(0, match.index).split('\n').length - 1;
-                var line = lines[lineIndex] || '';
-                
-                var isNarration = /^(나레이션|NA|N|내레이션)\s*:/i.test(line) || /^\(나레이션\)/i.test(line);
-                
-                if (!isNarration) {
-                    var context = script.substring(Math.max(0, match.index - 20), Math.min(script.length, match.index + rule.modern.length + 20));
-                    
-                    var isDuplicate = detectedErrors.some(function(err) {
-                        return err.original === rule.modern && err.context === context;
-                    });
-                    
-                    if (!isDuplicate) {
-                        detectedErrors.push({
-                            type: '시대착오',
-                            original: rule.modern,
-                            revised: rule.historical[0] || '(수정 필요)',
-                            reason: rule.reason,
-                            severity: rule.confidence === '높음' ? 'high' : 'medium',
-                            context: context,
-                            position: match.index
-                        });
-                        console.log('🔍 시대착오 자동 검출: ' + rule.modern + ' → ' + rule.historical[0]);
-                    }
-                }
-            }
-        });
-    }
-    
-    return detectedErrors;
-}
-
 function buildStage1Prompt(script) {
-    var modernWords = getModernWordsOnly();
-    var modernWordsList = modernWords.slice(0, 100).join(', ');
+    var rulesString = getHistoricalRulesString();
     
     return '당신은 조선시대 사극 대본 전문 검수자입니다. 반드시 오류를 찾아내야 합니다.\n\n' +
-        '## 🎯 핵심 임무 (매우 중요!!!)\n' +
-        '이 대본에서 시대에 맞지 않는 현대적 표현, 물건, 시설, 직업, 개념을 반드시 찾아내세요.\n' +
+        '## 🎯 핵심 임무\n' +
+        '이 대본에서 시대에 맞지 않는 표현, 문맥 오류, 캐릭터 불일치 등을 반드시 찾아내세요.\n' +
         '"오류 없음"은 거의 불가능합니다. 더 꼼꼼히 분석하세요.\n\n' +
-        '## ⚠️ 최우선 검사 항목: 현대 물건/용어 검출 (절대 놓치지 마세요!!!)\n\n' +
-        '### 🚨 다음 단어가 대본에 있으면 무조건 오류입니다:\n' +
-        modernWordsList + '\n\n' +
-        '### 📌 현대 물건 예시 (조선시대에 절대 있을 수 없음):\n' +
-        '- 필기구: 펜, 볼펜, 연필, 지우개, 노트 → 붓, 먹, 서책으로 수정\n' +
-        '- 조명: 전등, 전구, 형광등, 손전등 → 촛불, 등잔, 횃불로 수정\n' +
-        '- 통신: 전화, 휴대폰, 문자 → 전령, 파발, 서신으로 수정\n' +
-        '- 교통: 자동차, 기차, 버스, 택시 → 가마, 마차, 말로 수정\n' +
-        '- 가전: 냉장고, 에어컨, 선풍기, TV, 라디오 → 석빙고, 부채 등으로 수정\n' +
-        '- 식품: 커피, 라면, 콜라, 햄버거, 피자 → 차, 국수 등으로 수정\n' +
-        '- 의복: 양복, 청바지, 티셔츠, 구두, 운동화 → 도포, 한복, 짚신으로 수정\n' +
-        '- 시설: 병원, 학교, 경찰서, 은행, 카페 → 의원, 서당, 포도청, 전당포로 수정\n' +
-        '- 직업: 의사, 경찰, 선생님, 회사원 → 의원, 포졸, 훈장, 상인으로 수정\n' +
-        '- 단위: 미터, 킬로그램, 퍼센트, 원 → 자, 근, 할, 냥으로 수정\n' +
-        '- 외래어: OK, 바이, 파이팅, 스트레스, 센스 → 조선식 표현으로 수정\n\n' +
-        '## ⛔ 오류로 판정하지 말아야 할 것\n' +
+        '## ⛔ 절대 오류로 판정하지 말아야 할 것 (매우 중요!)\n\n' +
         '### 나레이션은 절대 오류가 아닙니다!\n' +
-        '- "나레이션:", "NA:", "N:" 등으로 시작하는 줄\n' +
-        '- 나레이션의 고어체/문어체 표현은 작가의 스타일\n\n' +
-        '## 📋 추가 검출 항목 (등장인물 대사에서만)\n' +
-        '### 1. 캐릭터/인물 오류\n' +
+        '다음 패턴으로 시작하는 줄은 나레이션입니다:\n' +
+        '- "나레이션:", "NA:", "N:", "내레이션:", "(나레이션)"\n' +
+        '- 인물 이름 없이 상황을 설명하는 문장\n' +
+        '- 괄호 안의 지문이나 설명\n\n' +
+        '나레이션에서는 다음이 모두 허용됩니다 (오류 아님!):\n' +
+        '- 고어체 어미: ~하였느니라, ~이니라, ~하느니라, ~로다, ~하였도다\n' +
+        '- 문어체 표현: ~함이라, ~것이로다, ~바이니, ~지니, ~리라\n' +
+        '- 어떤 문체든 작가의 선택이므로 허용\n\n' +
+        '## 📋 검출해야 할 오류 유형 (등장인물 대사에서만!)\n\n' +
+        '### 1. 시대착오 오류 (대사에서만 검사)\n' +
+        '- 현대 물건/시설: ' + rulesString + '\n' +
+        '- 현대 개념: 민주주의, 인권, 자유, 평등, 투표, 선거 등\n' +
+        '- 외래어/외국어: 영어, 일본어 표현 등\n' +
+        '- 현대 단위: 미터, 킬로그램, 퍼센트 등\n\n' +
+        '### 2. 캐릭터/인물 오류\n' +
         '- 같은 인물의 나이가 다르게 표기된 경우\n' +
-        '- 신분에 맞지 않는 말투\n\n' +
-        '### 2. 호칭 오류\n' +
-        '- 신분에 맞지 않는 호칭\n\n' +
-        '### 3. 이야기 흐름 오류\n' +
-        '- 시간 순서, 장소 이동 오류\n\n' +
+        '- 신분에 맞지 않는 말투\n' +
+        '- 성격 불일치\n' +
+        '- 인물 이름 오타나 혼동\n\n' +
+        '### 3. 호칭 오류\n' +
+        '- 신분에 맞지 않는 호칭\n' +
+        '- 관계에 맞지 않는 호칭\n\n' +
+        '### 4. 이야기 흐름 오류\n' +
+        '- 시간 순서 오류\n' +
+        '- 장소 이동 오류\n' +
+        '- 앞뒤 문맥 불일치\n\n' +
+        '### 5. 대사 자연스러움\n' +
+        '- 어색한 문장 구조\n' +
+        '- 반복되는 표현\n\n' +
         '## 📝 분석 대상 대본:\n```\n' + script + '\n```\n\n' +
         '## ✅ 응답 규칙\n' +
         '1. 나레이션은 절대 오류로 넣지 마세요!\n' +
-        '2. 위에 나열된 현대 물건/용어가 대본에 있으면 반드시 오류로 검출하세요!\n' +
-        '3. 각 오류에 대해 조선시대에 맞는 수정안을 제시하세요\n\n' +
+        '2. 등장인물의 대사에서만 오류를 찾으세요\n' +
+        '3. 각 오류에 대해 구체적인 수정안을 제시하세요\n\n' +
         '## 📤 응답 형식 (반드시 JSON만 반환):\n' +
         '```json\n' +
         '{"errors": [\n' +
-        '  {"type": "시대착오", "original": "펜", "revised": "붓", "reason": "펜은 근대 이후 도입", "severity": "high"},\n' +
-        '  {"type": "시대착오", "original": "커피", "revised": "차", "reason": "커피는 근대 도입", "severity": "high"}\n' +
+        '  {"type": "시대착오", "original": "문제가 되는 원문 텍스트", "revised": "수정된 텍스트", "reason": "수정 사유 15자 이내", "severity": "high"},\n' +
+        '  {"type": "캐릭터일관성", "original": "원문", "revised": "수정문", "reason": "사유", "severity": "medium"}\n' +
         ']}\n' +
         '```\n\n' +
-        '⚠️ 최종 확인: 펜, 커피, 병원, 의사, 전화 등 현대 용어를 꼭 검출했는지 확인하세요!';
+        '⚠️ 최종 확인: 나레이션을 오류로 넣었다면 반드시 삭제하세요!';
 }
 
 function buildStage2Prompt(script) {
-    var modernWords = getModernWordsOnly();
-    var modernWordsList = modernWords.slice(0, 80).join(', ');
-    
     return '당신은 조선시대 사극 대본 전문 작가이자 품질 검수 전문가입니다.\n' +
         '이 대본의 품질을 엄격하게 평가하고, 반드시 개선점을 찾아주세요.\n\n' +
-        '## 🚨 최우선 검사: 현대 물건/용어 추가 검출\n' +
-        '다음 단어가 대본에 남아있으면 무조건 오류입니다:\n' +
-        modernWordsList + '\n\n' +
-        '## ⛔ 오류로 판정하지 말아야 할 것\n' +
+        '## ⛔ 절대 오류로 판정하지 말아야 할 것\n\n' +
         '### 나레이션은 절대 오류가 아닙니다!\n' +
-        '- "나레이션:", "NA:", "N:" 등으로 시작하는 줄\n\n' +
+        '- "나레이션:", "NA:", "N:" 등으로 시작하는 줄\n' +
+        '- 나레이션의 고어체/문어체 표현은 작가의 스타일입니다\n' +
+        '- 나레이션은 어떤 문체든 허용됩니다\n\n' +
         '## 📝 분석 대상 대본:\n```\n' + script + '\n```\n\n' +
-        '## 🔍 필수 검사 항목\n' +
+        '## 🔍 필수 검사 항목 (등장인물 대사에서만!)\n\n' +
         '### 1. 추가 오류 검출\n' +
-        '- 1차 분석에서 놓친 현대 물건/용어\n' +
+        '- 미묘한 시대착오 표현 (대사에서만)\n' +
         '- 어색한 문장 구조\n' +
-        '- 캐릭터 말투 불일치\n\n' +
-        '### 2. 품질 평가 기준 (각 100점)\n' +
-        '- 시니어 적합도 (senior): 문장 명확성, 호칭 자연스러움\n' +
-        '- 재미 요소 (fun): 갈등, 긴장감\n' +
-        '- 이야기 흐름 (flow): 장면 연결, 인과관계\n' +
-        '- 시청자 이탈 방지 (retention): 호기심 유발\n\n' +
+        '- 캐릭터 말투 불일치\n' +
+        '- 감정선 단절\n\n' +
+        '### 2. 품질 평가 기준 (각 100점, 엄격하게 채점)\n\n' +
+        '#### 시니어 적합도 (senior)\n' +
+        '- 문장이 명확하고 이해하기 쉬운가?\n' +
+        '- 인물 관계가 호칭으로 자연스럽게 드러나는가?\n\n' +
+        '#### 재미 요소 (fun)\n' +
+        '- 갈등과 긴장감이 있는가?\n' +
+        '- 인물의 속마음이나 의도가 대사에 담겨있는가?\n\n' +
+        '#### 이야기 흐름 (flow)\n' +
+        '- 장면 간 연결이 자연스러운가?\n' +
+        '- 인과관계가 명확한가?\n\n' +
+        '#### 시청자 이탈 방지 (retention)\n' +
+        '- 초반에 호기심을 유발하는가?\n' +
+        '- 장면 끝에 다음이 궁금해지는가?\n\n' +
+        '## ⚠️ 채점 기준\n' +
+        '- 90점 이상: 거의 완벽함\n' +
+        '- 80-89점: 좋지만 개선 여지 있음\n' +
+        '- 70-79점: 보통\n' +
+        '- 70점 미만: 많은 수정 필요\n\n' +
+        '## 🚫 절대 금지 사항\n' +
+        '- 나레이션을 오류로 판정하지 마세요!\n' +
+        '- 소리 효과 추가 금지\n' +
+        '- 과도한 감정 지시문 금지\n\n' +
         '## 📤 응답 형식 (반드시 JSON만 반환):\n' +
         '```json\n' +
         '{\n' +
         '  "errors": [\n' +
-        '    {"type": "시대착오", "original": "원문", "revised": "수정문", "reason": "사유", "severity": "high"}\n' +
+        '    {"type": "오류유형", "original": "원문", "revised": "수정문", "reason": "사유15자이내", "severity": "high/medium/low"}\n' +
         '  ],\n' +
-        '  "scores": {"senior": 75, "fun": 70, "flow": 80, "retention": 65},\n' +
-        '  "improvements": [{"category": "시니어적합도", "currentScore": 75, "issues": [{"location": "S#1", "problem": "문제점", "solution": "해결방법"}]}],\n' +
-        '  "changePoints": [{"location": "S#1", "description": "변경내용", "category": "개선항목"}],\n' +
-        '  "perfectScript": "★수정부분 앞에 ★표시한 전체 대본"\n' +
+        '  "scores": {\n' +
+        '    "senior": 75,\n' +
+        '    "fun": 70,\n' +
+        '    "flow": 80,\n' +
+        '    "retention": 65\n' +
+        '  },\n' +
+        '  "improvements": [\n' +
+        '    {\n' +
+        '      "category": "시니어적합도",\n' +
+        '      "currentScore": 75,\n' +
+        '      "issues": [\n' +
+        '        {"location": "S#1", "problem": "문제점 설명", "solution": "해결 방법"}\n' +
+        '      ]\n' +
+        '    }\n' +
+        '  ],\n' +
+        '  "changePoints": [\n' +
+        '    {"location": "S#1", "description": "변경 내용", "category": "개선항목"}\n' +
+        '  ],\n' +
+        '  "perfectScript": "★수정된 부분은 앞에 ★표시를 붙인 전체 대본"\n' +
         '}\n' +
-        '```';
+        '```\n\n' +
+        '⚠️ 최종 확인: 나레이션을 오류로 넣었다면 반드시 삭제하세요!';
 }
 
 function filterNarrationErrors(errors, script) {
@@ -1743,27 +1565,6 @@ function hideProgress() {
     if (container) container.style.display = 'none';
 }
 
-function mergeErrors(apiErrors, localErrors) {
-    var merged = [];
-    var seen = new Set();
-    
-    apiErrors.forEach(function(err) {
-        if (err.original) {
-            seen.add(err.original);
-            merged.push(err);
-        }
-    });
-    
-    localErrors.forEach(function(err) {
-        if (err.original && !seen.has(err.original)) {
-            merged.push(err);
-            console.log('➕ 로컬 검출 오류 추가: ' + err.original);
-        }
-    });
-    
-    return merged;
-}
-
 async function startStage1Analysis() {
     var script = document.getElementById('original-script').value.trim();
     if (!script) { alert('분석할 대본을 입력해주세요.'); return; }
@@ -1777,23 +1578,16 @@ async function startStage1Analysis() {
         state.stage1.originalScript = script;
         state.stage1.isFixed = false;
         state.stage1.currentErrorIndex = -1;
-        
-        updateProgress(20, '로컬 시대고증 검사 중...');
-        var localErrors = detectHistoricalErrors(script);
-        console.log('🔍 로컬 검출 오류: ' + localErrors.length + '개');
-        
         var prompt = buildStage1Prompt(script);
         updateProgress(30, 'Gemini API 응답 대기 중...');
         var response = await callGeminiAPI(prompt);
         updateProgress(70, '분석 결과 처리 중...');
         var result = parseApiResponse(response);
         
-        var apiErrors = filterNarrationErrors(result.errors || [], script);
-        var mergedErrors = mergeErrors(apiErrors, localErrors);
-        console.log('📊 최종 오류: API(' + apiErrors.length + ') + 로컬(' + localErrors.length + ') = ' + mergedErrors.length + '개');
+        var filteredErrors = filterNarrationErrors(result.errors || [], script);
         
         state.stage1.analysis = result;
-        state.stage1.allErrors = mergedErrors.map(function(err, idx) {
+        state.stage1.allErrors = filteredErrors.map(function(err, idx) {
             return { id: 'stage1-error-' + idx, type: err.type, original: err.original, revised: err.revised, reason: err.reason, severity: err.severity, useRevised: true };
         });
         updateProgress(90, '결과 표시 중...');
@@ -1819,9 +1613,276 @@ async function startStage2Analysis() {
         state.stage2.originalScript = script;
         state.stage2.isFixed = false;
         state.stage2.currentErrorIndex = -1;
-        
-        updateProgress(20, '로컬 시대고증 재검사 중...');
-        var localErrors = detectHistoricalErrors(script);
-        
         var prompt = buildStage2Prompt(script);
-        updateProgress(30, 'Gemini API 응답 대기 중
+        updateProgress(30, 'Gemini API 응답 대기 중...');
+        var response = await callGeminiAPI(prompt);
+        updateProgress(70, '분석 결과 처리 중...');
+        var result = parseApiResponse(response);
+        
+        var filteredErrors = filterNarrationErrors(result.errors || [], script);
+        
+        state.stage2.analysis = result;
+        state.stage2.allErrors = filteredErrors.map(function(err, idx) {
+            return { id: 'stage2-error-' + idx, type: err.type, original: err.original, revised: err.revised, reason: err.reason, severity: err.severity, useRevised: true };
+        });
+        if (result.scores) state.scores = result.scores;
+        if (result.perfectScript) state.perfectScript = result.perfectScript;
+        if (result.changePoints) state.changePoints = result.changePoints;
+        updateProgress(90, '결과 표시 중...');
+        displayStage2Results();
+        if (result.scores) displayScoresAndPerfectScript(result.scores, result.improvements, result.perfectScript, result.changePoints);
+        updateProgress(100, '2차 분석 완료!');
+        setTimeout(hideProgress, 1000);
+    } catch (error) {
+        if (error.name !== 'AbortError') { alert('분석 중 오류가 발생했습니다: ' + error.message); }
+        hideProgress();
+    }
+}
+
+function displayStage1Results() {
+    var container = document.getElementById('analysis-stage1');
+    if (!container) return;
+    var errors = state.stage1.allErrors;
+    if (!errors || errors.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:30px;color:#69f0ae;font-size:18px;">✅ 오류가 발견되지 않았습니다.</div>';
+    } else {
+        var html = '<table class="analysis-table"><thead><tr><th>유형</th><th>원문</th><th>수정</th><th>사유</th></tr></thead><tbody>';
+        errors.forEach(function(err) {
+            var severityColor = err.severity === 'high' ? '#ff5555' : (err.severity === 'medium' ? '#ffaa00' : '#69f0ae');
+            html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;">' +
+                '<td class="type-cell" style="color:' + severityColor + ';font-weight:bold;">' + formatTypeText(err.type) + '</td>' +
+                '<td style="color:#ff9800;font-size:11px;">' + escapeHtml(err.original) + '</td>' +
+                '<td style="color:#69f0ae;font-size:11px;">' + escapeHtml(err.revised) + '</td>' +
+                '<td style="color:#aaa;font-size:11px;">' + escapeHtml(err.reason) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+        
+        container.querySelectorAll('tr[data-marker-id]').forEach(function(row) {
+            row.addEventListener('click', function() {
+                var markerId = this.getAttribute('data-marker-id');
+                var errorIndex = findErrorIndexById('stage1', markerId);
+                if (errorIndex >= 0) { 
+                    setCurrentError('stage1', errorIndex); 
+                }
+            });
+        });
+    }
+    renderScriptWithMarkers('stage1');
+    enableStage1Buttons(errors && errors.length > 0);
+}
+
+function displayStage2Results() {
+    var container = document.getElementById('analysis-stage2');
+    if (!container) return;
+    var errors = state.stage2.allErrors;
+    if (!errors || errors.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:30px;color:#69f0ae;font-size:18px;">✅ 추가 오류가 발견되지 않았습니다.</div>';
+    } else {
+        var html = '<table class="analysis-table"><thead><tr><th>유형</th><th>원문</th><th>수정</th><th>사유</th></tr></thead><tbody>';
+        errors.forEach(function(err) {
+            var severityColor = err.severity === 'high' ? '#ff5555' : (err.severity === 'medium' ? '#ffaa00' : '#69f0ae');
+            html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;">' +
+                '<td class="type-cell" style="color:' + severityColor + ';font-weight:bold;">' + formatTypeText(err.type) + '</td>' +
+                '<td style="color:#ff9800;font-size:11px;">' + escapeHtml(err.original) + '</td>' +
+                '<td style="color:#69f0ae;font-size:11px;">' + escapeHtml(err.revised) + '</td>' +
+                '<td style="color:#aaa;font-size:11px;">' + escapeHtml(err.reason) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+        
+        container.querySelectorAll('tr[data-marker-id]').forEach(function(row) {
+            row.addEventListener('click', function() {
+                var markerId = this.getAttribute('data-marker-id');
+                var errorIndex = findErrorIndexById('stage2', markerId);
+                if (errorIndex >= 0) { 
+                    setCurrentError('stage2', errorIndex); 
+                    console.log('🎯 2차 분석 테이블 클릭: 최종 수정 반영으로 스크롤 이동');
+                }
+            });
+        });
+    }
+    renderScriptWithMarkers('stage2');
+    enableStage2Buttons(errors && errors.length > 0);
+}
+
+function displayScoresAndPerfectScript(scores, improvements, perfectScript, changePoints) {
+    var scoreDisplay = document.getElementById('score-display');
+    if (!scoreDisplay) return;
+    
+    var senior = scores.senior || 0;
+    var fun = scores.fun || 0;
+    var flow = scores.flow || 0;
+    var retention = scores.retention || 0;
+    var average = Math.round((senior + fun + flow + retention) / 4);
+    var passed = average >= 95;
+    
+    var html = '<div class="score-perfect-container">' +
+        '<div class="score-panel">' +
+        '<h3 style="color:#fff;margin-bottom:15px;text-align:center;">📊 품질 평가 점수</h3>' +
+        '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:15px;">' +
+        createScoreCard('시니어 적합도', senior, '#4CAF50') +
+        createScoreCard('이야기 흐름', flow, '#2196F3') +
+        createScoreCard('재미 요소', fun, '#FF9800') +
+        createScoreCard('시청자 이탈 방지', retention, '#9C27B0') +
+        '</div>' +
+        '<div style="text-align:center;padding:15px;background:#2d2d2d;border-radius:8px;margin-bottom:15px;">' +
+        '<div style="font-size:20px;color:#fff;">평균: <span style="color:' + (passed ? '#69f0ae' : '#ff5555') + ';font-weight:bold;">' + average + '점</span></div>' +
+        '<div style="font-size:16px;color:' + (passed ? '#69f0ae' : '#ff5555') + ';">' + (passed ? '✅ 합격' : '❌ 미합격') + '</div>' +
+        '</div>';
+    
+    if (improvements && improvements.length > 0) {
+        html += '<div><h4 style="color:#ffaa00;margin-bottom:10px;font-size:14px;">💡 개선 제안</h4>';
+        improvements.forEach(function(imp) {
+            var issuesHtml = '';
+            if (imp.issues && imp.issues.length > 0) {
+                imp.issues.forEach(function(issue) {
+                    issuesHtml += '<div style="font-size:10px;color:#aaa;margin-top:3px;">• ' + escapeHtml(issue.location) + ': ' + escapeHtml(issue.solution) + '</div>';
+                });
+            } else if (imp.suggestion) {
+                issuesHtml = '<div style="color:#aaa;font-size:11px;margin-top:5px;">' + escapeHtml(imp.suggestion) + '</div>';
+            }
+            html += '<div style="background:#2d2d2d;padding:10px;border-radius:6px;margin-bottom:8px;border-left:3px solid #ffaa00;">' +
+                '<div style="color:#fff;font-weight:bold;font-size:12px;">' + escapeHtml(imp.category) + ' (' + (imp.currentScore || '') + '점)</div>' +
+                issuesHtml + '</div>';
+        });
+        html += '</div>';
+    }
+    html += '</div>';
+    
+    var formattedScript = formatPerfectScript(perfectScript || '100점 수정 대본이 생성되지 않았습니다.');
+    
+    html += '<div class="perfect-panel">' +
+        '<h3 style="color:#69f0ae;margin-bottom:15px;text-align:center;">💯 100점 수정 대본</h3>' +
+        '<div class="perfect-script-content">' + formattedScript + '</div>';
+    
+    if (changePoints && changePoints.length > 0) {
+        html += '<div class="change-points-section">' +
+            '<div class="change-points-title">📍 변경 포인트 (' + changePoints.length + '개)</div>';
+        changePoints.forEach(function(point, idx) {
+            html += '<div class="change-point-item" data-point-index="' + idx + '">' +
+                '<strong>[' + escapeHtml(point.location) + ']</strong> ' + 
+                escapeHtml(point.description) + 
+                ' <span style="color:#888;font-size:10px;">(' + escapeHtml(point.category) + ')</span>' +
+                '</div>';
+        });
+        html += '</div>';
+    }
+    
+    html += '<div style="text-align:center;margin-top:15px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">' +
+        '<button id="btn-download-perfect" style="background:#69f0ae;color:#000;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-weight:bold;">📥 100점 대본 다운로드</button>' +
+        '<button id="btn-compare-scripts" style="background:#9c27b0;color:#fff;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-weight:bold;">🔍 대본 비교하기</button>' +
+        '</div></div></div>';
+    
+    scoreDisplay.innerHTML = html;
+    
+    var downloadBtn = document.getElementById('btn-download-perfect');
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', function() {
+            if (perfectScript) {
+                downloadScript(perfectScript);
+            } else {
+                alert('100점 수정 대본이 없습니다.');
+            }
+        });
+    }
+    
+    var compareBtn = document.getElementById('btn-compare-scripts');
+    if (compareBtn) {
+        compareBtn.addEventListener('click', function() {
+            openCompareModal();
+        });
+    }
+    
+    document.querySelectorAll('.change-point-item').forEach(function(item) {
+        item.addEventListener('click', function() {
+            var idx = parseInt(this.getAttribute('data-point-index'));
+            scrollToPerfectScriptChange(idx, changePoints);
+        });
+    });
+}
+
+function formatPerfectScript(script) {
+    if (!script) return '';
+    
+    var escaped = escapeHtml(script);
+    var formatted = escaped.replace(/★([^\n]*)/g, '<span class="perfect-modified">★$1</span>');
+    
+    return formatted;
+}
+
+function scrollToPerfectScriptChange(index, changePoints) {
+    if (!changePoints || !changePoints[index]) return;
+    
+    var point = changePoints[index];
+    var scriptContent = document.querySelector('.perfect-script-content');
+    if (!scriptContent) return;
+    
+    var location = point.location;
+    var text = scriptContent.innerHTML;
+    
+    var searchText = escapeHtml(location);
+    var startIdx = text.indexOf(searchText);
+    
+    if (startIdx !== -1) {
+        var highlightId = 'temp-highlight-' + index;
+        var before = text.substring(0, startIdx);
+        var match = text.substring(startIdx, startIdx + searchText.length);
+        var after = text.substring(startIdx + searchText.length);
+        
+        scriptContent.innerHTML = before + '<span id="' + highlightId + '" style="background:#69f0ae;color:#000;padding:2px 4px;border-radius:3px;">' + match + '</span>' + after;
+        
+        var highlightEl = document.getElementById(highlightId);
+        if (highlightEl) {
+            highlightEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            setTimeout(function() {
+                highlightEl.outerHTML = match;
+            }, 2000);
+        }
+    } else {
+        scriptContent.scrollTop = 0;
+    }
+}
+
+function createScoreCard(label, score, color) {
+    return '<div style="background:#2d2d2d;padding:10px;border-radius:6px;text-align:center;">' +
+        '<div style="color:#aaa;font-size:10px;margin-bottom:3px;">' + label + '</div>' +
+        '<div style="font-size:24px;font-weight:bold;color:' + color + ';">' + score + '</div>' +
+        '<div style="width:100%;background:#444;height:6px;border-radius:3px;margin-top:5px;">' +
+        '<div style="width:' + score + '%;background:' + color + ';height:100%;border-radius:3px;"></div></div></div>';
+}
+
+function enableStage1Buttons(hasErrors) {
+    var btnBefore = document.getElementById('btn-revert-before-stage1');
+    var btnAfter = document.getElementById('btn-revert-after-stage1');
+    var btnFix = document.getElementById('btn-fix-script-stage1');
+    if (btnBefore) btnBefore.disabled = !hasErrors;
+    if (btnAfter) btnAfter.disabled = !hasErrors;
+    if (btnFix) btnFix.disabled = false;
+}
+
+function enableStage2Buttons(hasErrors) {
+    var btnBefore = document.getElementById('btn-revert-before-stage2');
+    var btnAfter = document.getElementById('btn-revert-after-stage2');
+    var btnFix = document.getElementById('btn-fix-script-stage2');
+    if (btnBefore) btnBefore.disabled = !hasErrors;
+    if (btnAfter) btnAfter.disabled = !hasErrors;
+    if (btnFix) btnFix.disabled = false;
+}
+
+function fixScript(stage) {
+    var s = state[stage];
+    var text = s.originalScript;
+    var errors = s.allErrors || [];
+    errors.forEach(function(err) {
+        if (err.useRevised && err.original && err.revised) {
+            text = text.split(err.original).join(err.revised);
+        }
+    });
+    s.fixedScript = text;
+    s.isFixed = true;
+    if (stage === 'stage2') state.finalScript = text;
+    renderScriptWithMarkers(stage);
+    alert((stage === 'stage1' ? '1차' : '최종') + ' 수정본이 적용되었습니다.');
+}
