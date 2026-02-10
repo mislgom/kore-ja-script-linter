@@ -1,15 +1,14 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.47 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.47: 페이지 로드 시 품질 평가 + 100점 수정 대본 박스 즉시 표시
+ * main.js v4.46 - Vertex AI API 키 + Gemini 2.5 Flash
  * - v4.46: 품질 평가 + 100점 수정 대본 좌우 분할
  * - ENDPOINT: generativelanguage.googleapis.com
  * - TIMEOUT: 300000 ms
  * - MAX_OUTPUT_TOKENS: 16384
  */
 
-console.log('🚀 main.js v4.47 로드됨');
-console.log('📌 v4.47: 페이지 로드 시 품질 평가 + 100점 수정 대본 박스 즉시 표시');
+console.log('🚀 main.js v4.46 로드됨');
+console.log('📌 v4.46: 품질 평가 + 100점 수정 대본 좌우 분할');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -216,7 +215,7 @@ function initApp() {
     console.log('📊 총 ' + getTotalRulesCount() + '개 시대고증 규칙 로드됨');
     console.log('⏱️ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('🤖 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.47 초기화 완료');
+    console.log('✅ main.js v4.46 초기화 완료');
 }
 
 function initEscKeyHandler() {
@@ -265,22 +264,8 @@ function addStyles() {
         '.analysis-table th:nth-child(4),.analysis-table td:nth-child(4){width:calc(50% - 45px);}' +
         '.type-cell{font-size:11px;line-height:1.3;word-break:keep-all;}' +
         '.score-perfect-container{display:flex;gap:20px;margin-top:20px;}' +
-        '.score-panel{flex:1;background:#1e1e1e;border-radius:10px;padding:20px;min-height:400px;border:1px solid #333;}' +
-        '.perfect-panel{flex:1;background:#1e1e1e;border-radius:10px;padding:20px;min-height:400px;border:1px solid #333;}' +
-        '.panel-title{font-size:16px;font-weight:bold;color:#69f0ae;margin-bottom:15px;padding-bottom:10px;border-bottom:1px solid #444;}' +
-        '.perfect-script-content{background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#69f0ae;max-height:500px;overflow-y:auto;}' +
-        '.score-item{display:flex;justify-content:space-between;align-items:center;padding:12px;margin-bottom:10px;background:#2d2d2d;border-radius:8px;}' +
-        '.score-label{font-size:14px;color:#fff;}' +
-        '.score-value{font-size:18px;font-weight:bold;}' +
-        '.score-value.pass{color:#69f0ae;}' +
-        '.score-value.fail{color:#ff5252;}' +
-        '.score-avg{margin-top:15px;padding:15px;background:#333;border-radius:8px;text-align:center;}' +
-        '.score-avg-label{font-size:14px;color:#aaa;margin-bottom:5px;}' +
-        '.score-avg-value{font-size:24px;font-weight:bold;}' +
-        '.improvement-section{margin-top:15px;padding:15px;background:#2d2d2d;border-radius:8px;}' +
-        '.improvement-title{font-size:14px;font-weight:bold;color:#ffd740;margin-bottom:10px;}' +
-        '.improvement-content{font-size:13px;color:#ccc;line-height:1.6;}' +
-        '.waiting-message{color:#888;font-size:14px;text-align:center;padding:50px 20px;}';
+        '.score-panel,.perfect-panel{flex:1;background:#1e1e1e;border-radius:10px;padding:20px;min-height:400px;}' +
+        '.perfect-script-content{background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#69f0ae;max-height:500px;overflow-y:auto;}';
     document.head.appendChild(style);
 }
 
@@ -532,748 +517,327 @@ function addFullViewButtonsToHeaders() {
                 header2.appendChild(btn2);
             }
         }
-    }, 500);
+    }, 100);
 }
 
 function ensureScoreSection() {
-    if (document.getElementById('score-perfect-section')) return;
-    
-    var revisedStage2 = document.getElementById('revised-stage2');
-    var insertTarget = null;
-    
-    if (revisedStage2) {
-        insertTarget = revisedStage2.parentElement;
-        while (insertTarget && !insertTarget.classList.contains('section') && !insertTarget.classList.contains('panel') && !insertTarget.classList.contains('card')) {
-            if (insertTarget.parentElement && insertTarget.parentElement.tagName !== 'BODY' && insertTarget.parentElement.tagName !== 'MAIN') {
-                insertTarget = insertTarget.parentElement;
-            } else {
-                break;
+    var scoreSection = document.getElementById('score-section');
+    if (!scoreSection) {
+        scoreSection = document.createElement('div');
+        scoreSection.id = 'score-section';
+        scoreSection.style.display = 'none';
+        var revisedStage2 = document.getElementById('revised-stage2');
+        if (revisedStage2 && revisedStage2.parentElement) {
+            revisedStage2.parentElement.parentElement.appendChild(scoreSection);
+        } else {
+            document.body.appendChild(scoreSection);
+        }
+    }
+    return scoreSection;
+}
+
+function hideOriginalAnalysisButtons() {
+    var btn1 = document.getElementById('btn-analyze-stage1');
+    var btn2 = document.getElementById('btn-analyze-stage2');
+    if (btn1) btn1.style.display = 'none';
+    if (btn2) btn2.style.display = 'none';
+}
+
+function initStopButton() {
+    var stopBtn = document.getElementById('btn-stop-analysis');
+    if (stopBtn) {
+        stopBtn.addEventListener('click', function() {
+            if (currentAbortController) {
+                currentAbortController.abort();
+                currentAbortController = null;
+                updateProgress(0, '분석 중지됨');
+                stopBtn.disabled = true;
+                alert('분석이 중지되었습니다.');
+                setTimeout(function() {
+                    document.getElementById('progress-container').style.display = 'none';
+                }, 1000);
             }
-        }
+        });
     }
-    
-    if (!insertTarget) {
-        insertTarget = document.querySelector('.results-section') || 
-                       document.querySelector('.analysis-results') || 
-                       document.querySelector('main') ||
-                       document.body;
-    }
-    
-    var section = document.createElement('div');
-    section.id = 'score-perfect-section';
-    section.style.cssText = 'margin-top:30px;padding:20px;';
-    
-    section.innerHTML = 
-        '<div class="score-perfect-container">' +
-            '<div class="score-panel" id="score-panel">' +
-                '<div class="panel-title">📊 품질 평가 점수</div>' +
-                '<div id="score-content">' +
-                    '<div class="waiting-message">2차 분석 완료 후 점수가 표시됩니다</div>' +
-                '</div>' +
-            '</div>' +
-            '<div class="perfect-panel" id="perfect-panel">' +
-                '<div class="panel-title">✨ 100점 수정 대본</div>' +
-                '<div id="perfect-content">' +
-                    '<div class="waiting-message">2차 분석 완료 후 수정 대본이 표시됩니다</div>' +
-                '</div>' +
-            '</div>' +
-        '</div>';
-    
-    if (insertTarget && insertTarget !== document.body) {
-        insertTarget.parentNode.insertBefore(section, insertTarget.nextSibling);
-    } else {
-        insertTarget.appendChild(section);
-    }
-    
-    console.log('✅ 품질 평가 + 100점 수정 대본 박스 생성 완료');
-}
-
-function displayScoresAndPerfectScript(scores, perfectScript, improvement) {
-    var scoreContent = document.getElementById('score-content');
-    var perfectContent = document.getElementById('perfect-content');
-    
-    if (!scoreContent || !perfectContent) {
-        ensureScoreSection();
-        scoreContent = document.getElementById('score-content');
-        perfectContent = document.getElementById('perfect-content');
-    }
-    
-    if (scoreContent && scores) {
-        var avg = Math.round((scores.senior + scores.fun + scores.flow + scores.retention) / 4);
-        var passClass = avg >= 95 ? 'pass' : 'fail';
-        
-        var scoreHtml = 
-            '<div class="score-item">' +
-                '<span class="score-label">👴 시니어 적합도</span>' +
-                '<span class="score-value ' + (scores.senior >= 95 ? 'pass' : 'fail') + '">' + scores.senior + '점</span>' +
-            '</div>' +
-            '<div class="score-item">' +
-                '<span class="score-label">😄 재미요소</span>' +
-                '<span class="score-value ' + (scores.fun >= 95 ? 'pass' : 'fail') + '">' + scores.fun + '점</span>' +
-            '</div>' +
-            '<div class="score-item">' +
-                '<span class="score-label">📖 이야기 흐름</span>' +
-                '<span class="score-value ' + (scores.flow >= 95 ? 'pass' : 'fail') + '">' + scores.flow + '점</span>' +
-            '</div>' +
-            '<div class="score-item">' +
-                '<span class="score-label">🎯 시청자 이탈 방지</span>' +
-                '<span class="score-value ' + (scores.retention >= 95 ? 'pass' : 'fail') + '">' + scores.retention + '점</span>' +
-            '</div>' +
-            '<div class="score-avg">' +
-                '<div class="score-avg-label">평균 점수</div>' +
-                '<div class="score-avg-value ' + passClass + '">' + avg + '점 ' + (avg >= 95 ? '✅ 합격' : '❌ 불합격') + '</div>' +
-            '</div>';
-        
-        if (improvement) {
-            scoreHtml += 
-                '<div class="improvement-section">' +
-                    '<div class="improvement-title">💡 개선 제안</div>' +
-                    '<div class="improvement-content">' + improvement + '</div>' +
-                '</div>';
-        }
-        
-        scoreContent.innerHTML = scoreHtml;
-    }
-    
-    if (perfectContent && perfectScript) {
-        perfectContent.innerHTML = '<div class="perfect-script-content">' + escapeHtml(perfectScript) + '</div>';
-    }
-    
-    state.scores = scores;
-    state.perfectScript = perfectScript;
-}
-
-function escapeHtml(text) {
-    if (!text) return '';
-    var div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
 
 function initDarkMode() {
-    var toggle = document.getElementById('dark-mode-toggle');
-    if (toggle) {
-        var isDark = localStorage.getItem('darkMode') !== 'false';
-        document.body.classList.toggle('dark-mode', isDark);
-        toggle.checked = isDark;
-        toggle.addEventListener('change', function() {
-            document.body.classList.toggle('dark-mode', this.checked);
-            localStorage.setItem('darkMode', this.checked);
-        });
+    var btn = document.getElementById('btn-dark-mode');
+    if (!btn) return;
+    var saved = localStorage.getItem('darkMode');
+    if (saved === 'true') {
+        document.body.classList.add('dark-mode');
+        btn.textContent = '☀️ 라이트모드';
     }
+    btn.addEventListener('click', function() {
+        document.body.classList.toggle('dark-mode');
+        var isDark = document.body.classList.contains('dark-mode');
+        localStorage.setItem('darkMode', isDark);
+        btn.textContent = isDark ? '☀️ 라이트모드' : '🌙 다크모드';
+    });
 }
 
 function initApiKeyPanel() {
-    var apiKeyInput = document.getElementById('api-key');
-    var saveBtn = document.getElementById('save-api-key');
-    var statusEl = document.getElementById('api-key-status');
-    
-    if (apiKeyInput) {
-        var savedKey = localStorage.getItem('geminiApiKey');
-        if (savedKey) {
-            apiKeyInput.value = savedKey;
-            if (statusEl) statusEl.textContent = '✅ API 키 저장됨';
-        }
-    }
-    
+    var btn = document.getElementById('btn-api-settings');
+    var panel = document.getElementById('api-key-panel');
+    var input = document.getElementById('api-key-input');
+    var saveBtn = document.getElementById('btn-save-api-key');
+    var closeBtn = document.getElementById('btn-close-api-panel');
+    if (!btn || !panel || !input) return;
+    var savedKey = localStorage.getItem('GEMINI_API_KEY');
+    if (savedKey) input.value = savedKey;
+    btn.addEventListener('click', function() {
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    });
     if (saveBtn) {
         saveBtn.addEventListener('click', function() {
-            var key = apiKeyInput.value.trim();
+            var key = input.value.trim();
             if (key) {
-                localStorage.setItem('geminiApiKey', key);
-                if (statusEl) statusEl.textContent = '✅ API 키 저장됨';
+                localStorage.setItem('GEMINI_API_KEY', key);
+                alert('API 키가 저장되었습니다.');
+                panel.style.display = 'none';
             } else {
-                localStorage.removeItem('geminiApiKey');
-                if (statusEl) statusEl.textContent = '❌ API 키를 입력하세요';
+                alert('API 키를 입력해주세요.');
             }
         });
     }
-}
-
-function initTextArea() {
-    var textarea = document.getElementById('script-input');
-    if (textarea) {
-        textarea.addEventListener('input', function() {
-            updateCharCount();
+    if (closeBtn) {
+        closeBtn.addEventListener('click', function() {
+            panel.style.display = 'none';
         });
     }
 }
 
-function updateCharCount() {
-    var textarea = document.getElementById('script-input');
-    var counter = document.getElementById('char-count');
-    if (textarea && counter) {
-        counter.textContent = textarea.value.length + '자';
-    }
+function validateApiKey(apiKey) {
+    if (!apiKey) return { valid: false, message: 'API 키가 설정되지 않았습니다.' };
+    if (apiKey.length < 20) return { valid: false, message: 'API 키가 너무 짧습니다.' };
+    return { valid: true, message: 'OK' };
+}
+
+function initTextArea() {
+    var textarea = document.getElementById('original-script');
+    var charCount = document.getElementById('char-count');
+    if (!textarea || !charCount) return;
+    textarea.addEventListener('input', function() {
+        charCount.textContent = textarea.value.length;
+    });
+}
+
+function initClearButton() {
+    var clearBtn = document.getElementById('btn-clear-script');
+    if (!clearBtn) return;
+    clearBtn.addEventListener('click', function() {
+        document.getElementById('original-script').value = '';
+        document.getElementById('char-count').textContent = '0';
+        var fileDisplay = document.getElementById('file-name-display');
+        if (fileDisplay) fileDisplay.textContent = '';
+    });
 }
 
 function initFileUpload() {
     var fileInput = document.getElementById('file-input');
-    var uploadBtn = document.getElementById('upload-btn');
-    
-    if (uploadBtn && fileInput) {
-        uploadBtn.addEventListener('click', function() {
-            fileInput.click();
-        });
-        
-        fileInput.addEventListener('change', function(e) {
-            handleFileSelect(e.target.files);
-        });
-    }
+    if (!fileInput) return;
+    fileInput.addEventListener('change', function(e) {
+        var file = e.target.files[0];
+        if (file && file.name.endsWith('.txt')) {
+            handleFile(file);
+            var fileDisplay = document.getElementById('file-name-display');
+            if (fileDisplay) fileDisplay.textContent = '📎 ' + file.name;
+        } else {
+            alert('TXT 파일만 업로드 가능합니다.');
+        }
+    });
 }
 
 function initDragAndDrop() {
-    var dropZone = document.getElementById('script-input');
-    if (dropZone) {
-        dropZone.addEventListener('dragover', function(e) {
-            e.preventDefault();
-            this.classList.add('drag-over');
-        });
-        
-        dropZone.addEventListener('dragleave', function() {
-            this.classList.remove('drag-over');
-        });
-        
-        dropZone.addEventListener('drop', function(e) {
-            e.preventDefault();
-            this.classList.remove('drag-over');
-            handleFileSelect(e.dataTransfer.files);
-        });
-    }
-}
-
-function handleFileSelect(files) {
-    if (files.length === 0) return;
-    
-    var file = files[0];
-    var reader = new FileReader();
-    
-    reader.onload = function(e) {
-        var textarea = document.getElementById('script-input');
-        if (textarea) {
-            textarea.value = e.target.result;
-            updateCharCount();
+    var dropZone = document.getElementById('drop-zone');
+    if (!dropZone) return;
+    dropZone.addEventListener('dragenter', function(e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', function(e) { e.preventDefault(); if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over'); });
+    dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        var file = e.dataTransfer.files[0];
+        if (file && file.name.endsWith('.txt')) {
+            handleFile(file);
+            var fileDisplay = document.getElementById('file-name-display');
+            if (fileDisplay) fileDisplay.textContent = '📎 ' + file.name;
+        } else {
+            alert('TXT 파일만 업로드 가능합니다.');
         }
-    };
-    
-    if (file.name.endsWith('.txt') || file.type === 'text/plain') {
-        reader.readAsText(file, 'UTF-8');
-    } else {
-        alert('텍스트 파일(.txt)만 지원됩니다.');
-    }
-}
-
-function initClearButton() {
-    var clearBtn = document.getElementById('clear-btn');
-    if (clearBtn) {
-        clearBtn.addEventListener('click', function() {
-            var textarea = document.getElementById('script-input');
-            if (textarea) {
-                textarea.value = '';
-                updateCharCount();
-            }
-            resetState();
-        });
-    }
-}
-
-function resetState() {
-    state.stage1 = {
-        originalScript: '',
-        analysis: null,
-        revisedScript: '',
-        allErrors: [],
-        fixedScript: '',
-        currentErrorIndex: -1,
-        isFixed: false
-    };
-    state.stage2 = {
-        originalScript: '',
-        analysis: null,
-        revisedScript: '',
-        allErrors: [],
-        fixedScript: '',
-        currentErrorIndex: -1,
-        isFixed: false
-    };
-    state.finalScript = '';
-    state.perfectScript = '';
-    state.scores = null;
-    
-    var analysis1 = document.getElementById('analysis-stage1');
-    var revised1 = document.getElementById('revised-stage1');
-    var analysis2 = document.getElementById('analysis-stage2');
-    var revised2 = document.getElementById('revised-stage2');
-    
-    if (analysis1) analysis1.innerHTML = '';
-    if (revised1) revised1.innerHTML = '';
-    if (analysis2) analysis2.innerHTML = '';
-    if (revised2) revised2.innerHTML = '';
-    
-    var scoreContent = document.getElementById('score-content');
-    var perfectContent = document.getElementById('perfect-content');
-    if (scoreContent) scoreContent.innerHTML = '<div class="waiting-message">2차 분석 완료 후 점수가 표시됩니다</div>';
-    if (perfectContent) perfectContent.innerHTML = '<div class="waiting-message">2차 분석 완료 후 수정 대본이 표시됩니다</div>';
-}
-
-function hideOriginalAnalysisButtons() {
-    var originalBtns = document.querySelectorAll('.analyze-btn-original');
-    originalBtns.forEach(function(btn) {
-        btn.style.display = 'none';
     });
+}
+
+function handleFile(file) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('original-script').value = e.target.result;
+        document.getElementById('char-count').textContent = e.target.result.length;
+    };
+    reader.readAsText(file);
 }
 
 function initDownloadButton() {
-    var downloadBtn = document.getElementById('download-btn');
-    if (downloadBtn) {
-        downloadBtn.addEventListener('click', downloadScript);
-    }
-}
-
-function downloadScript() {
-    var content = state.finalScript || state.stage2.fixedScript || state.stage1.fixedScript || '';
-    if (!content) {
-        alert('다운로드할 대본이 없습니다.');
-        return;
-    }
-    
-    var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = '수정된_대본_' + new Date().toISOString().slice(0,10) + '.txt';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
-
-function initRevertButtons() {
-    var revert1 = document.getElementById('revert-stage1');
-    var revert2 = document.getElementById('revert-stage2');
-    
-    if (revert1) {
-        revert1.addEventListener('click', function() {
-            revertScript('stage1');
-        });
-    }
-    
-    if (revert2) {
-        revert2.addEventListener('click', function() {
-            revertScript('stage2');
-        });
-    }
-}
-
-function revertScript(stage) {
-    var stateObj = state[stage];
-    if (stateObj.originalScript) {
-        var revisedBox = document.getElementById('revised-' + stage);
-        if (revisedBox) {
-            revisedBox.innerHTML = '<pre style="white-space:pre-wrap;word-break:break-word;">' + escapeHtml(stateObj.originalScript) + '</pre>';
+    var btn = document.getElementById('btn-download');
+    if (!btn) return;
+    btn.addEventListener('click', function() {
+        var scriptToDownload = state.perfectScript || state.finalScript;
+        if (!scriptToDownload || scriptToDownload.trim() === '') {
+            scriptToDownload = state.stage2.fixedScript || state.stage1.fixedScript;
         }
-        stateObj.isFixed = false;
-        stateObj.currentErrorIndex = -1;
-    }
-}
-
-function initStage1AnalysisButton() {
-    var btn = document.getElementById('analyze-stage1');
-    if (btn) {
-        btn.addEventListener('click', function() {
-            runStage1Analysis();
-        });
-    }
-}
-
-function initStage2AnalysisButton() {
-    var btn = document.getElementById('analyze-stage2');
-    if (btn) {
-        btn.addEventListener('click', function() {
-            runStage2Analysis();
-        });
-    }
-}
-
-function initStopButton() {
-    var btn = document.getElementById('stop-analysis');
-    if (btn) {
-        btn.addEventListener('click', function() {
-            if (currentAbortController) {
-                currentAbortController.abort();
-                currentAbortController = null;
-                setAnalyzing(false);
-            }
-        });
-    }
-}
-
-function setAnalyzing(isAnalyzing) {
-    var stage1Btn = document.getElementById('analyze-stage1');
-    var stage2Btn = document.getElementById('analyze-stage2');
-    var stopBtn = document.getElementById('stop-analysis');
-    
-    if (stage1Btn) stage1Btn.disabled = isAnalyzing;
-    if (stage2Btn) stage2Btn.disabled = isAnalyzing;
-    if (stopBtn) stopBtn.style.display = isAnalyzing ? 'inline-block' : 'none';
-}
-
-async function runStage1Analysis() {
-    var textarea = document.getElementById('script-input');
-    if (!textarea || !textarea.value.trim()) {
-        alert('대본을 입력해주세요.');
-        return;
-    }
-    
-    var apiKey = localStorage.getItem('geminiApiKey');
-    if (!apiKey) {
-        alert('API 키를 먼저 저장해주세요.');
-        return;
-    }
-    
-    setAnalyzing(true);
-    state.stage1.originalScript = textarea.value.trim();
-    
-    var analysisBox = document.getElementById('analysis-stage1');
-    var revisedBox = document.getElementById('revised-stage1');
-    
-    if (analysisBox) analysisBox.innerHTML = '<div class="loading">1차 분석 중...</div>';
-    if (revisedBox) revisedBox.innerHTML = '';
-    
-    try {
-        currentAbortController = new AbortController();
-        var result = await analyzeScript(state.stage1.originalScript, 'stage1', currentAbortController.signal);
-        
-        if (result) {
-            state.stage1.analysis = result.errors || [];
-            state.stage1.allErrors = result.errors || [];
-            state.stage1.revisedScript = result.revisedScript || state.stage1.originalScript;
-            
-            displayAnalysisResult('stage1', state.stage1.analysis);
-            displayRevisedScript('stage1', state.stage1.revisedScript, state.stage1.allErrors);
+        if (!scriptToDownload || scriptToDownload.trim() === '') {
+            alert('다운로드할 수정본이 없습니다.\n\n분석 후 "대본 픽스" 버튼을 먼저 눌러주세요.');
+            return;
         }
-    } catch (error) {
-        if (error.name !== 'AbortError') {
-            console.error('1차 분석 오류:', error);
-            if (analysisBox) analysisBox.innerHTML = '<div class="error">분석 중 오류 발생: ' + error.message + '</div>';
-        }
-    } finally {
-        setAnalyzing(false);
-        currentAbortController = null;
-    }
-}
-
-async function runStage2Analysis() {
-    var sourceScript = state.stage1.fixedScript || state.stage1.revisedScript || state.stage1.originalScript;
-    
-    if (!sourceScript) {
-        alert('1차 분석을 먼저 실행해주세요.');
-        return;
-    }
-    
-    var apiKey = localStorage.getItem('geminiApiKey');
-    if (!apiKey) {
-        alert('API 키를 먼저 저장해주세요.');
-        return;
-    }
-    
-    setAnalyzing(true);
-    state.stage2.originalScript = sourceScript;
-    
-    var analysisBox = document.getElementById('analysis-stage2');
-    var revisedBox = document.getElementById('revised-stage2');
-    
-    if (analysisBox) analysisBox.innerHTML = '<div class="loading">2차 분석 중...</div>';
-    if (revisedBox) revisedBox.innerHTML = '';
-    
-    try {
-        currentAbortController = new AbortController();
-        var result = await analyzeScript(state.stage2.originalScript, 'stage2', currentAbortController.signal);
-        
-        if (result) {
-            state.stage2.analysis = result.errors || [];
-            state.stage2.allErrors = result.errors || [];
-            state.stage2.revisedScript = result.revisedScript || state.stage2.originalScript;
-            
-            displayAnalysisResult('stage2', state.stage2.analysis);
-            displayRevisedScript('stage2', state.stage2.revisedScript, state.stage2.allErrors);
-            
-            if (result.scores) {
-                displayScoresAndPerfectScript(result.scores, result.perfectScript, result.improvement);
-            }
-        }
-    } catch (error) {
-        if (error.name !== 'AbortError') {
-            console.error('2차 분석 오류:', error);
-            if (analysisBox) analysisBox.innerHTML = '<div class="error">분석 중 오류 발생: ' + error.message + '</div>';
-        }
-    } finally {
-        setAnalyzing(false);
-        currentAbortController = null;
-    }
-}
-
-async function analyzeScript(script, stage, signal) {
-    var apiKey = localStorage.getItem('geminiApiKey');
-    var url = API_CONFIG.ENDPOINT + '/' + API_CONFIG.MODEL + ':generateContent?key=' + apiKey;
-    
-    var historicalContext = buildHistoricalContext();
-    
-    var prompt = '';
-    if (stage === 'stage1') {
-        prompt = build1stStagePrompt(script, historicalContext);
-    } else {
-        prompt = build2ndStagePrompt(script, historicalContext);
-    }
-    
-    var requestBody = {
-        contents: [{
-            parts: [{
-                text: prompt
-            }]
-        }],
-        generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: API_CONFIG.MAX_OUTPUT_TOKENS
-        }
-    };
-    
-    var response = await fetchWithTimeout(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody),
-        signal: signal
-    }, API_CONFIG.TIMEOUT);
-    
-    if (!response.ok) {
-        var errorText = await response.text();
-        throw new Error('API 오류: ' + response.status + ' - ' + errorText);
-    }
-    
-    var data = await response.json();
-    
-    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-        var text = data.candidates[0].content.parts[0].text;
-        return parseAnalysisResponse(text, stage);
-    }
-    
-    throw new Error('응답 파싱 실패');
-}
-
-async function fetchWithTimeout(url, options, timeout) {
-    var controller = new AbortController();
-    var id = setTimeout(function() { controller.abort(); }, timeout);
-    
-    var mergedSignal = options.signal;
-    
-    try {
-        var response = await fetch(url, {
-            ...options,
-            signal: controller.signal
-        });
-        clearTimeout(id);
-        return response;
-    } catch (error) {
-        clearTimeout(id);
-        if (mergedSignal && mergedSignal.aborted) {
-            throw new DOMException('Aborted', 'AbortError');
-        }
-        throw error;
-    }
-}
-
-function buildHistoricalContext() {
-    var context = '시대고증 규칙:\n';
-    for (var category in HISTORICAL_RULES) {
-        var rules = HISTORICAL_RULES[category];
-        for (var i = 0; i < rules.length; i++) {
-            var rule = rules[i];
-            context += '- ' + rule.modern + ' → ' + rule.historical.join('/') + ' (' + rule.reason + ')\n';
-        }
-    }
-    return context;
-}
-
-function build1stStagePrompt(script, historicalContext) {
-    return '당신은 사극 대본 전문 검수자입니다.\n\n' +
-        historicalContext + '\n\n' +
-        '다음 대본을 분석하여 시대착오적 표현과 오류를 찾아주세요.\n\n' +
-        '분석 항목:\n' +
-        '1. 시대착오 - 현대적 용어/물건이 사용된 경우\n' +
-        '2. 인물설정 - 인물의 신분/지위에 맞지 않는 표현\n' +
-        '3. 역사적사실 - 역사적 사실과 다른 내용\n\n' +
-        '응답 형식 (JSON):\n' +
-        '```json\n' +
-        '{\n' +
-        '  "errors": [\n' +
-        '    {\n' +
-        '      "type": "오류유형",\n' +
-        '      "original": "원문",\n' +
-        '      "suggestion": "수정제안",\n' +
-        '      "reason": "수정이유"\n' +
-        '    }\n' +
-        '  ],\n' +
-        '  "revisedScript": "수정된 전체 대본"\n' +
-        '}\n' +
-        '```\n\n' +
-        '대본:\n' + script;
-}
-
-function build2ndStagePrompt(script, historicalContext) {
-    return '당신은 사극 대본 전문 검수자입니다.\n\n' +
-        historicalContext + '\n\n' +
-        '다음 대본을 분석하여 이야기 흐름, 캐릭터 일관성, 대사 자연스러움 등을 검토해주세요.\n\n' +
-        '분석 항목:\n' +
-        '1. 이야기흐름 - 스토리 전개의 자연스러움\n' +
-        '2. 캐릭터일관성 - 인물의 성격/말투 일관성\n' +
-        '3. 장면연결성 - 장면 간 연결의 매끄러움\n' +
-        '4. 쌩뚱맞은표현 - 맥락에 맞지 않는 표현\n' +
-        '5. 시간왜곡 - 시간 순서의 오류\n\n' +
-        '또한 다음 4가지 항목에 대해 100점 만점으로 점수를 매겨주세요:\n' +
-        '- 시니어적합도: 60대 이상 시청자가 이해하기 쉬운가\n' +
-        '- 재미요소: 흥미롭고 몰입되는가\n' +
-        '- 이야기흐름: 스토리가 자연스럽게 전개되는가\n' +
-        '- 시청자이탈방지: 지루하지 않고 계속 보고 싶은가\n\n' +
-        '평균 95점 이상이면 합격입니다.\n\n' +
-        '응답 형식 (JSON):\n' +
-        '```json\n' +
-        '{\n' +
-        '  "errors": [\n' +
-        '    {\n' +
-        '      "type": "오류유형",\n' +
-        '      "original": "원문",\n' +
-        '      "suggestion": "수정제안",\n' +
-        '      "reason": "수정이유"\n' +
-        '    }\n' +
-        '  ],\n' +
-        '  "revisedScript": "수정된 전체 대본",\n' +
-        '  "scores": {\n' +
-        '    "senior": 점수,\n' +
-        '    "fun": 점수,\n' +
-        '    "flow": 점수,\n' +
-        '    "retention": 점수\n' +
-        '  },\n' +
-        '  "improvement": "개선 제안 내용",\n' +
-        '  "perfectScript": "100점 기준으로 완벽하게 수정된 대본"\n' +
-        '}\n' +
-        '```\n\n' +
-        '대본:\n' + script;
-}
-
-function parseAnalysisResponse(text, stage) {
-    try {
-        var jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
-        if (jsonMatch) {
-            var jsonStr = jsonMatch[1];
-            var result = JSON.parse(jsonStr);
-            
-            if (result.errors) {
-                result.errors = result.errors.map(function(err, idx) {
-                    return {
-                        ...err,
-                        id: stage + '-error-' + idx,
-                        isRevised: true
-                    };
-                });
-            }
-            
-            return result;
-        }
-        
-        var directParse = JSON.parse(text);
-        return directParse;
-    } catch (e) {
-        console.error('JSON 파싱 오류:', e);
-        return {
-            errors: [],
-            revisedScript: text
-        };
-    }
-}
-
-function displayAnalysisResult(stage, errors) {
-    var analysisBox = document.getElementById('analysis-' + stage);
-    if (!analysisBox) return;
-    
-    if (!errors || errors.length === 0) {
-        analysisBox.innerHTML = '<div class="no-errors">발견된 오류가 없습니다. ✅</div>';
-        return;
-    }
-    
-    var html = '<table class="analysis-table">' +
-        '<thead><tr>' +
-        '<th>유형</th>' +
-        '<th>원문</th>' +
-        '<th>수정제안</th>' +
-        '<th>사유</th>' +
-        '</tr></thead><tbody>';
-    
-    for (var i = 0; i < errors.length; i++) {
-        var err = errors[i];
-        var markerId = err.id || (stage + '-error-' + i);
-        html += '<tr data-marker-id="' + markerId + '" style="cursor:pointer;">' +
-            '<td class="type-cell">' + formatTypeText(err.type) + '</td>' +
-            '<td>' + escapeHtml(err.original) + '</td>' +
-            '<td>' + escapeHtml(err.suggestion) + '</td>' +
-            '<td>' + escapeHtml(err.reason) + '</td>' +
-            '</tr>';
-    }
-    
-    html += '</tbody></table>';
-    analysisBox.innerHTML = html;
-    
-    analysisBox.querySelectorAll('tr[data-marker-id]').forEach(function(row) {
-        row.addEventListener('click', function() {
-            var markerId = this.getAttribute('data-marker-id');
-            var errorIndex = findErrorIndexById(stage, markerId);
-            if (errorIndex >= 0) {
-                setCurrentError(stage, errorIndex);
-                scrollToMarker(stage, markerId);
-            }
-        });
+        downloadScript(scriptToDownload);
     });
 }
 
-function displayRevisedScript(stage, script, errors) {
-    var revisedBox = document.getElementById('revised-' + stage);
-    if (!revisedBox) return;
+function downloadScript(script) {
+    if (!script || script.trim() === '') {
+        alert('다운로드할 내용이 없습니다.');
+        return;
+    }
+    try {
+        var blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = '최종수정본_' + new Date().toISOString().slice(0, 10) + '.txt';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function() {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 200);
+    } catch (e) {
+        alert('다운로드 중 오류가 발생했습니다: ' + e.message);
+    }
+}
+
+function initRevertButtons() {
+    var r1 = document.getElementById('revised-stage1');
+    var r2 = document.getElementById('revised-stage2');
+    if (r1) addRevertButton(r1, 'stage1');
+    if (r2) addRevertButton(r2, 'stage2');
+}
+
+function addRevertButton(container, stage) {
+    var parent = container.parentElement;
+    if (parent.querySelector('.revert-btn-wrapper')) return;
+    var wrapper = document.createElement('div');
+    wrapper.className = 'revert-btn-wrapper';
+    wrapper.style.cssText = 'text-align:center;padding:10px;border-top:1px solid #444;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;';
+
+    var btnBefore = document.createElement('button');
+    btnBefore.id = 'btn-revert-before-' + stage;
+    btnBefore.innerHTML = '🔄 수정 전';
+    btnBefore.style.cssText = 'background:#ff9800;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
+    btnBefore.disabled = true;
+    btnBefore.addEventListener('click', function() { toggleCurrentError(stage, false); });
+
+    var btnAfter = document.createElement('button');
+    btnAfter.id = 'btn-revert-after-' + stage;
+    btnAfter.innerHTML = '✅ 수정 후';
+    btnAfter.style.cssText = 'background:#4CAF50;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
+    btnAfter.disabled = true;
+    btnAfter.addEventListener('click', function() { toggleCurrentError(stage, true); });
+
+    wrapper.appendChild(btnBefore);
+    wrapper.appendChild(btnAfter);
+
+    var btnFix = document.createElement('button');
+    btnFix.id = 'btn-fix-script-' + stage;
+    btnFix.innerHTML = '📌 대본 픽스';
+    btnFix.style.cssText = 'background:#2196F3;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
+    btnFix.disabled = true;
+    btnFix.addEventListener('click', function() { fixScript(stage); });
+    wrapper.appendChild(btnFix);
+
+    parent.appendChild(wrapper);
+}
+
+function toggleCurrentError(stage, useRevised) {
+    var s = state[stage];
+    var errors = s.allErrors || [];
     
-    var markedScript = script;
-    
-    if (errors && errors.length > 0) {
-        for (var i = errors.length - 1; i >= 0; i--) {
-            var err = errors[i];
-            var markerId = err.id || (stage + '-error-' + i);
-            
-            if (err.isRevised && err.suggestion) {
-                var marker = '<span class="correction-marker marker-revised" data-marker-id="' + markerId + '" data-original="' + escapeAttr(err.original) + '" data-suggestion="' + escapeAttr(err.suggestion) + '">' + escapeHtml(err.suggestion) + '</span>';
-                markedScript = markedScript.split(err.suggestion).join(marker);
-            }
-        }
+    if (s.currentErrorIndex < 0 || s.currentErrorIndex >= errors.length) {
+        alert('먼저 분석 결과 테이블에서 수정할 항목을 클릭해주세요.');
+        return;
     }
     
-    revisedBox.innerHTML = '<div style="white-space:pre-wrap;word-break:break-word;line-height:1.8;">' + markedScript + '</div>';
+    var err = errors[s.currentErrorIndex];
+    err.useRevised = useRevised;
     
-    revisedBox.querySelectorAll('.correction-marker').forEach(function(marker) {
+    renderScriptWithMarkers(stage);
+}
+
+function setCurrentError(stage, errorIndex) {
+    state[stage].currentErrorIndex = errorIndex;
+    highlightCurrentRow(stage, errorIndex);
+}
+
+function highlightCurrentRow(stage, errorIndex) {
+    var tableContainer = document.getElementById('analysis-' + stage);
+    if (!tableContainer) return;
+    
+    var rows = tableContainer.querySelectorAll('tbody tr');
+    rows.forEach(function(row, idx) {
+        if (idx === errorIndex) {
+            row.style.background = '#3a3a3a';
+            row.style.outline = '2px solid #69f0ae';
+        } else {
+            row.style.background = '';
+            row.style.outline = '';
+        }
+    });
+}
+
+function renderScriptWithMarkers(stage) {
+    var container = document.getElementById('revised-' + stage);
+    if (!container) return;
+
+    var scrollTop = container.scrollTop;
+
+    var s = state[stage];
+    var text = s.originalScript;
+    var errors = s.allErrors || [];
+
+    var sortedErrors = errors.slice().sort(function(a, b) {
+        var posA = text.indexOf(a.original);
+        var posB = text.indexOf(b.original);
+        return posB - posA;
+    });
+
+    sortedErrors.forEach(function(err) {
+        if (err.original && text.includes(err.original)) {
+            var displayText = err.useRevised ? err.revised : err.original;
+            var markerClass = err.useRevised ? 'marker-revised' : 'marker-original';
+            var markerHtml = '<span class="correction-marker ' + markerClass + '" data-marker-id="' + err.id + '" data-stage="' + stage + '" title="' + escapeHtml(err.original) + ' → ' + escapeHtml(err.revised) + '">' + escapeHtml(displayText) + '</span>';
+            text = text.replace(err.original, markerHtml);
+        }
+    });
+
+    container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + text + '</div>';
+
+    container.scrollTop = scrollTop;
+
+    container.querySelectorAll('.correction-marker').forEach(function(marker) {
         marker.addEventListener('click', function() {
             var markerId = this.getAttribute('data-marker-id');
             var errorIndex = findErrorIndexById(stage, markerId);
             if (errorIndex >= 0) {
-                toggleMarker(this, stage, errorIndex);
+                setCurrentError(stage, errorIndex);
+                scrollToTableRow(stage, markerId);
             }
         });
     });
 }
 
-function escapeAttr(text) {
-    if (!text) return '';
-    return text.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
 function findErrorIndexById(stage, markerId) {
-    var errors = state[stage].allErrors;
+    var errors = state[stage].allErrors || [];
     for (var i = 0; i < errors.length; i++) {
         if (errors[i].id === markerId) {
             return i;
@@ -1282,60 +846,25 @@ function findErrorIndexById(stage, markerId) {
     return -1;
 }
 
-function setCurrentError(stage, index) {
-    state[stage].currentErrorIndex = index;
-}
-
-function toggleMarker(markerEl, stage, errorIndex) {
-    var err = state[stage].allErrors[errorIndex];
-    if (!err) return;
-    
-    var isCurrentlyRevised = markerEl.classList.contains('marker-revised');
-    
-    if (isCurrentlyRevised) {
-        markerEl.textContent = err.original;
-        markerEl.classList.remove('marker-revised');
-        markerEl.classList.add('marker-original');
-        err.isRevised = false;
-    } else {
-        markerEl.textContent = err.suggestion;
-        markerEl.classList.remove('marker-original');
-        markerEl.classList.add('marker-revised');
-        err.isRevised = true;
-    }
-}
-
-function toggleCurrentError(stage, toRevised) {
-    var index = state[stage].currentErrorIndex;
-    if (index < 0) return;
-    
-    var err = state[stage].allErrors[index];
-    if (!err) return;
-    
-    err.isRevised = toRevised;
-    
-    var revisedBox = document.getElementById('revised-' + stage);
-    if (revisedBox) {
-        var marker = revisedBox.querySelector('.correction-marker[data-marker-id="' + err.id + '"]');
-        if (marker) {
-            if (toRevised) {
-                marker.textContent = err.suggestion;
-                marker.classList.remove('marker-original');
-                marker.classList.add('marker-revised');
-            } else {
-                marker.textContent = err.original;
-                marker.classList.remove('marker-revised');
-                marker.classList.add('marker-original');
-            }
+function scrollToTableRow(stage, markerId) {
+    var tableContainer = document.getElementById('analysis-' + stage);
+    if (!tableContainer) return;
+    var rows = tableContainer.querySelectorAll('tr[data-marker-id]');
+    rows.forEach(function(row) {
+        if (row.getAttribute('data-marker-id') === markerId) {
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            row.style.transition = 'background 0.3s';
+            row.style.background = '#ffeb3b';
+            setTimeout(function() { row.style.background = '#3a3a3a'; }, 1000);
         }
-    }
+    });
 }
 
 function scrollToMarker(stage, markerId) {
-    var revisedBox = document.getElementById('revised-' + stage);
-    if (!revisedBox) return;
+    var container = document.getElementById('revised-' + stage);
+    if (!container) return;
     
-    var marker = revisedBox.querySelector('.correction-marker[data-marker-id="' + markerId + '"]');
+    var marker = container.querySelector('.correction-marker[data-marker-id="' + markerId + '"]');
     if (marker) {
         marker.scrollIntoView({ behavior: 'smooth', block: 'center' });
         var isRevised = marker.classList.contains('marker-revised');
@@ -1347,19 +876,424 @@ function scrollToMarker(stage, markerId) {
     }
 }
 
-function fixScript(stage) {
-    var stateObj = state[stage];
-    var revisedBox = document.getElementById('revised-' + stage);
-    
-    if (!revisedBox) return;
-    
-    var content = revisedBox.innerText || revisedBox.textContent;
-    stateObj.fixedScript = content;
-    stateObj.isFixed = true;
-    
-    if (stage === 'stage2') {
-        state.finalScript = content;
+function escapeHtml(str) {
+    if (!str) return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function initStage1AnalysisButton() {
+    var analysisContainer = document.getElementById('analysis-stage1');
+    if (!analysisContainer) return;
+    var parent = analysisContainer.parentElement;
+    var existingBtn = parent.querySelector('.stage1-start-wrapper');
+    if (existingBtn) existingBtn.remove();
+    var wrapper = document.createElement('div');
+    wrapper.className = 'stage1-start-wrapper';
+    wrapper.style.cssText = 'text-align:center;padding:15px;';
+    var btn = document.createElement('button');
+    btn.id = 'btn-start-stage1';
+    btn.innerHTML = '🔍 1차 분석 시작';
+    btn.style.cssText = 'background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border:none;padding:15px 40px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:16px;box-shadow:0 4px 15px rgba(102,126,234,0.4);transition:transform 0.2s,box-shadow 0.2s;';
+    btn.addEventListener('mouseover', function() {
+        this.style.transform = 'translateY(-2px)';
+        this.style.boxShadow = '0 6px 20px rgba(102,126,234,0.5)';
+    });
+    btn.addEventListener('mouseout', function() {
+        this.style.transform = 'translateY(0)';
+        this.style.boxShadow = '0 4px 15px rgba(102,126,234,0.4)';
+    });
+    btn.addEventListener('click', startStage1Analysis);
+    wrapper.appendChild(btn);
+    parent.appendChild(wrapper);
+}
+
+function initStage2AnalysisButton() {
+    var analysisContainer = document.getElementById('analysis-stage2');
+    if (!analysisContainer) return;
+    var parent = analysisContainer.parentElement;
+    var existingBtn = parent.querySelector('.stage2-start-wrapper');
+    if (existingBtn) existingBtn.remove();
+    var wrapper = document.createElement('div');
+    wrapper.className = 'stage2-start-wrapper';
+    wrapper.style.cssText = 'text-align:center;padding:15px;';
+    var btn = document.createElement('button');
+    btn.id = 'btn-start-stage2';
+    btn.innerHTML = '🔬 2차 분석 시작';
+    btn.style.cssText = 'background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);color:white;border:none;padding:15px 40px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:16px;box-shadow:0 4px 15px rgba(245,87,108,0.4);transition:transform 0.2s,box-shadow 0.2s;';
+    btn.addEventListener('mouseover', function() {
+        this.style.transform = 'translateY(-2px)';
+        this.style.boxShadow = '0 6px 20px rgba(245,87,108,0.5)';
+    });
+    btn.addEventListener('mouseout', function() {
+        this.style.transform = 'translateY(0)';
+        this.style.boxShadow = '0 4px 15px rgba(245,87,108,0.4)';
+    });
+    btn.addEventListener('click', startStage2Analysis);
+    wrapper.appendChild(btn);
+    parent.appendChild(wrapper);
+}
+
+function getHistoricalRulesString() {
+    var rules = [];
+    for (var category in HISTORICAL_RULES) {
+        HISTORICAL_RULES[category].forEach(function(rule) {
+            rules.push(rule.modern + ' → ' + rule.historical.join('/'));
+        });
     }
+    return rules.join(', ');
+}
+
+function buildStage1Prompt(script) {
+    var rulesString = getHistoricalRulesString();
     
-    alert((stage === 'stage1' ? '1차' : '2차') + ' 대본이 픽스되었습니다.');
+    return '당신은 조선시대 사극 대본 전문 검수자입니다.\n' +
+        '아래 대본을 분석하여 모든 종류의 오류를 찾아내세요.\n\n' +
+        '## 중요: 반드시 아래 모든 카테고리에서 오류를 검토하세요\n\n' +
+        '### 1. 시대착오 (현대어/근대어) - 반드시 검토\n' +
+        '다음 현대어가 대본에 있으면 반드시 오류로 검출하세요:\n' +
+        rulesString + '\n\n' +
+        '### 2. 인물 설정 오류\n' +
+        '### 3. 시간 왜곡\n' +
+        '### 4. 이야기 흐름 오류\n' +
+        '### 5. 쌩뚱맞은 표현\n' +
+        '### 6. 캐릭터 일관성\n' +
+        '### 7. 장면 연결성\n\n' +
+        '## 분석 대상 대본:\n```\n' + script + '\n```\n\n' +
+        '## 중요 지시사항\n' +
+        '- "나레이션:" 또는 "(나레이션)"으로 시작하는 부분은 오류로 처리하지 마세요.\n' +
+        '- reason(사유)은 15자 이내로 간결하게 작성하세요.\n\n' +
+        '## 응답 형식 (JSON만 반환):\n' +
+        '```json\n{"errors": [{"type": "시대착오", "original": "원문", "revised": "수정문", "reason": "사유", "severity": "high"}]}\n```';
+}
+
+function buildStage2Prompt(script) {
+    var rulesString = getHistoricalRulesString();
+    
+    return '당신은 조선시대 사극 대본 최종 검수 전문가입니다.\n\n' +
+        '## 분석 대상 대본:\n```\n' + script + '\n```\n\n' +
+        '## 중요 지시사항\n' +
+        '- "나레이션:" 부분은 오류로 처리하지 마세요.\n' +
+        '- reason은 15자 이내로 작성하세요.\n' +
+        '- 각 항목 100점 만점으로 점수를 평가하세요.\n' +
+        '- improvements에 각 항목별 100점 달성을 위한 구체적 개선안을 작성하세요.\n' +
+        '- perfectScript에 모든 개선안을 반영한 100점짜리 전체 대본을 작성하세요.\n\n' +
+        '## 응답 형식 (JSON만 반환):\n' +
+        '```json\n' +
+        '{\n' +
+        '  "errors": [{"type": "시대착오", "original": "원문", "revised": "수정문", "reason": "사유", "severity": "high"}],\n' +
+        '  "scores": {"senior": 85, "fun": 80, "flow": 90, "retention": 85},\n' +
+        '  "improvements": [\n' +
+        '    {"category": "시니어적합도", "currentScore": 85, "suggestion": "구체적 개선안"},\n' +
+        '    {"category": "재미요소", "currentScore": 80, "suggestion": "구체적 개선안"},\n' +
+        '    {"category": "이야기흐름", "currentScore": 90, "suggestion": "구체적 개선안"},\n' +
+        '    {"category": "시청자이탈방지", "currentScore": 85, "suggestion": "구체적 개선안"}\n' +
+        '  ],\n' +
+        '  "perfectScript": "모든 개선안을 반영하여 4개 항목 모두 100점이 되도록 수정한 전체 대본"\n' +
+        '}\n```';
+}
+
+async function callGeminiAPI(prompt) {
+    var apiKey = localStorage.getItem('GEMINI_API_KEY');
+    var validation = validateApiKey(apiKey);
+    if (!validation.valid) {
+        throw new Error(validation.message);
+    }
+
+    currentAbortController = new AbortController();
+    var stopBtn = document.getElementById('btn-stop-analysis');
+    if (stopBtn) stopBtn.disabled = false;
+
+    var url = API_CONFIG.ENDPOINT + '/' + API_CONFIG.MODEL + ':generateContent?key=' + apiKey;
+
+    var response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+                temperature: 0.1,
+                topK: 40,
+                topP: 0.95,
+                maxOutputTokens: API_CONFIG.MAX_OUTPUT_TOKENS
+            }
+        }),
+        signal: currentAbortController.signal
+    });
+
+    if (!response.ok) {
+        var errorData = await response.json().catch(function() { return {}; });
+        throw new Error('API 오류: ' + (errorData.error?.message || response.statusText));
+    }
+
+    var data = await response.json();
+    if (stopBtn) stopBtn.disabled = true;
+    currentAbortController = null;
+
+    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+        return data.candidates[0].content.parts[0].text;
+    }
+    throw new Error('API 응답 형식 오류');
+}
+
+function parseApiResponse(responseText) {
+    var jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonMatch) {
+        return JSON.parse(jsonMatch[1]);
+    }
+    var jsonStart = responseText.indexOf('{');
+    var jsonEnd = responseText.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+        return JSON.parse(responseText.substring(jsonStart, jsonEnd + 1));
+    }
+    throw new Error('JSON 파싱 실패');
+}
+
+function showProgress(message) {
+    var container = document.getElementById('progress-container');
+    if (container) {
+        container.style.display = 'block';
+        updateProgress(0, message);
+    }
+}
+
+function updateProgress(percent, message) {
+    var bar = document.getElementById('progress-bar');
+    var text = document.getElementById('progress-text');
+    if (bar) bar.style.width = percent + '%';
+    if (text) text.textContent = message || '';
+}
+
+function hideProgress() {
+    var container = document.getElementById('progress-container');
+    if (container) container.style.display = 'none';
+}
+
+async function startStage1Analysis() {
+    var script = document.getElementById('original-script').value.trim();
+    if (!script) { alert('분석할 대본을 입력해주세요.'); return; }
+    var apiKey = localStorage.getItem('GEMINI_API_KEY');
+    if (!apiKey) { alert('API 키를 먼저 설정해주세요.'); return; }
+
+    showProgress('1차 분석 시작...');
+    updateProgress(10, 'AI 분석 요청 중...');
+
+    try {
+        state.stage1.originalScript = script;
+        state.stage1.isFixed = false;
+        var prompt = buildStage1Prompt(script);
+        updateProgress(30, 'Gemini API 응답 대기 중...');
+        var response = await callGeminiAPI(prompt);
+        updateProgress(70, '분석 결과 처리 중...');
+        var result = parseApiResponse(response);
+        state.stage1.analysis = result;
+        state.stage1.allErrors = (result.errors || []).map(function(err, idx) {
+            return { id: 'stage1-error-' + idx, type: err.type, original: err.original, revised: err.revised, reason: err.reason, severity: err.severity, useRevised: true };
+        });
+        updateProgress(90, '결과 표시 중...');
+        displayStage1Results();
+        updateProgress(100, '1차 분석 완료!');
+        setTimeout(hideProgress, 1000);
+    } catch (error) {
+        if (error.name !== 'AbortError') { alert('분석 중 오류가 발생했습니다: ' + error.message); }
+        hideProgress();
+    }
+}
+
+async function startStage2Analysis() {
+    var script = state.stage1.fixedScript || state.stage1.originalScript;
+    if (!script) { alert('1차 분석을 먼저 완료해주세요.'); return; }
+    var apiKey = localStorage.getItem('GEMINI_API_KEY');
+    if (!apiKey) { alert('API 키를 먼저 설정해주세요.'); return; }
+
+    showProgress('2차 분석 시작...');
+    updateProgress(10, 'AI 정밀 분석 요청 중...');
+
+    try {
+        state.stage2.originalScript = script;
+        state.stage2.isFixed = false;
+        var prompt = buildStage2Prompt(script);
+        updateProgress(30, 'Gemini API 응답 대기 중...');
+        var response = await callGeminiAPI(prompt);
+        updateProgress(70, '분석 결과 처리 중...');
+        var result = parseApiResponse(response);
+        state.stage2.analysis = result;
+        state.stage2.allErrors = (result.errors || []).map(function(err, idx) {
+            return { id: 'stage2-error-' + idx, type: err.type, original: err.original, revised: err.revised, reason: err.reason, severity: err.severity, useRevised: true };
+        });
+        if (result.scores) state.scores = result.scores;
+        if (result.perfectScript) state.perfectScript = result.perfectScript;
+        updateProgress(90, '결과 표시 중...');
+        displayStage2Results();
+        if (result.scores) displayScoresAndPerfectScript(result.scores, result.improvements, result.perfectScript);
+        updateProgress(100, '2차 분석 완료!');
+        setTimeout(hideProgress, 1000);
+    } catch (error) {
+        if (error.name !== 'AbortError') { alert('분석 중 오류가 발생했습니다: ' + error.message); }
+        hideProgress();
+    }
+}
+
+function displayStage1Results() {
+    var container = document.getElementById('analysis-stage1');
+    if (!container) return;
+    var errors = state.stage1.allErrors;
+    if (!errors || errors.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:30px;color:#69f0ae;font-size:18px;">✅ 오류가 발견되지 않았습니다.</div>';
+    } else {
+        var html = '<table class="analysis-table"><thead><tr><th>유형</th><th>원문</th><th>수정</th><th>사유</th></tr></thead><tbody>';
+        errors.forEach(function(err) {
+            var severityColor = err.severity === 'high' ? '#ff5555' : (err.severity === 'medium' ? '#ffaa00' : '#69f0ae');
+            html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;" onmouseover="this.style.background=\'#3a3a3a\'" onmouseout="this.style.background=\'\'">' +
+                '<td class="type-cell" style="color:' + severityColor + ';font-weight:bold;">' + formatTypeText(err.type) + '</td>' +
+                '<td style="color:#ff9800;font-size:11px;">' + escapeHtml(err.original) + '</td>' +
+                '<td style="color:#69f0ae;font-size:11px;">' + escapeHtml(err.revised) + '</td>' +
+                '<td style="color:#aaa;font-size:11px;">' + escapeHtml(err.reason) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+        container.querySelectorAll('tr[data-marker-id]').forEach(function(row) {
+            row.addEventListener('click', function() {
+                var markerId = this.getAttribute('data-marker-id');
+                var errorIndex = findErrorIndexById('stage1', markerId);
+                if (errorIndex >= 0) { setCurrentError('stage1', errorIndex); scrollToMarker('stage1', markerId); }
+            });
+        });
+    }
+    renderScriptWithMarkers('stage1');
+    enableStage1Buttons(errors && errors.length > 0);
+}
+
+function displayStage2Results() {
+    var container = document.getElementById('analysis-stage2');
+    if (!container) return;
+    var errors = state.stage2.allErrors;
+    if (!errors || errors.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:30px;color:#69f0ae;font-size:18px;">✅ 추가 오류가 발견되지 않았습니다.</div>';
+    } else {
+        var html = '<table class="analysis-table"><thead><tr><th>유형</th><th>원문</th><th>수정</th><th>사유</th></tr></thead><tbody>';
+        errors.forEach(function(err) {
+            var severityColor = err.severity === 'high' ? '#ff5555' : (err.severity === 'medium' ? '#ffaa00' : '#69f0ae');
+            html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;" onmouseover="this.style.background=\'#3a3a3a\'" onmouseout="this.style.background=\'\'">' +
+                '<td class="type-cell" style="color:' + severityColor + ';font-weight:bold;">' + formatTypeText(err.type) + '</td>' +
+                '<td style="color:#ff9800;font-size:11px;">' + escapeHtml(err.original) + '</td>' +
+                '<td style="color:#69f0ae;font-size:11px;">' + escapeHtml(err.revised) + '</td>' +
+                '<td style="color:#aaa;font-size:11px;">' + escapeHtml(err.reason) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+        container.querySelectorAll('tr[data-marker-id]').forEach(function(row) {
+            row.addEventListener('click', function() {
+                var markerId = this.getAttribute('data-marker-id');
+                var errorIndex = findErrorIndexById('stage2', markerId);
+                if (errorIndex >= 0) { setCurrentError('stage2', errorIndex); scrollToMarker('stage2', markerId); }
+            });
+        });
+    }
+    renderScriptWithMarkers('stage2');
+    enableStage2Buttons(errors && errors.length > 0);
+}
+
+function displayScoresAndPerfectScript(scores, improvements, perfectScript) {
+    var section = ensureScoreSection();
+    if (!section) return;
+    
+    var senior = scores.senior || 0;
+    var fun = scores.fun || 0;
+    var flow = scores.flow || 0;
+    var retention = scores.retention || 0;
+    var average = Math.round((senior + fun + flow + retention) / 4);
+    var passed = average >= 95;
+    
+    var html = '<div class="score-perfect-container">' +
+        '<div class="score-panel">' +
+        '<h3 style="color:#fff;margin-bottom:15px;text-align:center;">📊 품질 평가 점수</h3>' +
+        '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:15px;">' +
+        createScoreCard('시니어 적합도', senior, '#4CAF50') +
+        createScoreCard('이야기 흐름', flow, '#2196F3') +
+        createScoreCard('재미 요소', fun, '#FF9800') +
+        createScoreCard('시청자 이탈 방지', retention, '#9C27B0') +
+        '</div>' +
+        '<div style="text-align:center;padding:15px;background:#2d2d2d;border-radius:8px;margin-bottom:15px;">' +
+        '<div style="font-size:20px;color:#fff;">평균: <span style="color:' + (passed ? '#69f0ae' : '#ff5555') + ';font-weight:bold;">' + average + '점</span></div>' +
+        '<div style="font-size:16px;color:' + (passed ? '#69f0ae' : '#ff5555') + ';">' + (passed ? '✅ 합격' : '❌ 미합격') + '</div>' +
+        '</div>';
+    
+    if (improvements && improvements.length > 0) {
+        html += '<div><h4 style="color:#ffaa00;margin-bottom:10px;font-size:14px;">💡 개선 제안</h4>';
+        improvements.forEach(function(imp) {
+            html += '<div style="background:#2d2d2d;padding:10px;border-radius:6px;margin-bottom:8px;border-left:3px solid #ffaa00;">' +
+                '<div style="color:#fff;font-weight:bold;font-size:12px;">' + escapeHtml(imp.category) + ' (' + imp.currentScore + '점)</div>' +
+                '<div style="color:#aaa;font-size:11px;margin-top:5px;">' + escapeHtml(imp.suggestion) + '</div></div>';
+        });
+        html += '</div>';
+    }
+    html += '</div>';
+    
+    html += '<div class="perfect-panel">' +
+        '<h3 style="color:#69f0ae;margin-bottom:15px;text-align:center;">💯 100점 수정 대본</h3>' +
+        '<div class="perfect-script-content">' + escapeHtml(perfectScript || '100점 수정 대본이 생성되지 않았습니다.') + '</div>' +
+        '<div style="text-align:center;margin-top:15px;">' +
+        '<button id="btn-download-perfect" style="background:#69f0ae;color:#000;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-weight:bold;">📥 100점 대본 다운로드</button>' +
+        '</div></div></div>';
+    
+    section.innerHTML = html;
+    section.style.display = 'block';
+    
+    var downloadBtn = document.getElementById('btn-download-perfect');
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', function() {
+            if (perfectScript) {
+                downloadScript(perfectScript);
+            } else {
+                alert('100점 수정 대본이 없습니다.');
+            }
+        });
+    }
+}
+
+function createScoreCard(label, score, color) {
+    return '<div style="background:#2d2d2d;padding:10px;border-radius:6px;text-align:center;">' +
+        '<div style="color:#aaa;font-size:10px;margin-bottom:3px;">' + label + '</div>' +
+        '<div style="font-size:24px;font-weight:bold;color:' + color + ';">' + score + '</div>' +
+        '<div style="width:100%;background:#444;height:6px;border-radius:3px;margin-top:5px;">' +
+        '<div style="width:' + score + '%;background:' + color + ';height:100%;border-radius:3px;"></div></div></div>';
+}
+
+function enableStage1Buttons(hasErrors) {
+    var btnBefore = document.getElementById('btn-revert-before-stage1');
+    var btnAfter = document.getElementById('btn-revert-after-stage1');
+    var btnFix = document.getElementById('btn-fix-script-stage1');
+    if (btnBefore) btnBefore.disabled = !hasErrors;
+    if (btnAfter) btnAfter.disabled = !hasErrors;
+    if (btnFix) btnFix.disabled = false;
+}
+
+function enableStage2Buttons(hasErrors) {
+    var btnBefore = document.getElementById('btn-revert-before-stage2');
+    var btnAfter = document.getElementById('btn-revert-after-stage2');
+    var btnFix = document.getElementById('btn-fix-script-stage2');
+    if (btnBefore) btnBefore.disabled = !hasErrors;
+    if (btnAfter) btnAfter.disabled = !hasErrors;
+    if (btnFix) btnFix.disabled = false;
+}
+
+function fixScript(stage) {
+    var s = state[stage];
+    var text = s.originalScript;
+    var errors = s.allErrors || [];
+    errors.forEach(function(err) {
+        if (err.useRevised && err.original && err.revised) {
+            text = text.split(err.original).join(err.revised);
+        }
+    });
+    s.fixedScript = text;
+    s.isFixed = true;
+    if (stage === 'stage2') state.finalScript = text;
+    renderScriptWithMarkers(stage);
+    alert((stage === 'stage1' ? '1차' : '최종') + ' 수정본이 적용되었습니다.');
 }
