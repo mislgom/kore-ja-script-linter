@@ -1,15 +1,15 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.48 - Vertex AI API 키 + Gemini 2.5 Flash
- * - v4.48: 대본 비교하기 기능 추가 (최종 수정 vs 100점 대본)
- * - v4.47: 페이지 로드 시 품질 평가 + 100점 수정 대본 박스 즉시 표시
+ * main.js v4.49 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.49: 100점 수정 대본 개선 (구체적 프롬프트 + 녹색 하이라이트)
+ * - v4.48: 대본 비교하기 기능 추가
  * - ENDPOINT: generativelanguage.googleapis.com
  * - TIMEOUT: 300000 ms
  * - MAX_OUTPUT_TOKENS: 16384
  */
 
-console.log('🚀 main.js v4.48 로드됨');
-console.log('📌 v4.48: 대본 비교하기 기능 추가');
+console.log('🚀 main.js v4.49 로드됨');
+console.log('📌 v4.49: 100점 수정 대본 개선 - 구체적 프롬프트 + 녹색 하이라이트');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -179,6 +179,7 @@ var state = {
     },
     finalScript: '',
     perfectScript: '',
+    changePoints: [],
     scores: null
 };
 
@@ -217,7 +218,7 @@ function initApp() {
     console.log('📊 총 ' + getTotalRulesCount() + '개 시대고증 규칙 로드됨');
     console.log('⏱️ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('🤖 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.48 초기화 완료');
+    console.log('✅ main.js v4.49 초기화 완료');
 }
 
 function initEscKeyHandler() {
@@ -268,7 +269,12 @@ function addStyles() {
         '.type-cell{font-size:11px;line-height:1.3;word-break:keep-all;}' +
         '.score-perfect-container{display:flex;gap:20px;margin-top:20px;}' +
         '.score-panel,.perfect-panel{flex:1;background:#1e1e1e;border-radius:10px;padding:20px;min-height:400px;}' +
-        '.perfect-script-content{background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#69f0ae;max-height:500px;overflow-y:auto;}' +
+        '.perfect-script-content{background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;max-height:500px;overflow-y:auto;}' +
+        '.perfect-modified{color:#69f0ae;font-weight:bold;}' +
+        '.change-points-section{margin-top:15px;padding:15px;background:#2d2d2d;border-radius:8px;max-height:200px;overflow-y:auto;}' +
+        '.change-points-title{color:#ffaa00;font-weight:bold;margin-bottom:10px;font-size:14px;}' +
+        '.change-point-item{display:block;background:#1e1e1e;color:#69f0ae;padding:8px 12px;margin:5px 0;border-radius:5px;cursor:pointer;font-size:12px;border-left:3px solid #69f0ae;transition:all 0.2s;}' +
+        '.change-point-item:hover{background:#333;padding-left:15px;}' +
         '.compare-modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:10000;overflow:auto;}' +
         '.compare-content{display:flex;flex-direction:column;width:100%;height:100%;padding:20px;box-sizing:border-box;}' +
         '.compare-panels{display:flex;flex:1;gap:20px;min-height:0;}' +
@@ -331,7 +337,6 @@ function createFullViewModal() {
     });
 }
 
-// ★★★ v4.48 추가: 대본 비교 모달 생성 ★★★
 function createCompareModal() {
     if (document.getElementById('compare-modal')) return;
     
@@ -364,7 +369,6 @@ function createCompareModal() {
     });
 }
 
-// ★★★ v4.48 추가: 대본 비교 모달 열기 ★★★
 function openCompareModal() {
     var modal = document.getElementById('compare-modal');
     if (!modal) return;
@@ -381,10 +385,8 @@ function openCompareModal() {
     var rightBody = document.getElementById('compare-right-body');
     var diffList = document.getElementById('compare-diff-list');
     
-    // 차이점 찾기
     var differences = findDifferences(finalScript, perfectScript);
     
-    // 왼쪽: 최종 수정 반영 대본 (차이점 하이라이트)
     var leftHtml = escapeHtml(finalScript);
     differences.forEach(function(diff, idx) {
         if (diff.original) {
@@ -394,7 +396,6 @@ function openCompareModal() {
     });
     leftBody.innerHTML = leftHtml;
     
-    // 오른쪽: 100점 수정 대본 (차이점 하이라이트)
     var rightHtml = escapeHtml(perfectScript);
     differences.forEach(function(diff, idx) {
         if (diff.modified) {
@@ -404,7 +405,6 @@ function openCompareModal() {
     });
     rightBody.innerHTML = rightHtml;
     
-    // 하단: 수정 포인트 목록
     diffList.innerHTML = '';
     if (differences.length === 0) {
         diffList.innerHTML = '<div style="color:#888;padding:10px;">차이점이 없습니다.</div>';
@@ -425,15 +425,12 @@ function openCompareModal() {
     document.body.style.overflow = 'hidden';
 }
 
-// ★★★ v4.48 추가: 차이점 찾기 함수 ★★★
 function findDifferences(text1, text2) {
     var differences = [];
     
-    // 문장 단위로 분리
     var sentences1 = text1.split(/(?<=[.!?。])\s*/);
     var sentences2 = text2.split(/(?<=[.!?。])\s*/);
     
-    // 간단한 차이점 비교 (완전 일치하지 않는 문장 찾기)
     var maxLen = Math.max(sentences1.length, sentences2.length);
     
     for (var i = 0; i < maxLen; i++) {
@@ -441,7 +438,6 @@ function findDifferences(text1, text2) {
         var s2 = sentences2[i] || '';
         
         if (s1.trim() !== s2.trim() && (s1.trim() || s2.trim())) {
-            // 더 세밀한 차이점 찾기 (단어 단위)
             var words1 = s1.split(/\s+/);
             var words2 = s2.split(/\s+/);
             
@@ -450,7 +446,6 @@ function findDifferences(text1, text2) {
                 var w2 = words2[j] || '';
                 
                 if (w1 !== w2 && (w1 || w2)) {
-                    // 중복 방지
                     var isDuplicate = differences.some(function(d) {
                         return d.original === w1 && d.modified === w2;
                     });
@@ -467,16 +462,13 @@ function findDifferences(text1, text2) {
         }
     }
     
-    // 최대 30개까지만
     return differences.slice(0, 30);
 }
 
-// ★★★ v4.48 추가: 차이점 위치로 스크롤 ★★★
 function scrollToDiff(index) {
     var leftBody = document.getElementById('compare-left-body');
     var rightBody = document.getElementById('compare-right-body');
     
-    // 왼쪽 패널에서 해당 하이라이트 찾기
     var leftHighlight = leftBody.querySelector('[data-diff-id="diff-left-' + index + '"]');
     var rightHighlight = rightBody.querySelector('[data-diff-id="diff-right-' + index + '"]');
     
@@ -501,7 +493,6 @@ function scrollToDiff(index) {
     }
 }
 
-// ★★★ v4.48 추가: 대본 비교 모달 닫기 ★★★
 function closeCompareModal() {
     var modal = document.getElementById('compare-modal');
     if (modal) {
@@ -899,8 +890,9 @@ function downloadScript(script) {
         alert('다운로드할 내용이 없습니다.');
         return;
     }
+    var cleanScript = script.replace(/★/g, '');
     try {
-        var blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
+        var blob = new Blob([cleanScript], { type: 'text/plain;charset=utf-8' });
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a');
         a.href = url;
@@ -1171,30 +1163,66 @@ function buildStage1Prompt(script) {
         '```json\n{"errors": [{"type": "시대착오", "original": "원문", "revised": "수정문", "reason": "사유", "severity": "high"}]}\n```';
 }
 
+// ★★★ v4.49 변경: 구체적인 100점 대본 생성 프롬프트 ★★★
 function buildStage2Prompt(script) {
-    var rulesString = getHistoricalRulesString();
-    
-    return '당신은 조선시대 사극 대본 최종 검수 전문가입니다.\n\n' +
+    return '당신은 조선시대 사극 대본 전문 작가이자 검수 전문가입니다.\n\n' +
         '## 분석 대상 대본:\n```\n' + script + '\n```\n\n' +
-        '## 중요 지시사항\n' +
-        '- "나레이션:" 부분은 오류로 처리하지 마세요.\n' +
-        '- reason은 15자 이내로 작성하세요.\n' +
-        '- 각 항목 100점 만점으로 점수를 평가하세요.\n' +
-        '- improvements에 각 항목별 100점 달성을 위한 구체적 개선안을 작성하세요.\n' +
-        '- perfectScript에 모든 개선안을 반영한 100점짜리 전체 대본을 작성하세요.\n\n' +
-        '## 응답 형식 (JSON만 반환):\n' +
+        '## ===== 절대 금지 사항 =====\n' +
+        '다음은 절대로 추가하거나 사용하지 마세요:\n' +
+        '- 소리 효과 (발자국 소리, 바람 소리, 문 여는 소리 등)\n' +
+        '- 감탄사/추임새 (허!, 흥!, 에잇!, 아이고! 등)\n' +
+        '- 과도한 감정 지시문 ((분노하며), (냉소적으로), (비웃으며) 등)\n' +
+        '- 모든 대사를 고풍스럽게 바꾸지 말 것\n\n' +
+        '## ===== 평가 기준 (각 100점 만점) =====\n\n' +
+        '### 1. 시니어 적합도\n' +
+        '- 문장이 명확하고 이해하기 쉬운가\n' +
+        '- 인물 관계가 호칭으로 자연스럽게 드러나는가\n' +
+        '- 고풍스러운 어휘는 전체의 20~30%만 적용 (과하지 않게)\n\n' +
+        '### 2. 재미 요소\n' +
+        '- 대사 내용 자체로 갈등과 긴장감이 표현되는가\n' +
+        '- 인물의 속마음이나 의도가 대사에 담겨있는가\n' +
+        '- 과장 없이 자연스러운 재미가 있는가\n\n' +
+        '### 3. 이야기 흐름\n' +
+        '- 장면 간 연결이 자연스러운가\n' +
+        '- 인과관계가 명확한가\n' +
+        '- 흐름상 필요한 대사가 빠져있지 않은가 (1~2문장 이내로 보충)\n\n' +
+        '### 4. 시청자 이탈 방지\n' +
+        '- 초반에 호기심을 유발하는 대사가 있는가\n' +
+        '- 장면 끝에 다음이 궁금해지는 요소가 있는가\n' +
+        '- 자연스러운 후킹 (과하지 않게)\n\n' +
+        '## ===== 100점 수정 대본 작성 규칙 =====\n\n' +
+        '1. 수정하거나 추가한 대사 앞에는 반드시 ★ 표시를 붙이세요\n' +
+        '2. 원본 대사는 그대로 두고, 개선이 필요한 부분만 수정하세요\n' +
+        '3. 추가 대사는 장면당 1~2문장 이내로 최소화하세요\n' +
+        '4. 전체 대본을 처음부터 끝까지 빠짐없이 출력하세요\n' +
+        '5. 변경 포인트 목록을 반드시 제공하세요\n\n' +
+        '## ===== 응답 형식 (JSON만 반환) =====\n' +
         '```json\n' +
         '{\n' +
-        '  "errors": [{"type": "시대착오", "original": "원문", "revised": "수정문", "reason": "사유", "severity": "high"}],\n' +
-        '  "scores": {"senior": 85, "fun": 80, "flow": 90, "retention": 85},\n' +
-        '  "improvements": [\n' +
-        '    {"category": "시니어적합도", "currentScore": 85, "suggestion": "구체적 개선안"},\n' +
-        '    {"category": "재미요소", "currentScore": 80, "suggestion": "구체적 개선안"},\n' +
-        '    {"category": "이야기흐름", "currentScore": 90, "suggestion": "구체적 개선안"},\n' +
-        '    {"category": "시청자이탈방지", "currentScore": 85, "suggestion": "구체적 개선안"}\n' +
+        '  "errors": [\n' +
+        '    {"type": "오류유형", "original": "원문", "revised": "수정문", "reason": "사유(15자이내)", "severity": "high/medium/low"}\n' +
         '  ],\n' +
-        '  "perfectScript": "모든 개선안을 반영하여 4개 항목 모두 100점이 되도록 수정한 전체 대본"\n' +
-        '}\n```';
+        '  "scores": {\n' +
+        '    "senior": 점수,\n' +
+        '    "fun": 점수,\n' +
+        '    "flow": 점수,\n' +
+        '    "retention": 점수\n' +
+        '  },\n' +
+        '  "improvements": [\n' +
+        '    {\n' +
+        '      "category": "시니어적합도",\n' +
+        '      "currentScore": 현재점수,\n' +
+        '      "issues": [\n' +
+        '        {"location": "위치(예: S#3)", "problem": "문제점", "solution": "해결방법"}\n' +
+        '      ]\n' +
+        '    }\n' +
+        '  ],\n' +
+        '  "changePoints": [\n' +
+        '    {"location": "S#1", "description": "변경 내용 설명", "category": "개선항목"}\n' +
+        '  ],\n' +
+        '  "perfectScript": "★표시가 포함된 100점 수정 전체 대본"\n' +
+        '}\n' +
+        '```';
 }
 
 async function callGeminiAPI(prompt) {
@@ -1327,9 +1355,10 @@ async function startStage2Analysis() {
         });
         if (result.scores) state.scores = result.scores;
         if (result.perfectScript) state.perfectScript = result.perfectScript;
+        if (result.changePoints) state.changePoints = result.changePoints;
         updateProgress(90, '결과 표시 중...');
         displayStage2Results();
-        if (result.scores) displayScoresAndPerfectScript(result.scores, result.improvements, result.perfectScript);
+        if (result.scores) displayScoresAndPerfectScript(result.scores, result.improvements, result.perfectScript, result.changePoints);
         updateProgress(100, '2차 분석 완료!');
         setTimeout(hideProgress, 1000);
     } catch (error) {
@@ -1398,7 +1427,8 @@ function displayStage2Results() {
     enableStage2Buttons(errors && errors.length > 0);
 }
 
-function displayScoresAndPerfectScript(scores, improvements, perfectScript) {
+// ★★★ v4.49 변경: 100점 대본 녹색 하이라이트 + 변경 포인트 표시 ★★★
+function displayScoresAndPerfectScript(scores, improvements, perfectScript, changePoints) {
     var scoreDisplay = document.getElementById('score-display');
     if (!scoreDisplay) return;
     
@@ -1426,24 +1456,51 @@ function displayScoresAndPerfectScript(scores, improvements, perfectScript) {
     if (improvements && improvements.length > 0) {
         html += '<div><h4 style="color:#ffaa00;margin-bottom:10px;font-size:14px;">💡 개선 제안</h4>';
         improvements.forEach(function(imp) {
+            var issuesHtml = '';
+            if (imp.issues && imp.issues.length > 0) {
+                imp.issues.forEach(function(issue) {
+                    issuesHtml += '<div style="font-size:10px;color:#aaa;margin-top:3px;">• ' + escapeHtml(issue.location) + ': ' + escapeHtml(issue.solution) + '</div>';
+                });
+            } else if (imp.suggestion) {
+                issuesHtml = '<div style="color:#aaa;font-size:11px;margin-top:5px;">' + escapeHtml(imp.suggestion) + '</div>';
+            }
             html += '<div style="background:#2d2d2d;padding:10px;border-radius:6px;margin-bottom:8px;border-left:3px solid #ffaa00;">' +
-                '<div style="color:#fff;font-weight:bold;font-size:12px;">' + escapeHtml(imp.category) + ' (' + imp.currentScore + '점)</div>' +
-                '<div style="color:#aaa;font-size:11px;margin-top:5px;">' + escapeHtml(imp.suggestion) + '</div></div>';
+                '<div style="color:#fff;font-weight:bold;font-size:12px;">' + escapeHtml(imp.category) + ' (' + (imp.currentScore || '') + '점)</div>' +
+                issuesHtml + '</div>';
         });
         html += '</div>';
     }
     html += '</div>';
     
+    // 100점 수정 대본 - ★표시를 녹색으로 변환
+    var formattedScript = formatPerfectScript(perfectScript || '100점 수정 대본이 생성되지 않았습니다.');
+    
     html += '<div class="perfect-panel">' +
         '<h3 style="color:#69f0ae;margin-bottom:15px;text-align:center;">💯 100점 수정 대본</h3>' +
-        '<div class="perfect-script-content">' + escapeHtml(perfectScript || '100점 수정 대본이 생성되지 않았습니다.') + '</div>' +
-        '<div style="text-align:center;margin-top:15px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">' +
+        '<div class="perfect-script-content">' + formattedScript + '</div>';
+    
+    // 변경 포인트 목록
+    if (changePoints && changePoints.length > 0) {
+        html += '<div class="change-points-section">' +
+            '<div class="change-points-title">📍 변경 포인트 (' + changePoints.length + '개)</div>';
+        changePoints.forEach(function(point, idx) {
+            html += '<div class="change-point-item" data-point-index="' + idx + '">' +
+                '<strong>[' + escapeHtml(point.location) + ']</strong> ' + 
+                escapeHtml(point.description) + 
+                ' <span style="color:#888;font-size:10px;">(' + escapeHtml(point.category) + ')</span>' +
+                '</div>';
+        });
+        html += '</div>';
+    }
+    
+    html += '<div style="text-align:center;margin-top:15px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">' +
         '<button id="btn-download-perfect" style="background:#69f0ae;color:#000;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-weight:bold;">📥 100점 대본 다운로드</button>' +
         '<button id="btn-compare-scripts" style="background:#9c27b0;color:#fff;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-weight:bold;">🔍 대본 비교하기</button>' +
         '</div></div></div>';
     
     scoreDisplay.innerHTML = html;
     
+    // 다운로드 버튼 이벤트
     var downloadBtn = document.getElementById('btn-download-perfect');
     if (downloadBtn) {
         downloadBtn.addEventListener('click', function() {
@@ -1455,12 +1512,75 @@ function displayScoresAndPerfectScript(scores, improvements, perfectScript) {
         });
     }
     
-    // ★★★ v4.48 추가: 대본 비교하기 버튼 이벤트 ★★★
+    // 대본 비교하기 버튼 이벤트
     var compareBtn = document.getElementById('btn-compare-scripts');
     if (compareBtn) {
         compareBtn.addEventListener('click', function() {
             openCompareModal();
         });
+    }
+    
+    // 변경 포인트 클릭 이벤트
+    document.querySelectorAll('.change-point-item').forEach(function(item) {
+        item.addEventListener('click', function() {
+            var idx = parseInt(this.getAttribute('data-point-index'));
+            scrollToPerfectScriptChange(idx, changePoints);
+        });
+    });
+}
+
+// ★★★ v4.49 추가: ★표시를 녹색으로 변환하는 함수 ★★★
+function formatPerfectScript(script) {
+    if (!script) return '';
+    
+    // HTML 이스케이프
+    var escaped = escapeHtml(script);
+    
+    // ★로 시작하는 줄을 녹색으로 표시
+    // 패턴: ★로 시작해서 줄 끝까지
+    var formatted = escaped.replace(/★([^\n]*)/g, '<span class="perfect-modified">★$1</span>');
+    
+    return formatted;
+}
+
+// ★★★ v4.49 추가: 변경 포인트 클릭 시 해당 위치로 스크롤 ★★★
+function scrollToPerfectScriptChange(index, changePoints) {
+    if (!changePoints || !changePoints[index]) return;
+    
+    var point = changePoints[index];
+    var scriptContent = document.querySelector('.perfect-script-content');
+    if (!scriptContent) return;
+    
+    // 해당 위치(S#숫자) 찾기
+    var location = point.location;
+    var text = scriptContent.innerHTML;
+    
+    // 위치 문자열이 포함된 부분 찾기
+    var searchText = escapeHtml(location);
+    var startIdx = text.indexOf(searchText);
+    
+    if (startIdx !== -1) {
+        // 임시로 하이라이트 추가
+        var highlightId = 'temp-highlight-' + index;
+        var before = text.substring(0, startIdx);
+        var match = text.substring(startIdx, startIdx + searchText.length);
+        var after = text.substring(startIdx + searchText.length);
+        
+        scriptContent.innerHTML = before + '<span id="' + highlightId + '" style="background:#69f0ae;color:#000;padding:2px 4px;border-radius:3px;">' + match + '</span>' + after;
+        
+        // 스크롤
+        var highlightEl = document.getElementById(highlightId);
+        if (highlightEl) {
+            highlightEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // 2초 후 하이라이트 제거
+            setTimeout(function() {
+                highlightEl.outerHTML = match;
+            }, 2000);
+        }
+    } else {
+        // 위치를 찾지 못하면 맨 위로 스크롤
+        scriptContent.scrollTop = 0;
     }
 }
 
