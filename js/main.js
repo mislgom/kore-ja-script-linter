@@ -1,15 +1,15 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.47 - Vertex AI API 키 + Gemini 2.5 Flash
+ * main.js v4.48 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.48: 대본 비교하기 기능 추가 (최종 수정 vs 100점 대본)
  * - v4.47: 페이지 로드 시 품질 평가 + 100점 수정 대본 박스 즉시 표시
- * - v4.46: 품질 평가 + 100점 수정 대본 좌우 분할
  * - ENDPOINT: generativelanguage.googleapis.com
  * - TIMEOUT: 300000 ms
  * - MAX_OUTPUT_TOKENS: 16384
  */
 
-console.log('🚀 main.js v4.47 로드됨');
-console.log('📌 v4.47: 페이지 로드 시 품질 평가 + 100점 수정 대본 박스 즉시 표시');
+console.log('🚀 main.js v4.48 로드됨');
+console.log('📌 v4.48: 대본 비교하기 기능 추가');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -212,17 +212,19 @@ function initApp() {
     addStyles();
     addFullViewButtonsToHeaders();
     createFullViewModal();
+    createCompareModal();
     initEscKeyHandler();
     console.log('📊 총 ' + getTotalRulesCount() + '개 시대고증 규칙 로드됨');
     console.log('⏱️ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('🤖 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.47 초기화 완료');
+    console.log('✅ main.js v4.48 초기화 완료');
 }
 
 function initEscKeyHandler() {
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             closeFullViewModal();
+            closeCompareModal();
         }
     });
 }
@@ -266,7 +268,20 @@ function addStyles() {
         '.type-cell{font-size:11px;line-height:1.3;word-break:keep-all;}' +
         '.score-perfect-container{display:flex;gap:20px;margin-top:20px;}' +
         '.score-panel,.perfect-panel{flex:1;background:#1e1e1e;border-radius:10px;padding:20px;min-height:400px;}' +
-        '.perfect-script-content{background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#69f0ae;max-height:500px;overflow-y:auto;}';
+        '.perfect-script-content{background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#69f0ae;max-height:500px;overflow-y:auto;}' +
+        '.compare-modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:10000;overflow:auto;}' +
+        '.compare-content{display:flex;flex-direction:column;width:100%;height:100%;padding:20px;box-sizing:border-box;}' +
+        '.compare-panels{display:flex;flex:1;gap:20px;min-height:0;}' +
+        '.compare-panel{flex:1;display:flex;flex-direction:column;background:#1e1e1e;border-radius:10px;overflow:hidden;}' +
+        '.compare-header{background:#333;padding:15px;text-align:center;font-weight:bold;color:#fff;border-bottom:1px solid #444;}' +
+        '.compare-body{flex:1;overflow:auto;padding:15px;background:#2d2d2d;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;}' +
+        '.compare-diff-section{margin-top:20px;background:#1e1e1e;border-radius:10px;padding:15px;max-height:200px;overflow-y:auto;}' +
+        '.compare-diff-title{color:#ffaa00;font-weight:bold;margin-bottom:10px;font-size:14px;}' +
+        '.compare-diff-item{display:inline-block;background:#2d2d2d;color:#69f0ae;padding:6px 12px;margin:4px;border-radius:5px;cursor:pointer;font-size:12px;border:1px solid #444;transition:all 0.2s;}' +
+        '.compare-diff-item:hover{background:#3d3d3d;border-color:#69f0ae;}' +
+        '.compare-close{position:fixed;top:20px;right:30px;font-size:40px;color:#fff;cursor:pointer;z-index:10001;}' +
+        '.compare-close:hover{color:#ff5555;}' +
+        '.diff-highlight{background:#69f0ae33;border-radius:3px;padding:2px 4px;}';
     document.head.appendChild(style);
 }
 
@@ -314,6 +329,185 @@ function createFullViewModal() {
     modal.addEventListener('click', function(e) {
         if (e.target === modal) closeFullViewModal();
     });
+}
+
+// ★★★ v4.48 추가: 대본 비교 모달 생성 ★★★
+function createCompareModal() {
+    if (document.getElementById('compare-modal')) return;
+    
+    var modal = document.createElement('div');
+    modal.id = 'compare-modal';
+    modal.className = 'compare-modal';
+    modal.innerHTML = 
+        '<span class="compare-close" id="compare-close">&times;</span>' +
+        '<div class="compare-content">' +
+            '<div class="compare-panels">' +
+                '<div class="compare-panel">' +
+                    '<div class="compare-header">✅ 최종 수정 반영 대본</div>' +
+                    '<div class="compare-body" id="compare-left-body"></div>' +
+                '</div>' +
+                '<div class="compare-panel">' +
+                    '<div class="compare-header">💯 100점 수정 대본</div>' +
+                    '<div class="compare-body" id="compare-right-body"></div>' +
+                '</div>' +
+            '</div>' +
+            '<div class="compare-diff-section">' +
+                '<div class="compare-diff-title">📍 수정된 부분 (클릭하면 해당 위치로 이동)</div>' +
+                '<div id="compare-diff-list"></div>' +
+            '</div>' +
+        '</div>';
+    document.body.appendChild(modal);
+    
+    document.getElementById('compare-close').addEventListener('click', closeCompareModal);
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) closeCompareModal();
+    });
+}
+
+// ★★★ v4.48 추가: 대본 비교 모달 열기 ★★★
+function openCompareModal() {
+    var modal = document.getElementById('compare-modal');
+    if (!modal) return;
+    
+    var finalScript = state.stage2.fixedScript || state.stage1.fixedScript || state.stage2.originalScript || state.stage1.originalScript || '';
+    var perfectScript = state.perfectScript || '';
+    
+    if (!finalScript || !perfectScript) {
+        alert('비교할 대본이 없습니다.\n2차 분석을 먼저 완료해주세요.');
+        return;
+    }
+    
+    var leftBody = document.getElementById('compare-left-body');
+    var rightBody = document.getElementById('compare-right-body');
+    var diffList = document.getElementById('compare-diff-list');
+    
+    // 차이점 찾기
+    var differences = findDifferences(finalScript, perfectScript);
+    
+    // 왼쪽: 최종 수정 반영 대본 (차이점 하이라이트)
+    var leftHtml = escapeHtml(finalScript);
+    differences.forEach(function(diff, idx) {
+        if (diff.original) {
+            var marker = '<span class="diff-highlight" data-diff-id="diff-left-' + idx + '">' + escapeHtml(diff.original) + '</span>';
+            leftHtml = leftHtml.replace(escapeHtml(diff.original), marker);
+        }
+    });
+    leftBody.innerHTML = leftHtml;
+    
+    // 오른쪽: 100점 수정 대본 (차이점 하이라이트)
+    var rightHtml = escapeHtml(perfectScript);
+    differences.forEach(function(diff, idx) {
+        if (diff.modified) {
+            var marker = '<span class="diff-highlight" data-diff-id="diff-right-' + idx + '">' + escapeHtml(diff.modified) + '</span>';
+            rightHtml = rightHtml.replace(escapeHtml(diff.modified), marker);
+        }
+    });
+    rightBody.innerHTML = rightHtml;
+    
+    // 하단: 수정 포인트 목록
+    diffList.innerHTML = '';
+    if (differences.length === 0) {
+        diffList.innerHTML = '<div style="color:#888;padding:10px;">차이점이 없습니다.</div>';
+    } else {
+        differences.forEach(function(diff, idx) {
+            var item = document.createElement('span');
+            item.className = 'compare-diff-item';
+            item.setAttribute('data-diff-index', idx);
+            item.textContent = (idx + 1) + '. ' + (diff.original ? diff.original.substring(0, 20) : '추가됨') + (diff.original && diff.original.length > 20 ? '...' : '');
+            item.addEventListener('click', function() {
+                scrollToDiff(idx);
+            });
+            diffList.appendChild(item);
+        });
+    }
+    
+    modal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+}
+
+// ★★★ v4.48 추가: 차이점 찾기 함수 ★★★
+function findDifferences(text1, text2) {
+    var differences = [];
+    
+    // 문장 단위로 분리
+    var sentences1 = text1.split(/(?<=[.!?。])\s*/);
+    var sentences2 = text2.split(/(?<=[.!?。])\s*/);
+    
+    // 간단한 차이점 비교 (완전 일치하지 않는 문장 찾기)
+    var maxLen = Math.max(sentences1.length, sentences2.length);
+    
+    for (var i = 0; i < maxLen; i++) {
+        var s1 = sentences1[i] || '';
+        var s2 = sentences2[i] || '';
+        
+        if (s1.trim() !== s2.trim() && (s1.trim() || s2.trim())) {
+            // 더 세밀한 차이점 찾기 (단어 단위)
+            var words1 = s1.split(/\s+/);
+            var words2 = s2.split(/\s+/);
+            
+            for (var j = 0; j < Math.max(words1.length, words2.length); j++) {
+                var w1 = words1[j] || '';
+                var w2 = words2[j] || '';
+                
+                if (w1 !== w2 && (w1 || w2)) {
+                    // 중복 방지
+                    var isDuplicate = differences.some(function(d) {
+                        return d.original === w1 && d.modified === w2;
+                    });
+                    
+                    if (!isDuplicate && w1.length > 1 && w2.length > 1) {
+                        differences.push({
+                            original: w1,
+                            modified: w2,
+                            index: i
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
+    // 최대 30개까지만
+    return differences.slice(0, 30);
+}
+
+// ★★★ v4.48 추가: 차이점 위치로 스크롤 ★★★
+function scrollToDiff(index) {
+    var leftBody = document.getElementById('compare-left-body');
+    var rightBody = document.getElementById('compare-right-body');
+    
+    // 왼쪽 패널에서 해당 하이라이트 찾기
+    var leftHighlight = leftBody.querySelector('[data-diff-id="diff-left-' + index + '"]');
+    var rightHighlight = rightBody.querySelector('[data-diff-id="diff-right-' + index + '"]');
+    
+    if (leftHighlight) {
+        leftHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        leftHighlight.style.background = '#69f0ae';
+        leftHighlight.style.color = '#000';
+        setTimeout(function() {
+            leftHighlight.style.background = '#69f0ae33';
+            leftHighlight.style.color = '';
+        }, 2000);
+    }
+    
+    if (rightHighlight) {
+        rightHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        rightHighlight.style.background = '#69f0ae';
+        rightHighlight.style.color = '#000';
+        setTimeout(function() {
+            rightHighlight.style.background = '#69f0ae33';
+            rightHighlight.style.color = '';
+        }, 2000);
+    }
+}
+
+// ★★★ v4.48 추가: 대본 비교 모달 닫기 ★★★
+function closeCompareModal() {
+    var modal = document.getElementById('compare-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
 }
 
 function openFullViewModal(stage) {
@@ -521,17 +715,14 @@ function addFullViewButtonsToHeaders() {
     }, 100);
 }
 
-// ★★★ v4.47 변경: 페이지 로드 시 기존 score-display에 박스 즉시 표시 ★★★
 function ensureScoreSection() {
     var scoreDisplay = document.getElementById('score-display');
     if (!scoreDisplay) return null;
     
-    // 이미 박스가 있으면 스킵
     if (scoreDisplay.querySelector('.score-perfect-container')) {
         return scoreDisplay;
     }
     
-    // 초기 박스 HTML (대기 상태)
     scoreDisplay.innerHTML = '<div class="score-perfect-container">' +
         '<div class="score-panel">' +
         '<h3 style="color:#fff;margin-bottom:15px;text-align:center;">📊 품질 평가 점수</h3>' +
@@ -1246,8 +1437,9 @@ function displayScoresAndPerfectScript(scores, improvements, perfectScript) {
     html += '<div class="perfect-panel">' +
         '<h3 style="color:#69f0ae;margin-bottom:15px;text-align:center;">💯 100점 수정 대본</h3>' +
         '<div class="perfect-script-content">' + escapeHtml(perfectScript || '100점 수정 대본이 생성되지 않았습니다.') + '</div>' +
-        '<div style="text-align:center;margin-top:15px;">' +
+        '<div style="text-align:center;margin-top:15px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">' +
         '<button id="btn-download-perfect" style="background:#69f0ae;color:#000;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-weight:bold;">📥 100점 대본 다운로드</button>' +
+        '<button id="btn-compare-scripts" style="background:#9c27b0;color:#fff;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-weight:bold;">🔍 대본 비교하기</button>' +
         '</div></div></div>';
     
     scoreDisplay.innerHTML = html;
@@ -1260,6 +1452,14 @@ function displayScoresAndPerfectScript(scores, improvements, perfectScript) {
             } else {
                 alert('100점 수정 대본이 없습니다.');
             }
+        });
+    }
+    
+    // ★★★ v4.48 추가: 대본 비교하기 버튼 이벤트 ★★★
+    var compareBtn = document.getElementById('btn-compare-scripts');
+    if (compareBtn) {
+        compareBtn.addEventListener('click', function() {
+            openCompareModal();
         });
     }
 }
