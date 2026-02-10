@@ -1,6 +1,7 @@
 /**
  * MISLGOM 대본 검수 자동 프로그램
- * main.js v4.52 - Vertex AI API 키 + Gemini 2.5 Flash
+ * main.js v4.53 - Vertex AI API 키 + Gemini 2.5 Flash
+ * - v4.53: 2차 분석 테이블 클릭 → 최종 수정 반영 스크롤 이동 + 개별 오류 독립 토글
  * - v4.52: 개별 수정 전/후 토글 + 나레이션 오류 제외 강화
  * - v4.51: 1차/2차 분석 프롬프트 강화 (오류 검출 정확도 향상)
  * - v4.50: 나레이션 조선어투 허용 강화 + 클릭 이동/버튼 수정
@@ -11,8 +12,8 @@
  * - MAX_OUTPUT_TOKENS: 16384
  */
 
-console.log('🚀 main.js v4.52 로드됨');
-console.log('📌 v4.52: 개별 수정 전/후 토글 + 나레이션 오류 제외 강화');
+console.log('🚀 main.js v4.53 로드됨');
+console.log('📌 v4.53: 2차 분석 테이블 클릭 → 최종 수정 반영 스크롤 이동 + 개별 오류 독립 토글');
 
 var HISTORICAL_RULES = {
     objects: [
@@ -221,7 +222,8 @@ function initApp() {
     console.log('📊 총 ' + getTotalRulesCount() + '개 시대고증 규칙 로드됨');
     console.log('⏱️ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('🤖 모델: ' + API_CONFIG.MODEL);
-    console.log('✅ main.js v4.52 초기화 완료');
+    console.log('✅ main.js v4.53 초기화 완료');
+    console.log('🆕 v4.53 신규 기능: 테이블 클릭 → 대본 스크롤 이동, 개별 오류 독립 토글');
 }
 
 function initEscKeyHandler() {
@@ -555,7 +557,7 @@ function openFullViewModal(stage) {
     btnBefore.innerHTML = '🔄 수정 전';
     btnBefore.style.cssText = 'background:#ff9800;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
     btnBefore.addEventListener('click', function() {
-        toggleCurrentError(stage, false);
+        toggleCurrentErrorOnly(stage, false);
         updateFullViewContent(stage, leftBody, rightBody);
     });
     
@@ -563,7 +565,7 @@ function openFullViewModal(stage) {
     btnAfter.innerHTML = '✅ 수정 후';
     btnAfter.style.cssText = 'background:#4CAF50;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
     btnAfter.addEventListener('click', function() {
-        toggleCurrentError(stage, true);
+        toggleCurrentErrorOnly(stage, true);
         updateFullViewContent(stage, leftBody, rightBody);
     });
     
@@ -933,7 +935,7 @@ function addRevertButton(container, stage) {
     btnBefore.style.cssText = 'background:#ff9800;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
     btnBefore.disabled = true;
     btnBefore.addEventListener('click', function() { 
-        toggleSelectedOrAllErrors(stage, false);
+        toggleCurrentErrorOnly(stage, false);
     });
 
     var btnAfter = document.createElement('button');
@@ -942,7 +944,7 @@ function addRevertButton(container, stage) {
     btnAfter.style.cssText = 'background:#4CAF50;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
     btnAfter.disabled = true;
     btnAfter.addEventListener('click', function() { 
-        toggleSelectedOrAllErrors(stage, true);
+        toggleCurrentErrorOnly(stage, true);
     });
 
     wrapper.appendChild(btnBefore);
@@ -957,6 +959,26 @@ function addRevertButton(container, stage) {
     wrapper.appendChild(btnFix);
 
     parent.appendChild(wrapper);
+}
+
+function toggleCurrentErrorOnly(stage, useRevised) {
+    var s = state[stage];
+    var errors = s.allErrors || [];
+    
+    if (errors.length === 0) {
+        console.log('⚠️ 수정할 항목이 없습니다.');
+        return;
+    }
+    
+    if (s.currentErrorIndex >= 0 && s.currentErrorIndex < errors.length) {
+        var err = errors[s.currentErrorIndex];
+        err.useRevised = useRevised;
+        console.log('🔄 개별 오류 토글: [' + s.currentErrorIndex + '] ' + err.original + ' → ' + (useRevised ? '수정 후' : '수정 전'));
+        renderScriptWithMarkers(stage);
+    } else {
+        console.log('⚠️ 선택된 오류가 없습니다. 테이블에서 항목을 먼저 클릭하세요.');
+        alert('수정할 항목을 먼저 선택하세요.\n분석 결과 테이블에서 행을 클릭하면 해당 항목이 선택됩니다.');
+    }
 }
 
 function toggleSelectedOrAllErrors(stage, useRevised) {
@@ -1036,6 +1058,7 @@ function toggleCurrentError(stage, useRevised) {
 
 function setCurrentError(stage, errorIndex) {
     state[stage].currentErrorIndex = errorIndex;
+    console.log('📍 현재 선택된 오류: [' + stage + '] index=' + errorIndex);
     highlightCurrentRow(stage, errorIndex);
     
     var errors = state[stage].allErrors || [];
@@ -1674,6 +1697,7 @@ function displayStage2Results() {
                 var errorIndex = findErrorIndexById('stage2', markerId);
                 if (errorIndex >= 0) { 
                     setCurrentError('stage2', errorIndex); 
+                    console.log('🎯 2차 분석 테이블 클릭: 최종 수정 반영으로 스크롤 이동');
                 }
             });
         });
