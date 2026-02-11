@@ -2682,6 +2682,49 @@ function displayStage1Results() {
 function displayStage2Results() {
     var container = document.getElementById('analysis-stage2');
     if (!container) return;
+    
+    // ============================================================
+    // 핵심 수정: state.stage2.originalScript가 1차 수정본인지 확인
+    // 만약 원본과 같다면 1차 수정본으로 강제 교체
+    // ============================================================
+    var stage1Original = state.stage1 ? state.stage1.originalScript : '';
+    var stage1Fixed = state.stage1 ? (state.stage1.fixedScript || state.stage1.revisedScript) : '';
+    
+    // state.stage2.originalScript가 원본과 같으면 1차 수정본으로 교체
+    if (state.stage2.originalScript === stage1Original && stage1Fixed && stage1Fixed.length > 0) {
+        console.log('⚠️ displayStage2Results: stage2.originalScript가 원본임, 1차 수정본으로 교체');
+        state.stage2.originalScript = stage1Fixed;
+    }
+    
+    // 1차 수정본이 없으면 직접 생성
+    if (!stage1Fixed || stage1Fixed === stage1Original) {
+        console.log('⚠️ displayStage2Results: 1차 수정본 재생성');
+        var stage1Errors = state.stage1 ? state.stage1.allErrors : [];
+        var rebuiltScript = stage1Original;
+        
+        for (var i = 0; i < stage1Errors.length; i++) {
+            var err = stage1Errors[i];
+            if (err.useRevised && err.original && err.revised) {
+                var revisedText = cleanRevisedText(err.revised);
+                if (rebuiltScript.indexOf(err.original) !== -1) {
+                    rebuiltScript = rebuiltScript.split(err.original).join(revisedText);
+                    console.log('   ✅ 1차 수정 재적용: "' + err.original.substring(0, 20) + '..."');
+                }
+            }
+        }
+        
+        // 재생성한 1차 수정본을 stage2.originalScript에 저장
+        if (rebuiltScript !== stage1Original) {
+            state.stage2.originalScript = rebuiltScript;
+            state.stage1.fixedScript = rebuiltScript;
+            state.stage1.revisedScript = rebuiltScript;
+            console.log('✅ 1차 수정본 재생성 완료: ' + rebuiltScript.length + '자');
+        }
+    }
+    
+    console.log('📊 displayStage2Results 시작');
+    console.log('   - stage2.originalScript 길이: ' + (state.stage2.originalScript ? state.stage2.originalScript.length : 0) + '자');
+    
     var errors = state.stage2.allErrors;
     if (!errors || errors.length === 0) {
         container.innerHTML = '<div style="text-align:center;padding:30px;color:#69f0ae;font-size:18px;">✅ 추가 오류가 발견되지 않았습니다.</div>';
@@ -2709,10 +2752,11 @@ function displayStage2Results() {
             });
         });
     }
+    
     renderScriptWithMarkers('stage2');
     enableStage2Buttons(true);
     
-    console.log('📊 2차 분석 결과 표시 완료: 오류 ' + (errors ? errors.length : 0) + '개, 점수/100점 대본 표시 진행');
+    console.log('📊 2차 분석 결과 표시 완료: 오류 ' + (errors ? errors.length : 0) + '개');
 }
 
 function getCategoryColor(category) {
