@@ -1273,7 +1273,8 @@ function findApproximatePosition(text, searchText) {
 }
 
 /**
- * 수정 반영 영역에 마커를 렌더링하는 함수 (부분 매칭 강화)
+ * 수정 반영 영역에 마커를 렌더링하는 함수 (전체 대본 표시 + 부분 매칭 강화)
+ * v4.53 수정: 전체 대본이 잘리지 않도록 수정
  * @param {string} stage - 'stage1' 또는 'stage2'
  */
 function renderScriptWithMarkers(stage) {
@@ -1289,81 +1290,120 @@ function renderScriptWithMarkers(stage) {
         return;
     }
     
-    var text = stageData.originalScript || '';
+    var originalText = stageData.originalScript || '';
     var errors = stageData.allErrors || [];
     var scrollTop = container.scrollTop;
     var matchedCount = 0;
     var unmatchedErrors = [];
     
     console.log('🔧 renderScriptWithMarkers 시작: ' + stage);
-    console.log('   - 원본 텍스트 길이: ' + text.length + '자');
+    console.log('   - 원본 텍스트 길이: ' + originalText.length + '자');
     console.log('   - 처리할 오류 수: ' + errors.length + '개');
     
-    // 오류를 위치순으로 정렬 (뒤에서부터 처리하기 위해)
-    var sortedErrors = errors.slice().map(function(err, index) {
-        var position = findTextPosition(text, err.original);
-        return { error: err, originalIndex: index, position: position };
-    }).sort(function(a, b) {
-        return b.position - a.position; // 뒤에서부터 처리
-    });
+    // 오류가 없으면 원본 그대로 표시
+    if (!errors || errors.length === 0) {
+        var escapedOriginal = escapeHtml(originalText);
+        container.innerHTML = '<div style="white-space: pre-wrap; padding: 15px; font-size: 14px; line-height: 1.8; word-break: break-word;">' + escapedOriginal + '</div>';
+        console.log('🔧 오류 없음, 원본 대본 그대로 표시');
+        return;
+    }
     
-    // 각 오류에 대해 마커 생성
-    for (var i = 0; i < sortedErrors.length; i++) {
-        var item = sortedErrors[i];
-        var err = item.error;
+    // 마커 정보 수집 (위치와 함께)
+    var markerInfos = [];
+    
+    for (var i = 0; i < errors.length; i++) {
+        var err = errors[i];
         
         if (!err.original) {
             console.log('   ⚠️ 원문 없음: 오류 #' + err.id);
             continue;
         }
         
-        var matchResult = findBestMatch(text, err.original);
+        var matchResult = findBestMatch(originalText, err.original);
         
-        if (matchResult.found && matchResult.matchedText) {
-            // 매칭 성공
-            var displayText;
-            var markerClass;
-            
-            if (err.useRevised && err.revised) {
-                displayText = cleanRevisedText ? cleanRevisedText(err.revised) : err.revised;
-                markerClass = 'marker-revised';
-            } else {
-                displayText = matchResult.matchedText;
-                markerClass = 'marker-original';
-            }
-            
-            var escapedDisplay = escapeHtml ? escapeHtml(displayText) : displayText;
-            var titleText = (err.original + ' → ' + (err.revised || '')).replace(/"/g, '&quot;');
-            
-            var markerHtml = '<span class="correction-marker ' + markerClass + '" ' +
-                'data-marker-id="' + err.id + '" ' +
-                'data-stage="' + stage + '" ' +
-                'title="' + titleText + '">' +
-                escapedDisplay + '</span>';
-            
-            // 텍스트에서 매칭된 부분을 마커로 교체
-            var beforeMatch = text.substring(0, matchResult.position);
-            var afterMatch = text.substring(matchResult.position + matchResult.matchedText.length);
-            text = beforeMatch + markerHtml + afterMatch;
-            
-            // 매칭된 원문 저장 (scrollToMarker에서 사용)
+        if (matchResult.found && matchResult.position >= 0) {
+            markerInfos.push({
+                error: err,
+                position: matchResult.position,
+                length: matchResult.matchedText.length,
+                matchedText: matchResult.matchedText
+            });
             err.matchedOriginal = matchResult.matchedText;
             matchedCount++;
-            
-            console.log('   ✅ 마커 생성: #' + err.id + ' (위치: ' + matchResult.position + ')');
+            console.log('   ✅ 마커 위치 확인: #' + err.id + ' (위치: ' + matchResult.position + ', 길이: ' + matchResult.matchedText.length + ')');
         } else {
-            // 매칭 실패 - 대략적 위치 저장
-            var approxPos = findApproximatePosition(stageData.originalScript || '', err.original);
+            var approxPos = findApproximatePosition(originalText, err.original);
             err.approximatePosition = approxPos;
             unmatchedErrors.push(err);
-            
             console.log('   ❌ 매칭 실패: #' + err.id + ' (대략 위치: ' + (approxPos >= 0 ? Math.round(approxPos * 100) + '%' : '알 수 없음') + ')');
-            console.log('      원문: "' + err.original.substring(0, 50) + '..."');
         }
     }
     
+    // 위치순 정렬 (앞에서부터)
+    markerInfos.sort(function(a, b) {
+        return a.position - b.position;
+    });
+    
+    // 겹치는 마커 제거 (앞선 마커 우선)
+    var filteredMarkers = [];
+    var lastEnd = -1;
+    
+    for (var i = 0; i < markerInfos.length; i++) {
+        var info = markerInfos[i];
+        if (info.position >= lastEnd) {
+            filteredMarkers.push(info);
+            lastEnd = info.position + info.length;
+        } else {
+            console.log('   ⚠️ 겹치는 마커 제외: #' + info.error.id);
+        }
+    }
+    
+    // HTML 생성 (전체 텍스트를 순회하며 마커 삽입)
+    var resultHtml = '';
+    var currentPos = 0;
+    
+    for (var i = 0; i < filteredMarkers.length; i++) {
+        var info = filteredMarkers[i];
+        var err = info.error;
+        
+        // 마커 이전 텍스트 추가
+        if (info.position > currentPos) {
+            var beforeText = originalText.substring(currentPos, info.position);
+            resultHtml += escapeHtml(beforeText);
+        }
+        
+        // 마커 생성
+        var displayText;
+        var markerClass;
+        
+        if (err.useRevised && err.revised) {
+            displayText = cleanRevisedText(err.revised);
+            markerClass = 'marker-revised';
+        } else {
+            displayText = info.matchedText;
+            markerClass = 'marker-original';
+        }
+        
+        var escapedDisplay = escapeHtml(displayText);
+        var titleText = (err.original + ' → ' + (err.revised || '')).replace(/"/g, '&quot;');
+        
+        resultHtml += '<span class="correction-marker ' + markerClass + '" ' +
+            'data-marker-id="' + err.id + '" ' +
+            'data-stage="' + stage + '" ' +
+            'title="' + titleText + '">' +
+            escapedDisplay + '</span>';
+        
+        currentPos = info.position + info.length;
+    }
+    
+    // 마지막 마커 이후 텍스트 추가
+    if (currentPos < originalText.length) {
+        var afterText = originalText.substring(currentPos);
+        resultHtml += escapeHtml(afterText);
+    }
+    
     // 컨테이너에 렌더링
-    container.innerHTML = '<div style="white-space: pre-wrap; padding: 15px; font-size: 14px; line-height: 1.8;">' + text + '</div>';
+    container.innerHTML = '<div style="white-space: pre-wrap; padding: 15px; font-size: 14px; line-height: 1.8; word-break: break-word;">' + resultHtml + '</div>';
     container.scrollTop = scrollTop;
     
     // 마커 클릭 이벤트 연결
@@ -1373,7 +1413,6 @@ function renderScriptWithMarkers(stage) {
             var markerId = this.getAttribute('data-marker-id');
             var markerStage = this.getAttribute('data-stage');
             
-            // 해당 오류의 인덱스 찾기
             var errorIndex = -1;
             var stageErrors = state[markerStage] ? state[markerStage].allErrors : [];
             for (var j = 0; j < stageErrors.length; j++) {
@@ -1394,12 +1433,15 @@ function renderScriptWithMarkers(stage) {
         });
     });
     
-    console.log('🔧 수정 반영 렌더링 완료: ' + stage + ' (총 ' + errors.length + '개 중 ' + matchedCount + '개 마커 생성)');
+    console.log('🔧 수정 반영 렌더링 완료: ' + stage);
+    console.log('   - 전체 텍스트 길이: ' + originalText.length + '자');
+    console.log('   - 생성된 HTML 길이: ' + resultHtml.length + '자');
+    console.log('   - 총 오류: ' + errors.length + '개, 마커 생성: ' + matchedCount + '개');
     
     if (unmatchedErrors.length > 0) {
         console.log('   ⚠️ 매칭 실패 오류 ' + unmatchedErrors.length + '개:');
         unmatchedErrors.forEach(function(err) {
-            console.log('      - #' + err.id + ': "' + err.original.substring(0, 30) + '..."');
+            console.log('      - #' + err.id + ': "' + (err.original ? err.original.substring(0, 30) : '') + '..."');
         });
     }
 }
