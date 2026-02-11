@@ -1932,23 +1932,48 @@ function displayScoresAndPerfectScript(scores, improvements, perfectScript, chan
         '<div style="font-size:16px;color:' + (passed ? '#69f0ae' : '#ff5555') + ';">' + (passed ? '✅ 합격' : '❌ 미합격') + '</div>' +
         '</div>';
     
-    if (improvements && improvements.length > 0) {
-        html += '<div><h4 style="color:#ffaa00;margin-bottom:10px;font-size:14px;">💡 개선 제안</h4>';
-        improvements.forEach(function(imp) {
-            var issuesHtml = '';
-            if (imp.issues && imp.issues.length > 0) {
-                imp.issues.forEach(function(issue) {
-                    issuesHtml += '<div style="font-size:10px;color:#aaa;margin-top:3px;">• ' + escapeHtml(issue.location) + ': ' + escapeHtml(issue.solution) + '</div>';
-                });
-            } else if (imp.suggestion) {
-                issuesHtml = '<div style="color:#aaa;font-size:11px;margin-top:5px;">' + escapeHtml(imp.suggestion) + '</div>';
-            }
-            html += '<div style="background:#2d2d2d;padding:10px;border-radius:6px;margin-bottom:8px;border-left:3px solid #ffaa00;">' +
-                '<div style="color:#fff;font-weight:bold;font-size:12px;">' + escapeHtml(imp.category) + ' (' + (imp.currentScore || '') + '점)</div>' +
-                issuesHtml + '</div>';
-        });
-        html += '</div>';
-    }
+    html += '<div style="margin-top:15px;">' +
+        '<h4 style="color:#ffaa00;margin-bottom:10px;font-size:14px;text-align:center;">📋 100점 달성 개선방안</h4>' +
+        '<table style="width:100%;border-collapse:collapse;font-size:11px;">' +
+        '<thead>' +
+        '<tr style="background:#333;">' +
+        '<th style="border:1px solid #555;padding:8px;color:#fff;width:25%;">항목</th>' +
+        '<th style="border:1px solid #555;padding:8px;color:#fff;width:15%;">현재</th>' +
+        '<th style="border:1px solid #555;padding:8px;color:#fff;width:60%;">개선방안</th>' +
+        '</tr>' +
+        '</thead>' +
+        '<tbody>';
+    
+    var seniorImprovement = getImprovementDetail('시니어 적합도', senior, improvements);
+    html += '<tr>' +
+        '<td style="border:1px solid #555;padding:8px;color:#4CAF50;font-weight:bold;">시니어 적합도</td>' +
+        '<td style="border:1px solid #555;padding:8px;color:#fff;text-align:center;">' + senior + '점</td>' +
+        '<td style="border:1px solid #555;padding:8px;color:#aaa;">' + seniorImprovement + '</td>' +
+        '</tr>';
+    
+    var flowImprovement = getImprovementDetail('이야기흐름', flow, improvements);
+    html += '<tr>' +
+        '<td style="border:1px solid #555;padding:8px;color:#2196F3;font-weight:bold;">이야기 흐름</td>' +
+        '<td style="border:1px solid #555;padding:8px;color:#fff;text-align:center;">' + flow + '점</td>' +
+        '<td style="border:1px solid #555;padding:8px;color:#aaa;">' + flowImprovement + '</td>' +
+        '</tr>';
+    
+    var funImprovement = getImprovementDetail('재미요소', fun, improvements);
+    html += '<tr>' +
+        '<td style="border:1px solid #555;padding:8px;color:#FF9800;font-weight:bold;">재미 요소</td>' +
+        '<td style="border:1px solid #555;padding:8px;color:#fff;text-align:center;">' + fun + '점</td>' +
+        '<td style="border:1px solid #555;padding:8px;color:#aaa;">' + funImprovement + '</td>' +
+        '</tr>';
+    
+    var retentionImprovement = getImprovementDetail('시청자이탈방지', retention, improvements);
+    html += '<tr>' +
+        '<td style="border:1px solid #555;padding:8px;color:#9C27B0;font-weight:bold;">시청자 이탈 방지</td>' +
+        '<td style="border:1px solid #555;padding:8px;color:#fff;text-align:center;">' + retention + '점</td>' +
+        '<td style="border:1px solid #555;padding:8px;color:#aaa;">' + retentionImprovement + '</td>' +
+        '</tr>';
+    
+    html += '</tbody></table></div>';
+    
     html += '</div>';
     
     var formattedScript = formatPerfectScript(perfectScript || '100점 수정 대본이 생성되지 않았습니다.');
@@ -2078,15 +2103,12 @@ function scrollToPerfectScriptChange(index, changePoints) {
 }
 
 function createScoreCard(label, score, color) {
-    var tips = getImprovementTips(label, score);
-    var tipsHtml = score < 100 && tips ? '<div style="color:#ffaa00;font-size:9px;margin-top:5px;text-align:left;line-height:1.3;">' + tips + '</div>' : '';
-    
     return '<div style="background:#2d2d2d;padding:10px;border-radius:6px;text-align:center;">' +
         '<div style="color:#aaa;font-size:10px;margin-bottom:3px;">' + label + '</div>' +
         '<div style="font-size:24px;font-weight:bold;color:' + color + ';">' + score + '</div>' +
         '<div style="width:100%;background:#444;height:6px;border-radius:3px;margin-top:5px;">' +
         '<div style="width:' + score + '%;background:' + color + ';height:100%;border-radius:3px;"></div></div>' +
-        tipsHtml + '</div>';
+        '</div>';
 }
 
 function getImprovementTips(label, score) {
@@ -2100,6 +2122,43 @@ function getImprovementTips(label, score) {
     };
     
     return tips[label] || '';
+}
+function getImprovementDetail(category, score, improvements) {
+    if (improvements && improvements.length > 0) {
+        for (var i = 0; i < improvements.length; i++) {
+            var imp = improvements[i];
+            if (imp.category && imp.category.replace(/\s/g, '').indexOf(category.replace(/\s/g, '')) !== -1) {
+                if (imp.issues && imp.issues.length > 0) {
+                    var solutions = imp.issues.map(function(issue) {
+                        return issue.solution || issue.problem || '';
+                    }).filter(function(s) { return s; });
+                    if (solutions.length > 0) {
+                        return solutions.slice(0, 2).join(' / ');
+                    }
+                }
+                if (imp.suggestion) {
+                    return imp.suggestion;
+                }
+            }
+        }
+    }
+    
+    if (score >= 100) {
+        return '✅ 100점 달성 - 개선 불필요';
+    }
+    
+    var defaultImprovements = {
+        '시니어적합도': '문장 길이 단축 / 호칭 명확화 / 관계 설명 추가',
+        '시니어 적합도': '문장 길이 단축 / 호칭 명확화 / 관계 설명 추가',
+        '이야기흐름': '장면 연결어 추가 / 시간 순서 명시 / 인과관계 강화',
+        '이야기 흐름': '장면 연결어 추가 / 시간 순서 명시 / 인과관계 강화',
+        '재미요소': '갈등 심화 / 반전 요소 추가 / 감정 대사 강화',
+        '재미 요소': '갈등 심화 / 반전 요소 추가 / 감정 대사 강화',
+        '시청자이탈방지': '초반 호기심 유발 / 장면 끝 궁금증 추가 / 지루한 부분 압축',
+        '시청자 이탈 방지': '초반 호기심 유발 / 장면 끝 궁금증 추가 / 지루한 부분 압축'
+    };
+    
+    return defaultImprovements[category] || '구체적 개선사항은 AI 분석 결과를 확인하세요';
 }
 
 function enableStage1Buttons(hasErrors) {
