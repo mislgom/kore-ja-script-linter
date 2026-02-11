@@ -1762,8 +1762,8 @@ async function startStage2Analysis() {
             };
         }
         
-        // 나레이션 오류 필터링
-        var filteredIssues = filterNarrationErrors(analysisResult.issues || []);
+               // 나레이션 오류 필터링
+        var filteredIssues = filterNarrationErrors(analysisResult.issues || [], stage1Script);
         
         // AI 점수 추출
         var aiScores = analysisResult.scores || { senior: 70, fun: 70, flow: 70, retention: 70 };
