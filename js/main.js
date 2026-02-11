@@ -2488,14 +2488,24 @@ function displayScoresAndPerfectScript(scores, deductions, improvements) {
         createScoreCard('시청자 이탈 방지', scores.retention, deductions.retention) +
         '</div>';
     
+    // ============================================================
+    // 100점 달성 개선방안 테이블 (수정된 레이아웃)
+    // - 항목 칸: 좁게 (70px)
+    // - 현재/목표: 작게 (45px)
+    // - 개선 방안: 넓게 (간략한 설명 + 실제 반영 내용)
+    // ============================================================
+    
+    // 100점 대본에서 카테고리별 실제 반영 내용 추출
+    var perfectScriptExamples = extractPerfectScriptExamples(state.perfectScript, scores);
+    
     html += '<div style="background:#1e1e1e;border-radius:10px;padding:15px;margin-bottom:20px;">' +
         '<h4 style="color:#ffaa00;margin-bottom:15px;">📈 100점 달성 개선방안</h4>' +
-        '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+        '<table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;">' +
         '<thead><tr style="background:#333;">' +
-        '<th style="padding:10px;border:1px solid #444;color:#fff;">항목</th>' +
-        '<th style="padding:10px;border:1px solid #444;color:#fff;">현재</th>' +
-        '<th style="padding:10px;border:1px solid #444;color:#fff;">목표</th>' +
-        '<th style="padding:10px;border:1px solid #444;color:#fff;">개선 방안</th>' +
+        '<th style="width:70px;padding:8px 4px;border:1px solid #444;color:#fff;">항목</th>' +
+        '<th style="width:45px;padding:8px 4px;border:1px solid #444;color:#fff;">현재</th>' +
+        '<th style="width:45px;padding:8px 4px;border:1px solid #444;color:#fff;">목표</th>' +
+        '<th style="padding:8px 4px;border:1px solid #444;color:#fff;">개선 방안 및 실제 반영 내용</th>' +
         '</tr></thead><tbody>';
     
     var categoryKeywords = {
@@ -2507,12 +2517,33 @@ function displayScoresAndPerfectScript(scores, deductions, improvements) {
     
     improvements.forEach(function(item, index) {
         var scoreColor = item.currentScore >= 90 ? '#69f0ae' : item.currentScore >= 70 ? '#ffaa00' : '#ff5555';
-        var solutions = item.issues.map(function(i) { return i.solution; }).join('<br>');
+        
+        // 간략한 개선 방안
+        var briefSolution = item.issues.map(function(i) { 
+            return '• ' + i.solution; 
+        }).join('<br>');
+        
+        // 실제 반영 내용
+        var actualExample = perfectScriptExamples[item.category] || '';
+        
+        // 개선 방안 + 실제 반영 내용 결합
+        var combinedContent = '<div style="margin-bottom:8px;">' +
+            '<span style="color:#ffaa00;font-weight:bold;font-size:11px;">▶ 개선 방안:</span><br>' +
+            '<span style="color:#aaa;">' + briefSolution + '</span>' +
+            '</div>';
+        
+        if (actualExample) {
+            combinedContent += '<div style="background:#2a2a2a;padding:6px 8px;border-radius:4px;border-left:2px solid #69f0ae;">' +
+                '<span style="color:#69f0ae;font-weight:bold;font-size:11px;">▶ 실제 반영:</span><br>' +
+                '<span style="color:#fff;font-size:11px;">' + escapeHtml(actualExample) + '</span>' +
+                '</div>';
+        }
+        
         html += '<tr class="improvement-row" data-category="' + item.category + '" data-index="' + index + '" style="cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background=\'#2a2a2a\'" onmouseout="this.style.background=\'\'">' +
-            '<td style="padding:10px;border:1px solid #444;color:#fff;font-weight:bold;">' + item.category + '</td>' +
-            '<td style="padding:10px;border:1px solid #444;color:' + scoreColor + ';text-align:center;font-weight:bold;">' + item.currentScore + '점</td>' +
-            '<td style="padding:10px;border:1px solid #444;color:#69f0ae;text-align:center;">100점</td>' +
-            '<td style="padding:10px;border:1px solid #444;color:#aaa;">' + solutions + '</td>' +
+            '<td style="padding:8px 4px;border:1px solid #444;color:#fff;font-weight:bold;font-size:11px;text-align:center;word-break:keep-all;">' + item.category + '</td>' +
+            '<td style="padding:8px 4px;border:1px solid #444;color:' + scoreColor + ';text-align:center;font-weight:bold;">' + item.currentScore + '</td>' +
+            '<td style="padding:8px 4px;border:1px solid #444;color:#69f0ae;text-align:center;font-weight:bold;">100</td>' +
+            '<td style="padding:8px;border:1px solid #444;">' + combinedContent + '</td>' +
             '</tr>';
     });
     
@@ -2571,6 +2602,90 @@ function displayScoresAndPerfectScript(scores, deductions, improvements) {
     if (downloadBtn) downloadBtn.disabled = false;
     
     console.log('📊 점수 표시 완료 - 평균:', avgScore);
+}
+
+// ============================================================
+// 100점 대본에서 카테고리별 실제 반영 내용 추출 함수
+// ============================================================
+function extractPerfectScriptExamples(perfectScript, scores) {
+    var examples = {
+        '시니어 적합도': '',
+        '재미 요소': '',
+        '이야기 흐름': '',
+        '시청자 이탈 방지': ''
+    };
+    
+    if (!perfectScript || perfectScript.length < 10) {
+        return examples;
+    }
+    
+    var lines = perfectScript.split('\n').filter(function(line) {
+        return line.trim().length > 5;
+    });
+    
+    // 시니어 적합도: 짧고 명확한 문장 찾기
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (line.length >= 10 && line.length <= 40 && !line.startsWith('나레이션')) {
+            examples['시니어 적합도'] = line.substring(0, 50) + (line.length > 50 ? '...' : '');
+            break;
+        }
+    }
+    
+    // 재미 요소: 감정/갈등 표현이 있는 문장 찾기
+    var emotionKeywords = ['!', '?', '그런데', '하지만', '놀라', '화가', '슬퍼', '기뻐', '두려'];
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        for (var j = 0; j < emotionKeywords.length; j++) {
+            if (line.includes(emotionKeywords[j])) {
+                examples['재미 요소'] = line.substring(0, 50) + (line.length > 50 ? '...' : '');
+                break;
+            }
+        }
+        if (examples['재미 요소']) break;
+    }
+    
+    // 이야기 흐름: 전환 표현이 있는 문장 찾기
+    var flowKeywords = ['그때', '한편', '잠시 후', '다음 날', '그러자', '그래서', '때문에'];
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        for (var j = 0; j < flowKeywords.length; j++) {
+            if (line.includes(flowKeywords[j])) {
+                examples['이야기 흐름'] = line.substring(0, 50) + (line.length > 50 ? '...' : '');
+                break;
+            }
+        }
+        if (examples['이야기 흐름']) break;
+    }
+    
+    // 시청자 이탈 방지: 호기심 유발 문장 찾기 (주로 마지막 부분)
+    var hookKeywords = ['과연', '어떻게', '궁금', '비밀', '알 수 없', '다음'];
+    for (var i = lines.length - 1; i >= Math.max(0, lines.length - 10); i--) {
+        var line = lines[i].trim();
+        for (var j = 0; j < hookKeywords.length; j++) {
+            if (line.includes(hookKeywords[j])) {
+                examples['시청자 이탈 방지'] = line.substring(0, 50) + (line.length > 50 ? '...' : '');
+                break;
+            }
+        }
+        if (examples['시청자 이탈 방지']) break;
+    }
+    
+    // 빈 항목은 대본 앞/뒤에서 예시 추출
+    if (!examples['시니어 적합도'] && lines.length > 0) {
+        examples['시니어 적합도'] = lines[0].substring(0, 50) + (lines[0].length > 50 ? '...' : '');
+    }
+    if (!examples['재미 요소'] && lines.length > 2) {
+        examples['재미 요소'] = lines[Math.floor(lines.length / 3)].substring(0, 50);
+    }
+    if (!examples['이야기 흐름'] && lines.length > 2) {
+        examples['이야기 흐름'] = lines[Math.floor(lines.length / 2)].substring(0, 50);
+    }
+    if (!examples['시청자 이탈 방지'] && lines.length > 0) {
+        examples['시청자 이탈 방지'] = lines[lines.length - 1].substring(0, 50);
+    }
+    
+    return examples;
 }
 
 function scrollToImprovementInScript(category, categoryKeywords) {
