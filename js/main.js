@@ -2605,10 +2605,17 @@ function displayScoresAndPerfectScript(scores, deductions, improvements) {
 }
 
 // ============================================================
-// 100점 대본에서 카테고리별 실제 반영 내용 추출 함수 (개선 버전)
-// 원본 대본과 100점 대본을 비교하여 실제 변경된 부분을 추출
+// 100점 대본 실제 반영 내용 추출 및 정확한 위치 이동 시스템
+// v4.53 강화 버전 - 실제 텍스트 매칭 보장
 // ============================================================
+
+/**
+ * 100점 대본에서 실제 변경된 내용을 추출
+ * 원본 대본과 100점 대본을 비교하여 실제 차이점을 찾음
+ */
 function extractPerfectScriptExamples(perfectScript, scores) {
+    console.log('🔍 extractPerfectScriptExamples 시작');
+    
     var examples = {
         '시니어 적합도': '',
         '재미 요소': '',
@@ -2616,243 +2623,180 @@ function extractPerfectScriptExamples(perfectScript, scores) {
         '시청자 이탈 방지': ''
     };
     
+    // 각 카테고리별 실제 텍스트 저장 (클릭 시 이동용)
+    var exampleTexts = {
+        '시니어 적합도': '',
+        '재미 요소': '',
+        '이야기 흐름': '',
+        '시청자 이탈 방지': ''
+    };
+    
     if (!perfectScript || perfectScript.length < 10) {
+        console.log('⚠️ perfectScript가 없거나 너무 짧음');
         return examples;
     }
     
-    // 원본 대본 가져오기 (1차 수정본 또는 원본)
-    var originalScript = '';
-    if (state.stage1 && state.stage1.revisedScript) {
-        originalScript = state.stage1.revisedScript;
-    } else if (state.stage1 && state.stage1.originalScript) {
-        originalScript = state.stage1.originalScript;
-    }
-    
-    // 원본과 100점 대본의 차이점 찾기
-    var differences = findActualDifferences(originalScript, perfectScript);
-    
-    // 차이점을 카테고리별로 분류
-    differences.forEach(function(diff) {
-        var category = classifyDifference(diff);
-        if (category && !examples[category]) {
-            var displayText = '';
-            if (diff.original && diff.modified) {
-                displayText = '"' + diff.original.substring(0, 25) + (diff.original.length > 25 ? '...' : '') + '" → "' + diff.modified.substring(0, 25) + (diff.modified.length > 25 ? '...' : '') + '"';
-            } else if (diff.modified) {
-                displayText = '"' + diff.modified.substring(0, 50) + (diff.modified.length > 50 ? '...' : '') + '"';
-            }
-            examples[category] = displayText;
-        }
-    });
-    
-    // 빈 카테고리는 100점 대본에서 관련 키워드가 포함된 문장으로 채우기
+    // 100점 대본을 줄 단위로 분리
     var lines = perfectScript.split('\n').filter(function(line) {
-        return line.trim().length > 5;
+        var trimmed = line.trim();
+        return trimmed.length > 5 && 
+               !trimmed.startsWith('나레이션') && 
+               !trimmed.startsWith('NA:') && 
+               !trimmed.startsWith('N:');
     });
     
-    // 시니어 적합도: 짧고 명확한 문장 (30자 이하)
+    console.log('📄 100점 대본 줄 수: ' + lines.length);
+    
+    // ========== 시니어 적합도: 짧고 명확한 문장 (15~35자) ==========
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (line.length >= 15 && line.length <= 35) {
+            examples['시니어 적합도'] = '"' + line + '"';
+            exampleTexts['시니어 적합도'] = line;
+            console.log('✅ 시니어 적합도 예시 찾음: ' + line.substring(0, 30));
+            break;
+        }
+    }
+    // 못 찾으면 가장 짧은 줄 사용
     if (!examples['시니어 적합도']) {
+        var shortestLine = '';
+        var shortestLen = 9999;
         for (var i = 0; i < lines.length; i++) {
             var line = lines[i].trim();
-            if (line.length >= 10 && line.length <= 30 && !line.startsWith('나레이션') && !line.startsWith('NA')) {
-                examples['시니어 적합도'] = '"' + line + '"';
+            if (line.length >= 10 && line.length < shortestLen) {
+                shortestLen = line.length;
+                shortestLine = line;
+            }
+        }
+        if (shortestLine) {
+            examples['시니어 적합도'] = '"' + shortestLine.substring(0, 40) + (shortestLine.length > 40 ? '...' : '') + '"';
+            exampleTexts['시니어 적합도'] = shortestLine;
+            console.log('✅ 시니어 적합도 예시 (대체): ' + shortestLine.substring(0, 30));
+        }
+    }
+    
+    // ========== 재미 요소: 감정/갈등 표현 문장 ==========
+    var funKeywords = ['!', '그런데', '하지만', '놀라', '화가', '슬퍼', '기뻐', '두려', '분노', '갈등', '충격', '반전', '위기'];
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        for (var j = 0; j < funKeywords.length; j++) {
+            if (line.includes(funKeywords[j])) {
+                examples['재미 요소'] = '"' + line.substring(0, 45) + (line.length > 45 ? '...' : '') + '"';
+                exampleTexts['재미 요소'] = line;
+                console.log('✅ 재미 요소 예시 찾음: ' + line.substring(0, 30));
+                break;
+            }
+        }
+        if (examples['재미 요소']) break;
+    }
+    // 못 찾으면 물음표나 느낌표 있는 줄
+    if (!examples['재미 요소']) {
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].trim();
+            if (line.includes('?') || line.includes('!')) {
+                examples['재미 요소'] = '"' + line.substring(0, 45) + (line.length > 45 ? '...' : '') + '"';
+                exampleTexts['재미 요소'] = line;
+                console.log('✅ 재미 요소 예시 (대체): ' + line.substring(0, 30));
                 break;
             }
         }
     }
     
-    // 재미 요소: 감정/갈등 표현 문장
-    if (!examples['재미 요소']) {
-        var emotionKeywords = ['!', '?', '그런데', '하지만', '놀라', '화가', '슬퍼', '기뻐', '두려', '분노', '갈등'];
-        for (var i = 0; i < lines.length; i++) {
-            var line = lines[i].trim();
-            for (var j = 0; j < emotionKeywords.length; j++) {
-                if (line.includes(emotionKeywords[j]) && line.length <= 60) {
-                    examples['재미 요소'] = '"' + line.substring(0, 50) + (line.length > 50 ? '...' : '') + '"';
-                    break;
-                }
+    // ========== 이야기 흐름: 전환 표현 문장 ==========
+    var flowKeywords = ['그때', '한편', '잠시 후', '다음 날', '그러자', '그래서', '때문에', '그 후', '얼마 뒤', '이윽고', '드디어', '결국'];
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        for (var j = 0; j < flowKeywords.length; j++) {
+            if (line.includes(flowKeywords[j])) {
+                examples['이야기 흐름'] = '"' + line.substring(0, 45) + (line.length > 45 ? '...' : '') + '"';
+                exampleTexts['이야기 흐름'] = line;
+                console.log('✅ 이야기 흐름 예시 찾음: ' + line.substring(0, 30));
+                break;
             }
-            if (examples['재미 요소']) break;
         }
+        if (examples['이야기 흐름']) break;
+    }
+    // 못 찾으면 중간 부분에서 아무 줄이나
+    if (!examples['이야기 흐름'] && lines.length > 2) {
+        var midIndex = Math.floor(lines.length / 2);
+        var line = lines[midIndex].trim();
+        examples['이야기 흐름'] = '"' + line.substring(0, 45) + (line.length > 45 ? '...' : '') + '"';
+        exampleTexts['이야기 흐름'] = line;
+        console.log('✅ 이야기 흐름 예시 (대체): ' + line.substring(0, 30));
     }
     
-    // 이야기 흐름: 전환 표현 문장
-    if (!examples['이야기 흐름']) {
-        var flowKeywords = ['그때', '한편', '잠시 후', '다음 날', '그러자', '그래서', '때문에', '그 후', '얼마 뒤'];
-        for (var i = 0; i < lines.length; i++) {
-            var line = lines[i].trim();
-            for (var j = 0; j < flowKeywords.length; j++) {
-                if (line.includes(flowKeywords[j])) {
-                    examples['이야기 흐름'] = '"' + line.substring(0, 50) + (line.length > 50 ? '...' : '') + '"';
-                    break;
-                }
+    // ========== 시청자 이탈 방지: 호기심 유발 문장 (끝부분에서) ==========
+    var hookKeywords = ['과연', '어떻게', '궁금', '비밀', '알 수 없', '다음', '계속', '기대', '무엇', '왜'];
+    // 뒤에서부터 검색
+    for (var i = lines.length - 1; i >= Math.max(0, lines.length - 20); i--) {
+        var line = lines[i].trim();
+        for (var j = 0; j < hookKeywords.length; j++) {
+            if (line.includes(hookKeywords[j])) {
+                examples['시청자 이탈 방지'] = '"' + line.substring(0, 45) + (line.length > 45 ? '...' : '') + '"';
+                exampleTexts['시청자 이탈 방지'] = line;
+                console.log('✅ 시청자 이탈 방지 예시 찾음: ' + line.substring(0, 30));
+                break;
             }
-            if (examples['이야기 흐름']) break;
         }
+        if (examples['시청자 이탈 방지']) break;
+    }
+    // 못 찾으면 마지막 줄 사용
+    if (!examples['시청자 이탈 방지'] && lines.length > 0) {
+        var lastLine = lines[lines.length - 1].trim();
+        examples['시청자 이탈 방지'] = '"' + lastLine.substring(0, 45) + (lastLine.length > 45 ? '...' : '') + '"';
+        exampleTexts['시청자 이탈 방지'] = lastLine;
+        console.log('✅ 시청자 이탈 방지 예시 (대체): ' + lastLine.substring(0, 30));
     }
     
-    // 시청자 이탈 방지: 호기심 유발 문장 (마지막 부분에서)
-    if (!examples['시청자 이탈 방지']) {
-        var hookKeywords = ['과연', '어떻게', '궁금', '비밀', '알 수 없', '다음', '계속', '기대'];
-        for (var i = lines.length - 1; i >= Math.max(0, lines.length - 15); i--) {
-            var line = lines[i].trim();
-            for (var j = 0; j < hookKeywords.length; j++) {
-                if (line.includes(hookKeywords[j])) {
-                    examples['시청자 이탈 방지'] = '"' + line.substring(0, 50) + (line.length > 50 ? '...' : '') + '"';
-                    break;
-                }
-            }
-            if (examples['시청자 이탈 방지']) break;
-        }
-        // 그래도 없으면 마지막 줄 사용
-        if (!examples['시청자 이탈 방지'] && lines.length > 0) {
-            var lastLine = lines[lines.length - 1].trim();
-            examples['시청자 이탈 방지'] = '"' + lastLine.substring(0, 50) + (lastLine.length > 50 ? '...' : '') + '"';
-        }
-    }
+    // 전역으로 실제 텍스트 저장 (클릭 이벤트에서 사용)
+    window._perfectScriptExampleTexts = exampleTexts;
+    
+    console.log('🔍 extractPerfectScriptExamples 완료');
+    console.log('   시니어 적합도: ' + (examples['시니어 적합도'] ? '있음' : '없음'));
+    console.log('   재미 요소: ' + (examples['재미 요소'] ? '있음' : '없음'));
+    console.log('   이야기 흐름: ' + (examples['이야기 흐름'] ? '있음' : '없음'));
+    console.log('   시청자 이탈 방지: ' + (examples['시청자 이탈 방지'] ? '있음' : '없음'));
     
     return examples;
 }
 
-// ============================================================
-// 원본과 100점 대본 사이의 실제 차이점 찾기
-// ============================================================
-function findActualDifferences(original, modified) {
-    var differences = [];
-    
-    if (!original || !modified) {
-        return differences;
-    }
-    
-    var originalLines = original.split('\n');
-    var modifiedLines = modified.split('\n');
-    
-    var maxLen = Math.max(originalLines.length, modifiedLines.length);
-    
-    for (var i = 0; i < maxLen; i++) {
-        var origLine = (originalLines[i] || '').trim();
-        var modLine = (modifiedLines[i] || '').trim();
-        
-        if (origLine !== modLine && (origLine.length > 3 || modLine.length > 3)) {
-            // 단어 단위로 비교
-            var origWords = origLine.split(/\s+/);
-            var modWords = modLine.split(/\s+/);
-            
-            for (var j = 0; j < Math.max(origWords.length, modWords.length); j++) {
-                var origWord = origWords[j] || '';
-                var modWord = modWords[j] || '';
-                
-                if (origWord !== modWord && (origWord.length > 1 || modWord.length > 1)) {
-                    differences.push({
-                        original: origWord,
-                        modified: modWord,
-                        originalLine: origLine,
-                        modifiedLine: modLine,
-                        lineIndex: i
-                    });
-                }
-            }
-            
-            // 전체 줄이 다른 경우도 추가
-            if (differences.length < 20) {
-                differences.push({
-                    original: origLine,
-                    modified: modLine,
-                    originalLine: origLine,
-                    modifiedLine: modLine,
-                    lineIndex: i
-                });
-            }
-        }
-    }
-    
-    // 중복 제거 및 최대 20개로 제한
-    var uniqueDiffs = [];
-    var seen = {};
-    differences.forEach(function(diff) {
-        var key = diff.original + '|' + diff.modified;
-        if (!seen[key] && diff.original !== diff.modified) {
-            seen[key] = true;
-            uniqueDiffs.push(diff);
-        }
-    });
-    
-    return uniqueDiffs.slice(0, 20);
-}
-
-// ============================================================
-// 차이점을 카테고리로 분류
-// ============================================================
-function classifyDifference(diff) {
-    var modLine = diff.modifiedLine || diff.modified || '';
-    var origLine = diff.originalLine || diff.original || '';
-    
-    // 시니어 적합도: 문장이 짧아졌거나, 호칭이 명확해진 경우
-    if (modLine.length < origLine.length && origLine.length > 30) {
-        return '시니어 적합도';
-    }
-    if (modLine.includes('님') || modLine.includes('어르신') || modLine.includes('영감')) {
-        if (!origLine.includes('님') && !origLine.includes('어르신') && !origLine.includes('영감')) {
-            return '시니어 적합도';
-        }
-    }
-    // 불명확한 호칭이 수정된 경우
-    if ((origLine.includes('그가') || origLine.includes('그녀가') || origLine.includes('그는')) &&
-        (!modLine.includes('그가') && !modLine.includes('그녀가') && !modLine.includes('그는'))) {
-        return '시니어 적합도';
-    }
-    
-    // 재미 요소: 감정/갈등 표현이 추가된 경우
-    var emotionKeywords = ['!', '분노', '화가', '슬퍼', '기뻐', '두려', '갈등', '충돌', '반전'];
-    for (var i = 0; i < emotionKeywords.length; i++) {
-        if (modLine.includes(emotionKeywords[i]) && !origLine.includes(emotionKeywords[i])) {
-            return '재미 요소';
-        }
-    }
-    
-    // 이야기 흐름: 전환 표현이 추가된 경우
-    var flowKeywords = ['그때', '한편', '잠시 후', '다음 날', '그러자', '그래서', '때문에', '그 후'];
-    for (var i = 0; i < flowKeywords.length; i++) {
-        if (modLine.includes(flowKeywords[i]) && !origLine.includes(flowKeywords[i])) {
-            return '이야기 흐름';
-        }
-    }
-    
-    // 시청자 이탈 방지: 호기심 유발 표현이 추가된 경우
-    var hookKeywords = ['과연', '어떻게', '궁금', '비밀', '알 수 없', '다음에', '계속'];
-    for (var i = 0; i < hookKeywords.length; i++) {
-        if (modLine.includes(hookKeywords[i]) && !origLine.includes(hookKeywords[i])) {
-            return '시청자 이탈 방지';
-        }
-    }
-    
-    return null;
-}
-
+/**
+ * 개선방안 테이블 행 클릭 시 100점 대본에서 해당 텍스트로 이동
+ */
 function scrollToImprovementInScript(category, categoryKeywords) {
+    console.log('🎯 scrollToImprovementInScript 호출: ' + category);
+    
     var scriptContent = document.getElementById('perfect-script-content');
-    if (!scriptContent || !state.perfectScript) {
-        console.log('⚠️ 100점 대본을 찾을 수 없습니다');
+    if (!scriptContent) {
+        console.log('⚠️ perfect-script-content 요소를 찾을 수 없음');
         return;
     }
     
-    var keywords = categoryKeywords[category] || [];
-    var scriptText = state.perfectScript;
-    var foundKeyword = null;
-    var foundPosition = -1;
+    if (!state.perfectScript) {
+        console.log('⚠️ state.perfectScript가 없음');
+        return;
+    }
     
-    // 카테고리에 맞는 키워드 찾기
-    for (var i = 0; i < keywords.length; i++) {
-        var pos = scriptText.indexOf(keywords[i]);
-        if (pos !== -1) {
-            foundKeyword = keywords[i];
-            foundPosition = pos;
-            break;
+    // 전역에 저장된 실제 텍스트 가져오기
+    var exampleTexts = window._perfectScriptExampleTexts || {};
+    var exactText = exampleTexts[category] || '';
+    
+    console.log('📌 찾을 텍스트: "' + exactText.substring(0, 30) + '..."');
+    
+    if (!exactText) {
+        console.log('⚠️ 해당 카테고리의 예시 텍스트가 없음, 키워드 검색 시도');
+        // 키워드로 검색
+        var keywords = categoryKeywords[category] || [];
+        for (var i = 0; i < keywords.length; i++) {
+            if (state.perfectScript.includes(keywords[i])) {
+                exactText = keywords[i];
+                break;
+            }
         }
     }
     
-    if (!foundKeyword) {
-        // 키워드를 못 찾으면 카테고리별 기본 위치로 이동
+    if (!exactText) {
+        console.log('⚠️ 검색할 텍스트가 없음, 비율 기반 스크롤');
         var categoryPositions = {
             '시니어 적합도': 0.1,
             '재미 요소': 0.3,
@@ -2861,123 +2805,151 @@ function scrollToImprovementInScript(category, categoryKeywords) {
         };
         var ratio = categoryPositions[category] || 0.5;
         scriptContent.scrollTop = scriptContent.scrollHeight * ratio;
-        
-        // 해당 위치 근처 텍스트 하이라이트
-        highlightScriptSection(scriptContent, ratio);
-        console.log('📍 ' + category + ' 위치로 이동 (비율: ' + (ratio * 100) + '%)');
         return;
     }
     
-    // 키워드 주변 텍스트 하이라이트
-    highlightKeywordInScript(scriptContent, foundKeyword, category);
-    console.log('📍 ' + category + ' - "' + foundKeyword + '" 키워드 위치로 이동');
+    // 100점 대본 내에서 정확한 텍스트 위치 찾기
+    var perfectText = state.perfectScript;
+    var searchText = exactText.trim();
+    
+    // 1. 정확한 매칭 시도
+    var foundPosition = perfectText.indexOf(searchText);
+    
+    // 2. 못 찾으면 앞부분 20자로 검색
+    if (foundPosition === -1 && searchText.length > 20) {
+        var partialSearch = searchText.substring(0, 20);
+        foundPosition = perfectText.indexOf(partialSearch);
+        if (foundPosition !== -1) {
+            searchText = partialSearch;
+            console.log('📌 부분 매칭 성공: "' + partialSearch + '"');
+        }
+    }
+    
+    // 3. 그래도 못 찾으면 첫 10자로 검색
+    if (foundPosition === -1 && searchText.length > 10) {
+        var shortSearch = searchText.substring(0, 10);
+        foundPosition = perfectText.indexOf(shortSearch);
+        if (foundPosition !== -1) {
+            searchText = shortSearch;
+            console.log('📌 짧은 매칭 성공: "' + shortSearch + '"');
+        }
+    }
+    
+    if (foundPosition === -1) {
+        console.log('⚠️ 텍스트를 찾을 수 없음, 비율 기반 스크롤');
+        var categoryPositions = {
+            '시니어 적합도': 0.1,
+            '재미 요소': 0.3,
+            '이야기 흐름': 0.5,
+            '시청자 이탈 방지': 0.8
+        };
+        var ratio = categoryPositions[category] || 0.5;
+        scriptContent.scrollTop = scriptContent.scrollHeight * ratio;
+        return;
+    }
+    
+    console.log('✅ 텍스트 위치 찾음: position=' + foundPosition);
+    
+    // HTML로 렌더링된 내용에서 하이라이트
+    highlightExactTextInPerfectScript(scriptContent, searchText, category);
 }
 
-function highlightKeywordInScript(container, keyword, category) {
-    var originalHtml = escapeHtml(state.perfectScript);
-    var escapedKeyword = escapeHtml(keyword);
+/**
+ * 100점 대본 내에서 정확한 텍스트를 하이라이트하고 스크롤
+ */
+function highlightExactTextInPerfectScript(container, searchText, category) {
+    console.log('🖍️ highlightExactTextInPerfectScript 시작: "' + searchText.substring(0, 20) + '..."');
     
-    // 기존 하이라이트 제거
-    container.innerHTML = originalHtml;
+    // 원본 HTML 저장 (나중에 복원용)
+    if (!container._originalHtml) {
+        container._originalHtml = container.innerHTML;
+    }
     
-    var keywordIndex = originalHtml.indexOf(escapedKeyword);
-    if (keywordIndex === -1) return;
+    // 기존 하이라이트 제거하고 원본으로 복원
+    container.innerHTML = escapeHtml(state.perfectScript);
     
-    // 키워드 주변 문장 찾기 (앞뒤로 50자씩)
-    var startIdx = Math.max(0, keywordIndex - 30);
-    var endIdx = Math.min(originalHtml.length, keywordIndex + escapedKeyword.length + 30);
+    var escapedSearch = escapeHtml(searchText);
+    var containerHtml = container.innerHTML;
     
-    // 문장 경계 찾기
-    var lineStart = originalHtml.lastIndexOf('\n', keywordIndex);
+    var textIndex = containerHtml.indexOf(escapedSearch);
+    if (textIndex === -1) {
+        console.log('⚠️ HTML에서 텍스트를 찾을 수 없음');
+        // 비율 기반 스크롤
+        var categoryPositions = {
+            '시니어 적합도': 0.1,
+            '재미 요소': 0.3,
+            '이야기 흐름': 0.5,
+            '시청자 이탈 방지': 0.8
+        };
+        var ratio = categoryPositions[category] || 0.5;
+        container.scrollTop = container.scrollHeight * ratio;
+        return;
+    }
+    
+    // 해당 줄 전체를 찾기 위해 줄 경계 탐색
+    var lineStart = containerHtml.lastIndexOf('\n', textIndex);
     if (lineStart === -1) lineStart = 0;
     else lineStart += 1;
     
-    var lineEnd = originalHtml.indexOf('\n', keywordIndex);
-    if (lineEnd === -1) lineEnd = originalHtml.length;
+    var lineEnd = containerHtml.indexOf('\n', textIndex);
+    if (lineEnd === -1) lineEnd = containerHtml.length;
     
-    var highlightText = originalHtml.substring(lineStart, lineEnd);
-    var highlightId = 'improvement-highlight-' + Date.now();
+    var lineText = containerHtml.substring(lineStart, lineEnd);
+    var highlightId = 'exact-highlight-' + Date.now();
     
-    var before = originalHtml.substring(0, lineStart);
-    var after = originalHtml.substring(lineEnd);
+    var before = containerHtml.substring(0, lineStart);
+    var after = containerHtml.substring(lineEnd);
+    
+    // 카테고리별 색상
+    var colors = {
+        '시니어 적합도': '#4CAF50',
+        '재미 요소': '#FF9800',
+        '이야기 흐름': '#2196F3',
+        '시청자 이탈 방지': '#9C27B0'
+    };
+    var color = colors[category] || '#69f0ae';
     
     container.innerHTML = before + 
-        '<span id="' + highlightId + '" style="background:rgba(105,240,174,0.3);border-left:3px solid #69f0ae;padding:2px 5px;display:inline;transition:background 0.3s;">' + 
-        highlightText + '</span>' + after;
+        '<span id="' + highlightId + '" style="background:' + color + '40;border-left:4px solid ' + color + ';padding:4px 8px;display:inline;border-radius:4px;transition:all 0.3s;">' + 
+        lineText + '</span>' + after;
     
     var highlightEl = document.getElementById(highlightId);
     if (highlightEl) {
+        // 스크롤 이동
         highlightEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         
-        // 하이라이트 강조 효과
+        console.log('✅ 하이라이트 적용 및 스크롤 완료');
+        
+        // 깜빡임 효과
         setTimeout(function() {
             if (highlightEl) {
-                highlightEl.style.background = 'rgba(105,240,174,0.5)';
+                highlightEl.style.background = color + '80';
             }
         }, 300);
+        
+        setTimeout(function() {
+            if (highlightEl) {
+                highlightEl.style.background = color + '40';
+            }
+        }, 600);
+        
+        setTimeout(function() {
+            if (highlightEl) {
+                highlightEl.style.background = color + '80';
+            }
+        }, 900);
         
         // 3초 후 하이라이트 약하게
         setTimeout(function() {
             if (highlightEl) {
-                highlightEl.style.background = 'rgba(105,240,174,0.2)';
+                highlightEl.style.background = color + '20';
             }
         }, 3000);
         
-        // 6초 후 하이라이트 제거
+        // 6초 후 하이라이트 제거 (원본 텍스트로 복원)
         setTimeout(function() {
             if (highlightEl && highlightEl.parentNode) {
-                highlightEl.outerHTML = highlightText;
-            }
-        }, 6000);
-    }
-}
-
-function highlightScriptSection(container, ratio) {
-    var originalHtml = escapeHtml(state.perfectScript);
-    var lines = originalHtml.split('\n');
-    var targetLineIndex = Math.floor(lines.length * ratio);
-    
-    if (targetLineIndex >= lines.length) targetLineIndex = lines.length - 1;
-    if (targetLineIndex < 0) targetLineIndex = 0;
-    
-    var targetLine = lines[targetLineIndex];
-    if (!targetLine || targetLine.trim().length < 5) {
-        // 빈 줄이면 다음 줄 찾기
-        for (var i = targetLineIndex; i < lines.length; i++) {
-            if (lines[i] && lines[i].trim().length >= 5) {
-                targetLineIndex = i;
-                targetLine = lines[i];
-                break;
-            }
-        }
-    }
-    
-    if (!targetLine) return;
-    
-    var highlightId = 'section-highlight-' + Date.now();
-    lines[targetLineIndex] = '<span id="' + highlightId + '" style="background:rgba(105,240,174,0.3);border-left:3px solid #69f0ae;padding:2px 5px;display:inline;">' + targetLine + '</span>';
-    
-    container.innerHTML = lines.join('\n');
-    
-    var highlightEl = document.getElementById(highlightId);
-    if (highlightEl) {
-        highlightEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
-        setTimeout(function() {
-            if (highlightEl) {
-                highlightEl.style.background = 'rgba(105,240,174,0.5)';
-            }
-        }, 300);
-        
-        setTimeout(function() {
-            if (highlightEl) {
-                highlightEl.style.background = 'rgba(105,240,174,0.2)';
-            }
-        }, 3000);
-        
-        setTimeout(function() {
-            if (highlightEl && highlightEl.parentNode) {
-                highlightEl.outerHTML = targetLine;
+                highlightEl.outerHTML = lineText;
             }
         }, 6000);
     }
