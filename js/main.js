@@ -1123,9 +1123,9 @@ function renderScriptWithMarkers(stage) {
 
     sortedErrors.forEach(function(err) {
         if (err.original && text.includes(err.original)) {
-            var displayText = err.useRevised ? err.revised : err.original;
+            var displayText = err.useRevised ? cleanRevisedText(err.revised) : err.original;
             var markerClass = err.useRevised ? 'marker-revised' : 'marker-original';
-            var markerHtml = '<span class="correction-marker ' + markerClass + '" data-marker-id="' + err.id + '" data-stage="' + stage + '" title="' + escapeHtml(err.original) + ' → ' + escapeHtml(err.revised) + '">' + escapeHtml(displayText) + '</span>';
+            var markerHtml = '<span class="correction-marker ' + markerClass + '" data-marker-id="' + err.id + '" data-stage="' + stage + '" title="' + escapeHtml(err.original) + ' → ' + escapeHtml(cleanRevisedText(err.revised)) + '">' + escapeHtml(displayText) + '</span>';
             text = text.replace(err.original, markerHtml);
         }
     });
@@ -1144,6 +1144,27 @@ function renderScriptWithMarkers(stage) {
             }
         });
     });
+    
+    console.log('🖊️ 수정 반영 렌더링 완료: ' + stage + ' (' + errors.length + '개 항목, 특수문자 정제 적용)');
+}
+
+function cleanRevisedText(text) {
+    if (!text) return '';
+    
+    var cleaned = text
+        .replace(/\s*\/\s*/g, '')
+        .replace(/\s*\|\s*/g, '')
+        .replace(/\([^)]*\)/g, '')
+        .replace(/\[[^\]]*\]/g, '')
+        .replace(/\{[^}]*\}/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    
+    var firstOption = cleaned.split(/[,、]/)[0].trim();
+    
+    console.log('🧹 수정안 정제: "' + text + '" → "' + firstOption + '"');
+    
+    return firstOption || cleaned || text;
 }
 
 function findErrorIndexById(stage, markerId) {
