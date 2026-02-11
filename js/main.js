@@ -1460,6 +1460,15 @@ ${script}
 }
 
 function filterNarrationErrors(errors, script) {
+    if (!errors || errors.length === 0) {
+        return [];
+    }
+    
+    if (!script || typeof script !== 'string') {
+        console.log('⚠️ filterNarrationErrors: script가 없어서 필터링 생략');
+        return errors;
+    }
+    
     var narrationPatterns = [
         /^나레이션\s*:/im,
         /^NA\s*:/im,
@@ -1472,7 +1481,7 @@ function filterNarrationErrors(errors, script) {
     var lines = script.split('\n');
     
     return errors.filter(function(err) {
-        if (!err.original) return true;
+        if (!err || !err.original) return true;
         
         for (var i = 0; i < lines.length; i++) {
             var line = lines[i];
