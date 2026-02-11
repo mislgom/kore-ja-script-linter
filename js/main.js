@@ -1129,166 +1129,279 @@ function highlightCurrentRow(stage, errorIndex) {
     });
 }
 
-function renderScriptWithMarkers(stage) {
-    var container = document.getElementById('revised-' + stage);
-    if (!container) return;
+// ============================================================
+// renderScriptWithMarkers - 부분 매칭 강화 버전 (v4.53)
+// ============================================================
 
-    var scrollTop = container.scrollTop;
-
-    var s = state[stage];
-    var text = s.originalScript;
-    var errors = s.allErrors || [];
-    
-    // 매칭 성공/실패 카운터
-    var matchedCount = 0;
-    var unmatchedErrors = [];
-
-    // 에러별로 원문 위치 찾기 (부분 매칭 포함)
-    var sortedErrors = errors.slice().sort(function(a, b) {
-        var posA = findTextPosition(text, a.original);
-        var posB = findTextPosition(text, b.original);
-        return posB - posA;
-    });
-
-    sortedErrors.forEach(function(err) {
-        if (!err.original) return;
-        
-        // 1차: 정확한 매칭 시도
-        var matchResult = findBestMatch(text, err.original);
-        
-        if (matchResult.found) {
-            var displayText = err.useRevised ? cleanRevisedText(err.revised) : matchResult.matchedText;
-            var markerClass = err.useRevised ? 'marker-revised' : 'marker-original';
-            var markerHtml = '<span class="correction-marker ' + markerClass + '" data-marker-id="' + err.id + '" data-stage="' + stage + '" title="' + escapeHtml(err.original) + ' → ' + escapeHtml(cleanRevisedText(err.revised)) + '">' + escapeHtml(displayText) + '</span>';
-            text = text.replace(matchResult.matchedText, markerHtml);
-            matchedCount++;
-            console.log('✅ 마커 생성: [' + err.id + '] "' + matchResult.matchedText.substring(0, 25) + '..."');
-        } else {
-            unmatchedErrors.push(err);
-            console.log('⚠️ 매칭 실패: [' + err.id + '] "' + err.original.substring(0, 25) + '..."');
-        }
-    });
-
-    container.innerHTML = '<div style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;">' + text + '</div>';
-
-    container.scrollTop = scrollTop;
-
-    container.querySelectorAll('.correction-marker').forEach(function(marker) {
-        marker.addEventListener('click', function() {
-            var markerId = this.getAttribute('data-marker-id');
-            var errorIndex = findErrorIndexById(stage, markerId);
-            if (errorIndex >= 0) {
-                setCurrentError(stage, errorIndex);
-                scrollToTableRow(stage, markerId);
-            }
-        });
-    });
-    
-    console.log('🖊️ 수정 반영 렌더링 완료: ' + stage + ' (총 ' + errors.length + '개 중 ' + matchedCount + '개 마커 생성)');
-    
-    // 매칭 실패한 에러들의 위치 정보 저장 (스크롤용)
-    if (unmatchedErrors.length > 0) {
-        unmatchedErrors.forEach(function(err) {
-            err.unmatchedPosition = findApproximatePosition(s.originalScript, err.original);
-        });
-    }
-}
-
-// 텍스트 위치 찾기 (부분 매칭 포함)
+/**
+ * 텍스트 내에서 검색어의 위치를 찾는 헬퍼 함수
+ * @param {string} text - 전체 텍스트
+ * @param {string} searchText - 찾을 텍스트
+ * @returns {number} - 위치 (못 찾으면 -1)
+ */
 function findTextPosition(text, searchText) {
     if (!text || !searchText) return -1;
     
-    // 정확한 매칭
-    var pos = text.indexOf(searchText);
-    if (pos !== -1) return pos;
+    // 1. 정확한 매칭
+    var exactPos = text.indexOf(searchText);
+    if (exactPos !== -1) return exactPos;
     
-    // 앞부분만 매칭 (첫 20자)
-    var shortSearch = searchText.substring(0, Math.min(20, searchText.length));
-    return text.indexOf(shortSearch);
+    // 2. 공백 정규화 후 매칭
+    var normalizedText = text.replace(/\s+/g, ' ');
+    var normalizedSearch = searchText.replace(/\s+/g, ' ');
+    var normalizedPos = normalizedText.indexOf(normalizedSearch);
+    if (normalizedPos !== -1) return normalizedPos;
+    
+    // 3. 핵심 단어로 매칭
+    var words = searchText.split(/\s+/).filter(function(w) { return w.length > 2; });
+    if (words.length > 0) {
+        var firstWordPos = text.indexOf(words[0]);
+        if (firstWordPos !== -1) return firstWordPos;
+    }
+    
+    return -1;
 }
 
-// 최적의 매칭 찾기
+/**
+ * 부분 매칭을 포함한 최적 매칭을 찾는 헬퍼 함수
+ * @param {string} text - 전체 텍스트
+ * @param {string} searchText - 찾을 텍스트
+ * @returns {Object} - { found: boolean, matchedText: string, position: number }
+ */
 function findBestMatch(text, searchText) {
-    if (!text || !searchText) return { found: false, matchedText: '' };
+    if (!text || !searchText) {
+        return { found: false, matchedText: '', position: -1 };
+    }
     
     // 1. 정확한 매칭
-    if (text.indexOf(searchText) !== -1) {
-        return { found: true, matchedText: searchText };
+    var exactPos = text.indexOf(searchText);
+    if (exactPos !== -1) {
+        return { found: true, matchedText: searchText, position: exactPos };
     }
     
-    // 2. 공백/줄바꿈 정규화 후 매칭
+    // 2. 공백 정규화 후 매칭
     var normalizedSearch = searchText.replace(/\s+/g, ' ').trim();
-    var normalizedText = text.replace(/\s+/g, ' ');
-    if (normalizedText.indexOf(normalizedSearch) !== -1) {
-        // 원본 텍스트에서 해당 부분 찾기
-        var startWords = normalizedSearch.split(' ').slice(0, 3).join(' ');
-        var idx = text.indexOf(startWords);
-        if (idx !== -1) {
-            var endIdx = idx + normalizedSearch.length + 20;
-            var candidate = text.substring(idx, Math.min(endIdx, text.length));
-            var endMatch = candidate.indexOf('.');
-            if (endMatch === -1) endMatch = candidate.indexOf('\n');
-            if (endMatch === -1) endMatch = candidate.length;
-            var matched = candidate.substring(0, endMatch + 1).trim();
-            if (matched.length >= 5) {
-                return { found: true, matchedText: matched };
+    var normalizedPos = text.indexOf(normalizedSearch);
+    if (normalizedPos !== -1) {
+        return { found: true, matchedText: normalizedSearch, position: normalizedPos };
+    }
+    
+    // 3. 줄바꿈 제거 후 매칭
+    var noLineBreakSearch = searchText.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+    var noLineBreakPos = text.indexOf(noLineBreakSearch);
+    if (noLineBreakPos !== -1) {
+        return { found: true, matchedText: noLineBreakSearch, position: noLineBreakPos };
+    }
+    
+    // 4. 부분 문자열 매칭 (앞 30자, 뒤 30자)
+    if (searchText.length > 30) {
+        var frontPart = searchText.substring(0, 30).trim();
+        var frontPos = text.indexOf(frontPart);
+        if (frontPos !== -1) {
+            // 앞부분 발견, 그 위치부터 원본 길이만큼을 매칭으로 사용
+            var endPos = Math.min(frontPos + searchText.length, text.length);
+            var matchedText = text.substring(frontPos, endPos);
+            return { found: true, matchedText: matchedText, position: frontPos };
+        }
+        
+        var backPart = searchText.substring(searchText.length - 30).trim();
+        var backPos = text.indexOf(backPart);
+        if (backPos !== -1) {
+            var startPos = Math.max(0, backPos - searchText.length + 30);
+            var matchedText = text.substring(startPos, backPos + backPart.length);
+            return { found: true, matchedText: matchedText, position: startPos };
+        }
+    }
+    
+    // 5. 핵심 단어 기반 매칭 (3자 이상 단어들)
+    var words = searchText.split(/\s+/).filter(function(w) { return w.length >= 3; });
+    if (words.length >= 2) {
+        var firstWord = words[0];
+        var lastWord = words[words.length - 1];
+        var firstPos = text.indexOf(firstWord);
+        var lastPos = text.indexOf(lastWord, firstPos);
+        
+        if (firstPos !== -1 && lastPos !== -1 && lastPos > firstPos) {
+            var matchedText = text.substring(firstPos, lastPos + lastWord.length);
+            if (matchedText.length <= searchText.length * 1.5) {
+                return { found: true, matchedText: matchedText, position: firstPos };
             }
         }
     }
     
-    // 3. 앞부분 15자 이상 매칭
-    for (var len = Math.min(40, searchText.length); len >= 15; len -= 5) {
-        var partial = searchText.substring(0, len);
-        var partialIdx = text.indexOf(partial);
-        if (partialIdx !== -1) {
-            // 문장 끝까지 확장
-            var extendEnd = text.indexOf('.', partialIdx);
-            if (extendEnd === -1) extendEnd = text.indexOf('\n', partialIdx);
-            if (extendEnd === -1) extendEnd = partialIdx + len;
-            var matched = text.substring(partialIdx, extendEnd + 1).trim();
-            if (matched.length >= 10) {
-                return { found: true, matchedText: matched };
-            }
+    // 6. 첫 단어만으로 위치 추정
+    if (words.length > 0) {
+        var firstWordPos = text.indexOf(words[0]);
+        if (firstWordPos !== -1) {
+            var estimatedEnd = Math.min(firstWordPos + searchText.length, text.length);
+            var matchedText = text.substring(firstWordPos, estimatedEnd);
+            return { found: true, matchedText: matchedText, position: firstWordPos };
         }
     }
     
-    // 4. 핵심 키워드 매칭 (명사/동사 추출)
-    var keywords = searchText.match(/[가-힣]{2,}(?:은|는|이|가|을|를|에|로|으로)?/g) || [];
-    if (keywords.length >= 2) {
-        var keywordPattern = keywords.slice(0, 3).join('.*?');
-        try {
-            var regex = new RegExp(keywordPattern);
-            var match = text.match(regex);
-            if (match && match[0].length >= 10 && match[0].length <= 100) {
-                return { found: true, matchedText: match[0] };
-            }
-        } catch (e) {
-            // 정규식 오류 무시
-        }
-    }
-    
-    return { found: false, matchedText: '' };
+    return { found: false, matchedText: '', position: -1 };
 }
 
-// 대략적인 위치 찾기 (스크롤용)
+/**
+ * 대략적인 위치를 찾는 헬퍼 함수 (마커 생성 실패 시 스크롤용)
+ * @param {string} text - 전체 텍스트
+ * @param {string} searchText - 찾을 텍스트
+ * @returns {number} - 대략적 위치 (0~1 비율), 못 찾으면 -1
+ */
 function findApproximatePosition(text, searchText) {
-    if (!text || !searchText) return 0;
+    if (!text || !searchText || text.length === 0) return -1;
     
-    // 첫 10자로 검색
-    var shortSearch = searchText.substring(0, Math.min(10, searchText.length));
-    var idx = text.indexOf(shortSearch);
-    if (idx !== -1) return idx;
+    var words = searchText.split(/\s+/).filter(function(w) { return w.length >= 2; });
     
-    // 단어 단위로 검색
-    var words = searchText.split(/\s+/);
-    for (var i = 0; i < Math.min(3, words.length); i++) {
-        if (words[i].length >= 3) {
-            idx = text.indexOf(words[i]);
-            if (idx !== -1) return idx;
+    for (var i = 0; i < words.length; i++) {
+        var pos = text.indexOf(words[i]);
+        if (pos !== -1) {
+            return pos / text.length; // 0~1 사이의 비율
         }
     }
     
-    return 0;
+    // 첫 글자 5개로 시도
+    if (searchText.length >= 5) {
+        var firstChars = searchText.substring(0, 5);
+        var pos = text.indexOf(firstChars);
+        if (pos !== -1) {
+            return pos / text.length;
+        }
+    }
+    
+    return -1;
+}
+
+/**
+ * 수정 반영 영역에 마커를 렌더링하는 함수 (부분 매칭 강화)
+ * @param {string} stage - 'stage1' 또는 'stage2'
+ */
+function renderScriptWithMarkers(stage) {
+    var container = document.getElementById('revised-' + stage);
+    if (!container) {
+        console.log('⚠️ renderScriptWithMarkers: 컨테이너 없음 - revised-' + stage);
+        return;
+    }
+    
+    var stageData = state[stage];
+    if (!stageData) {
+        console.log('⚠️ renderScriptWithMarkers: 스테이지 데이터 없음 - ' + stage);
+        return;
+    }
+    
+    var text = stageData.originalScript || '';
+    var errors = stageData.allErrors || [];
+    var scrollTop = container.scrollTop;
+    var matchedCount = 0;
+    var unmatchedErrors = [];
+    
+    console.log('🔧 renderScriptWithMarkers 시작: ' + stage);
+    console.log('   - 원본 텍스트 길이: ' + text.length + '자');
+    console.log('   - 처리할 오류 수: ' + errors.length + '개');
+    
+    // 오류를 위치순으로 정렬 (뒤에서부터 처리하기 위해)
+    var sortedErrors = errors.slice().map(function(err, index) {
+        var position = findTextPosition(text, err.original);
+        return { error: err, originalIndex: index, position: position };
+    }).sort(function(a, b) {
+        return b.position - a.position; // 뒤에서부터 처리
+    });
+    
+    // 각 오류에 대해 마커 생성
+    for (var i = 0; i < sortedErrors.length; i++) {
+        var item = sortedErrors[i];
+        var err = item.error;
+        
+        if (!err.original) {
+            console.log('   ⚠️ 원문 없음: 오류 #' + err.id);
+            continue;
+        }
+        
+        var matchResult = findBestMatch(text, err.original);
+        
+        if (matchResult.found && matchResult.matchedText) {
+            // 매칭 성공
+            var displayText;
+            var markerClass;
+            
+            if (err.useRevised && err.revised) {
+                displayText = cleanRevisedText ? cleanRevisedText(err.revised) : err.revised;
+                markerClass = 'marker-revised';
+            } else {
+                displayText = matchResult.matchedText;
+                markerClass = 'marker-original';
+            }
+            
+            var escapedDisplay = escapeHtml ? escapeHtml(displayText) : displayText;
+            var titleText = (err.original + ' → ' + (err.revised || '')).replace(/"/g, '&quot;');
+            
+            var markerHtml = '<span class="correction-marker ' + markerClass + '" ' +
+                'data-marker-id="' + err.id + '" ' +
+                'data-stage="' + stage + '" ' +
+                'title="' + titleText + '">' +
+                escapedDisplay + '</span>';
+            
+            // 텍스트에서 매칭된 부분을 마커로 교체
+            var beforeMatch = text.substring(0, matchResult.position);
+            var afterMatch = text.substring(matchResult.position + matchResult.matchedText.length);
+            text = beforeMatch + markerHtml + afterMatch;
+            
+            // 매칭된 원문 저장 (scrollToMarker에서 사용)
+            err.matchedOriginal = matchResult.matchedText;
+            matchedCount++;
+            
+            console.log('   ✅ 마커 생성: #' + err.id + ' (위치: ' + matchResult.position + ')');
+        } else {
+            // 매칭 실패 - 대략적 위치 저장
+            var approxPos = findApproximatePosition(stageData.originalScript || '', err.original);
+            err.approximatePosition = approxPos;
+            unmatchedErrors.push(err);
+            
+            console.log('   ❌ 매칭 실패: #' + err.id + ' (대략 위치: ' + (approxPos >= 0 ? Math.round(approxPos * 100) + '%' : '알 수 없음') + ')');
+            console.log('      원문: "' + err.original.substring(0, 50) + '..."');
+        }
+    }
+    
+    // 컨테이너에 렌더링
+    container.innerHTML = '<div style="white-space: pre-wrap; padding: 15px; font-size: 14px; line-height: 1.8;">' + text + '</div>';
+    container.scrollTop = scrollTop;
+    
+    // 마커 클릭 이벤트 연결
+    var markers = container.querySelectorAll('.correction-marker');
+    markers.forEach(function(marker) {
+        marker.addEventListener('click', function() {
+            var markerId = this.getAttribute('data-marker-id');
+            var markerStage = this.getAttribute('data-stage');
+            
+            // 해당 오류의 인덱스 찾기
+            var errorIndex = -1;
+            var stageErrors = state[markerStage] ? state[markerStage].allErrors : [];
+            for (var j = 0; j < stageErrors.length; j++) {
+                if (stageErrors[j].id === markerId) {
+                    errorIndex = j;
+                    break;
+                }
+            }
+            
+            if (errorIndex !== -1) {
+                if (typeof setCurrentError === 'function') {
+                    setCurrentError(markerStage, errorIndex);
+                }
+                if (typeof scrollToTableRow === 'function') {
+                    scrollToTableRow(markerStage, markerId);
+                }
+            }
+        });
+    });
+    
+    console.log('🔧 수정 반영 렌더링 완료: ' + stage + ' (총 ' + errors.length + '개 중 ' + matchedCount + '개 마커 생성)');
+    
+    if (unmatchedErrors.length > 0) {
+        console.log('   ⚠️ 매칭 실패 오류 ' + unmatchedErrors.length + '개:');
+        unmatchedErrors.forEach(function(err) {
+            console.log('      - #' + err.id + ': "' + err.original.substring(0, 30) + '..."');
+        });
+    }
 }
 
 function cleanRevisedText(text) {
@@ -1377,7 +1490,7 @@ function scrollToMarker(stage, markerId) {
         }
     }
     
-    // 방법 3: 그래도 못 찾으면 원문 텍스트를 컨테이너에서 직접 검색
+    // 방법 3: 그래도 못 찾으면 대략적 위치로 스크롤
     if (!marker) {
         var errors = state[stage].allErrors || [];
         var targetError = null;
@@ -1389,6 +1502,39 @@ function scrollToMarker(stage, markerId) {
             }
         }
         
+        // approximatePosition 사용
+        if (targetError && typeof targetError.approximatePosition === 'number' && targetError.approximatePosition >= 0) {
+            var innerDiv = container.querySelector('div');
+            if (innerDiv) {
+                var scrollTarget = innerDiv.scrollHeight * targetError.approximatePosition;
+                container.scrollTop = Math.max(0, scrollTarget - 100);
+                
+                console.log('📍 대략적 위치로 스크롤: ' + Math.round(targetError.approximatePosition * 100) + '%');
+                
+                // 대략적 위치 근처 하이라이트 표시
+                var highlightDiv = document.createElement('div');
+                highlightDiv.style.cssText = 'position: absolute; left: 0; right: 0; height: 40px; background: rgba(255, 235, 59, 0.3); pointer-events: none; transition: opacity 0.5s;';
+                highlightDiv.style.top = scrollTarget + 'px';
+                
+                if (innerDiv.style.position !== 'relative') {
+                    innerDiv.style.position = 'relative';
+                }
+                innerDiv.appendChild(highlightDiv);
+                
+                setTimeout(function() {
+                    highlightDiv.style.opacity = '0';
+                    setTimeout(function() {
+                        if (highlightDiv.parentNode) {
+                            highlightDiv.parentNode.removeChild(highlightDiv);
+                        }
+                    }, 500);
+                }, 1500);
+                
+                return;
+            }
+        }
+        
+        // 원문 텍스트로 위치 계산
         if (targetError && targetError.original) {
             var containerText = container.innerText || container.textContent || '';
             var searchText = targetError.useRevised ? cleanRevisedText(targetError.revised) : targetError.original;
@@ -1397,7 +1543,6 @@ function scrollToMarker(stage, markerId) {
             if (textIndex !== -1) {
                 console.log('✅ 텍스트 위치 찾음, 스크롤 이동: ' + searchText.substring(0, 20) + '...');
                 
-                // 텍스트 위치 기반으로 스크롤 계산
                 var totalLength = containerText.length;
                 var scrollRatio = textIndex / totalLength;
                 var scrollTarget = container.scrollHeight * scrollRatio;
@@ -1407,7 +1552,6 @@ function scrollToMarker(stage, markerId) {
                     behavior: 'smooth'
                 });
                 
-                // 하이라이트 효과를 위해 임시 표시
                 highlightTextInContainer(container, searchText, stage);
                 return;
             }
