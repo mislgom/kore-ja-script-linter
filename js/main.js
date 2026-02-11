@@ -2300,17 +2300,14 @@ async function startStage1Analysis() {
             return { id: 'stage1-error-' + idx, type: err.type, original: err.original, revised: err.revised, reason: err.reason, severity: err.severity, useRevised: true };
         });
         updateProgress(90, '결과 표시 중...');
-                displayStage1Results();
+                    displayStage1Results();
         
-        // 1차 수정본 저장 (2차 분석용)
-        var revisedText = state.stage1.originalScript;
-        state.stage1.allErrors.forEach(function(err) {
-            if (err.useRevised && err.original && err.revised) {
-                revisedText = revisedText.split(err.original).join(cleanRevisedText(err.revised));
-            }
-        });
+        // 1차 수정본 저장 (2차 분석용) - v4.54: buildStage1FixedScript 사용
+        var revisedText = buildStage1FixedScript();
         state.stage1.revisedScript = revisedText;
+        state.stage1.fixedScript = revisedText;
         console.log('📝 1차 수정본 저장 완료: ' + revisedText.length + '자');
+        console.log('   - 원본과 다른가: ' + (revisedText !== state.stage1.originalScript ? '예 ✅' : '아니오 ⚠️'));
         
         updateProgress(100, '1차 분석 완료!');
 
@@ -2345,33 +2342,31 @@ async function startStage2Analysis() {
     console.log('   - 원본 대본 길이: ' + stage1Original.length + '자');
     console.log('   - 1차 오류 수: ' + stage1Errors.length + '개');
     
+        // ============================================================
+    // 2단계: 1차 수정이 반영된 대본 생성 (v4.54 핵심 수정!)
+    // buildStage1FixedScript()를 사용하여 renderScriptWithMarkers와
+    // 동일한 findBestMatch 매칭 로직으로 1차 수정본 생성
     // ============================================================
-    // 2단계: 1차 수정이 반영된 대본 생성 (핵심!)
-    // ============================================================
-    console.log('📋 2단계: 1차 수정 반영 대본 생성');
+    console.log('📋 2단계: 1차 수정 반영 대본 생성 (v4.54 buildStage1FixedScript 사용)');
     
-    var stage1FixedScript = stage1Original;
+    var stage1FixedScript = buildStage1FixedScript();
+    
+    // stage1AppliedList 생성 (10단계 AI 100점 대본 검증용)
     var stage1AppliedCount = 0;
     var stage1AppliedList = [];
+    var stage1ErrorsForList = state.stage1.allErrors || [];
     
-    for (var i = 0; i < stage1Errors.length; i++) {
-        var err = stage1Errors[i];
-        if (err.useRevised && err.original && err.revised) {
-            var originalText = err.original;
-            var revisedText = cleanRevisedText(err.revised);
-            
-            // 원본 텍스트가 대본에 존재하는지 확인
-            if (stage1FixedScript.indexOf(originalText) !== -1) {
-                stage1FixedScript = stage1FixedScript.split(originalText).join(revisedText);
+    for (var i = 0; i < stage1ErrorsForList.length; i++) {
+        var errForList = stage1ErrorsForList[i];
+        if (errForList.useRevised && errForList.original && errForList.revised) {
+            var revisedTextForList = cleanRevisedText(errForList.revised);
+            if (stage1FixedScript.indexOf(revisedTextForList) !== -1) {
                 stage1AppliedCount++;
                 stage1AppliedList.push({
                     index: i,
-                    original: originalText.substring(0, 30),
-                    revised: revisedText.substring(0, 30)
+                    original: errForList.original.substring(0, 30),
+                    revised: revisedTextForList.substring(0, 30)
                 });
-                console.log('   ✅ 1차 수정 [' + i + ']: "' + originalText.substring(0, 25) + '..." → "' + revisedText.substring(0, 25) + '..."');
-            } else {
-                console.log('   ⚠️ 1차 수정 [' + i + '] 매칭 실패: "' + originalText.substring(0, 25) + '..."');
             }
         }
     }
@@ -2379,16 +2374,17 @@ async function startStage2Analysis() {
     console.log('📄 1차 수정 적용 결과:');
     console.log('   - 적용된 수정: ' + stage1AppliedCount + '개');
     console.log('   - 1차 수정본 길이: ' + stage1FixedScript.length + '자');
+    console.log('   - 원본과 다른가: ' + (stage1FixedScript !== stage1Original ? '예 ✅' : '아니오 ⚠️'));
     
     // 1차 수정본을 state에 저장
     state.stage1.revisedScript = stage1FixedScript;
     state.stage1.fixedScript = stage1FixedScript;
     
     // 검증: 1차 수정이 실제로 적용되었는지 확인
-    if (stage1AppliedCount > 0) {
-        console.log('✅ 1차 수정이 성공적으로 적용됨');
-    } else if (stage1Errors.length > 0) {
-        console.log('⚠️ 1차 오류가 있지만 적용된 수정이 없음 - 원본 사용');
+    if (stage1FixedScript !== stage1Original) {
+        console.log('✅ 1차 수정이 성공적으로 적용됨 (텍스트 변경 확인)');
+    } else if (stage1ErrorsForList.length > 0) {
+        console.log('⚠️ 1차 오류가 있지만 텍스트가 변경되지 않음 - 매칭 문제 가능성');
     }
     
     // 스크립트 최소 길이 검사
@@ -2710,43 +2706,26 @@ function displayStage2Results() {
     var container = document.getElementById('analysis-stage2');
     if (!container) return;
     
-    // ============================================================
-    // 핵심 수정: state.stage2.originalScript가 1차 수정본인지 확인
-    // 만약 원본과 같다면 1차 수정본으로 강제 교체
+        // ============================================================
+    // v4.54 핵심 수정: state.stage2.originalScript가 1차 수정본인지 확인
+    // 만약 원본과 같다면 buildStage1FixedScript()로 강제 교체
     // ============================================================
     var stage1Original = state.stage1 ? state.stage1.originalScript : '';
     var stage1Fixed = state.stage1 ? (state.stage1.fixedScript || state.stage1.revisedScript) : '';
     
-    // state.stage2.originalScript가 원본과 같으면 1차 수정본으로 교체
-    if (state.stage2.originalScript === stage1Original && stage1Fixed && stage1Fixed.length > 0) {
-        console.log('⚠️ displayStage2Results: stage2.originalScript가 원본임, 1차 수정본으로 교체');
-        state.stage2.originalScript = stage1Fixed;
+    // stage1Fixed가 없거나 원본과 같으면 buildStage1FixedScript()로 재생성
+    if (!stage1Fixed || stage1Fixed.trim() === stage1Original.trim()) {
+        console.log('⚠️ displayStage2Results: 1차 수정본이 없거나 원본과 동일, buildStage1FixedScript()로 재생성');
+        stage1Fixed = buildStage1FixedScript();
+        state.stage1.fixedScript = stage1Fixed;
+        state.stage1.revisedScript = stage1Fixed;
     }
     
-    // 1차 수정본이 없으면 직접 생성
-    if (!stage1Fixed || stage1Fixed === stage1Original) {
-        console.log('⚠️ displayStage2Results: 1차 수정본 재생성');
-        var stage1Errors = state.stage1 ? state.stage1.allErrors : [];
-        var rebuiltScript = stage1Original;
-        
-        for (var i = 0; i < stage1Errors.length; i++) {
-            var err = stage1Errors[i];
-            if (err.useRevised && err.original && err.revised) {
-                var revisedText = cleanRevisedText(err.revised);
-                if (rebuiltScript.indexOf(err.original) !== -1) {
-                    rebuiltScript = rebuiltScript.split(err.original).join(revisedText);
-                    console.log('   ✅ 1차 수정 재적용: "' + err.original.substring(0, 20) + '..."');
-                }
-            }
-        }
-        
-        // 재생성한 1차 수정본을 stage2.originalScript에 저장
-        if (rebuiltScript !== stage1Original) {
-            state.stage2.originalScript = rebuiltScript;
-            state.stage1.fixedScript = rebuiltScript;
-            state.stage1.revisedScript = rebuiltScript;
-            console.log('✅ 1차 수정본 재생성 완료: ' + rebuiltScript.length + '자');
-        }
+    // state.stage2.originalScript가 원본과 같으면 1차 수정본으로 교체
+    if (state.stage2.originalScript.trim() === stage1Original.trim() && stage1Fixed && stage1Fixed.trim() !== stage1Original.trim()) {
+        console.log('⚠️ displayStage2Results: stage2.originalScript가 원본임, 1차 수정본으로 교체');
+        state.stage2.originalScript = stage1Fixed;
+        console.log('✅ stage2.originalScript 교체 완료: ' + stage1Fixed.length + '자');
     }
     
     console.log('📊 displayStage2Results 시작');
@@ -3679,6 +3658,104 @@ function enableStage2Buttons(hasErrors) {
     if (btnBefore) btnBefore.disabled = !hasErrors;
     if (btnAfter) btnAfter.disabled = !hasErrors;
     if (btnFix) btnFix.disabled = false;
+}
+// ============================================================
+// buildStage1FixedScript - 1차 수정본 확정 생성 (v4.54)
+// renderScriptWithMarkers와 동일한 findBestMatch 매칭 로직 사용
+// ============================================================
+function buildStage1FixedScript() {
+    var originalText = state.stage1.originalScript || '';
+    var errors = state.stage1.allErrors || [];
+    
+    if (!originalText || originalText.length === 0) {
+        console.log('⚠️ buildStage1FixedScript: 원본 텍스트 없음');
+        return originalText;
+    }
+    
+    if (!errors || errors.length === 0) {
+        console.log('⚠️ buildStage1FixedScript: 오류 없음, 원본 반환');
+        return originalText;
+    }
+    
+    console.log('🔧 buildStage1FixedScript 시작');
+    console.log('   - 원본 길이: ' + originalText.length + '자');
+    console.log('   - 오류 수: ' + errors.length + '개');
+    
+    // 1단계: useRevised=true인 오류만 필터링하고 매칭 위치 찾기
+    var replacements = [];
+    
+    for (var i = 0; i < errors.length; i++) {
+        var err = errors[i];
+        
+        if (!err.useRevised || !err.original || !err.revised) {
+            continue;
+        }
+        
+        var searchText = err.original.trim();
+        if (searchText.length === 0) continue;
+        
+        var revisedText = cleanRevisedText(err.revised);
+        if (!revisedText || revisedText.length === 0) continue;
+        
+        // findBestMatch 사용 (renderScriptWithMarkers와 동일한 로직)
+        var match = findBestMatch(originalText, searchText);
+        
+        if (match.found && match.position !== -1 && match.matchedText.length > 0) {
+            replacements.push({
+                position: match.position,
+                length: match.matchedText.length,
+                matchedText: match.matchedText,
+                revisedText: revisedText,
+                errorId: err.id
+            });
+            console.log('   ✅ 매칭 성공 [' + err.id + ']: "' + match.matchedText.substring(0, 25) + '..." → "' + revisedText.substring(0, 25) + '..."');
+        } else {
+            console.log('   ❌ 매칭 실패 [' + err.id + ']: "' + searchText.substring(0, 25) + '..."');
+        }
+    }
+    
+    // 2단계: 위치순 정렬
+    replacements.sort(function(a, b) { return a.position - b.position; });
+    
+    // 3단계: 겹치는 치환 제거
+    var finalReplacements = [];
+    var lastEnd = 0;
+    for (var i = 0; i < replacements.length; i++) {
+        if (replacements[i].position >= lastEnd) {
+            finalReplacements.push(replacements[i]);
+            lastEnd = replacements[i].position + replacements[i].length;
+        }
+    }
+    
+    // 4단계: 텍스트 조립 (앞에서부터 순서대로)
+    var result = '';
+    var pos = 0;
+    
+    for (var i = 0; i < finalReplacements.length; i++) {
+        var r = finalReplacements[i];
+        
+        // 치환 위치 이전 텍스트 그대로 유지
+        if (r.position > pos) {
+            result += originalText.substring(pos, r.position);
+        }
+        
+        // 수정안 삽입
+        result += r.revisedText;
+        
+        pos = r.position + r.length;
+    }
+    
+    // 마지막 치환 이후 텍스트 그대로 유지
+    if (pos < originalText.length) {
+        result += originalText.substring(pos);
+    }
+    
+    console.log('🔧 buildStage1FixedScript 완료');
+    console.log('   - 적용된 수정: ' + finalReplacements.length + '개');
+    console.log('   - 결과 길이: ' + result.length + '자');
+    console.log('   - 원본과 다른가: ' + (result !== originalText ? '예' : '아니오'));
+    
+    return result;
 }
 
 function fixScript(stage) {
