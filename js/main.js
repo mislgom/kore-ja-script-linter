@@ -1687,8 +1687,20 @@ async function startStage1Analysis() {
             return { id: 'stage1-error-' + idx, type: err.type, original: err.original, revised: err.revised, reason: err.reason, severity: err.severity, useRevised: true };
         });
         updateProgress(90, '결과 표시 중...');
-        displayStage1Results();
+                displayStage1Results();
+        
+        // 1차 수정본 저장 (2차 분석용)
+        var revisedText = state.stage1.originalScript;
+        state.stage1.allErrors.forEach(function(err) {
+            if (err.useRevised && err.original && err.revised) {
+                revisedText = revisedText.split(err.original).join(cleanRevisedText(err.revised));
+            }
+        });
+        state.stage1.revisedScript = revisedText;
+        console.log('📝 1차 수정본 저장 완료: ' + revisedText.length + '자');
+        
         updateProgress(100, '1차 분석 완료!');
+
         setTimeout(hideProgress, 1000);
     } catch (error) {
         if (error.name !== 'AbortError') { alert('분석 중 오류가 발생했습니다: ' + error.message); }
@@ -1764,11 +1776,23 @@ async function startStage2Analysis() {
         state.scores = scoreResult.finalScores;
         state.scoreDeductions = scoreResult.deductions;
         
-        // 상태 저장
+                // 상태 저장
         state.stage2 = {
+            originalScript: stage1Script,
             analysis: analysisResult,
-            allErrors: filteredIssues,
-            currentErrorIndex: 0
+            allErrors: filteredIssues.map(function(err, idx) {
+                return {
+                    id: 'stage2-error-' + idx,
+                    type: err.type || '기타',
+                    original: err.original || err.location || '',
+                    revised: err.suggestion || err.revised || '',
+                    reason: err.reason || '',
+                    severity: err.severity || 'medium',
+                    useRevised: true
+                };
+            }),
+            currentErrorIndex: 0,
+            isFixed: false
         };
         
         state.perfectScript = analysisResult.perfectScript || stage1Script;
@@ -1881,89 +1905,91 @@ function getCategoryColor(category) {
 }
 
 function displayScoresAndPerfectScript(scores, deductions, improvements) {
-    var scoreSection = document.getElementById('score-section');
-    if (!scoreSection) return;
+    var scoreSection = document.getElementById('score-display');
+    if (!scoreSection) {
+        console.error('❌ score-display 요소를 찾을 수 없습니다');
+        return;
+    }
     
     var avgScore = Math.round((scores.senior + scores.fun + scores.flow + scores.retention) / 4);
     var passClass = avgScore >= 80 ? 'pass' : 'fail';
     var passText = avgScore >= 80 ? '합격' : '재검토 필요';
     
-    var html = `
-        <div class="score-header">
-            <h3>📊 대본 분석 점수</h3>
-            <div class="average-score ${passClass}">
-                평균: ${avgScore}점 (${passText})
-            </div>
-        </div>
-        
-        <div class="score-cards">
-            ${createScoreCard('시니어 적합도', scores.senior, deductions.senior)}
-            ${createScoreCard('재미 요소', scores.fun, deductions.fun)}
-            ${createScoreCard('이야기 흐름', scores.flow, deductions.flow)}
-            ${createScoreCard('시청자 이탈 방지', scores.retention, deductions.retention)}
-        </div>
-        
-        <div class="improvement-section">
-            <h4>📈 100점 달성 개선방안</h4>
-            <table class="improvement-table">
-                <thead>
-                    <tr>
-                        <th>항목</th>
-                        <th>현재</th>
-                        <th>목표</th>
-                        <th>개선 방안</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
+    var html = '<div style="padding:20px;">' +
+        '<div style="text-align:center;margin-bottom:20px;">' +
+        '<span style="font-size:24px;font-weight:bold;color:' + (avgScore >= 80 ? '#69f0ae' : '#ff5555') + ';">' +
+        '평균: ' + avgScore + '점 (' + passText + ')' +
+        '</span></div>' +
+        '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:15px;margin-bottom:20px;">' +
+        createScoreCard('시니어 적합도', scores.senior, deductions.senior) +
+        createScoreCard('재미 요소', scores.fun, deductions.fun) +
+        createScoreCard('이야기 흐름', scores.flow, deductions.flow) +
+        createScoreCard('시청자 이탈 방지', scores.retention, deductions.retention) +
+        '</div>';
+    
+    html += '<div style="background:#1e1e1e;border-radius:10px;padding:15px;margin-bottom:20px;">' +
+        '<h4 style="color:#ffaa00;margin-bottom:15px;">📈 100점 달성 개선방안</h4>' +
+        '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+        '<thead><tr style="background:#333;">' +
+        '<th style="padding:10px;border:1px solid #444;color:#fff;">항목</th>' +
+        '<th style="padding:10px;border:1px solid #444;color:#fff;">현재</th>' +
+        '<th style="padding:10px;border:1px solid #444;color:#fff;">목표</th>' +
+        '<th style="padding:10px;border:1px solid #444;color:#fff;">개선 방안</th>' +
+        '</tr></thead><tbody>';
     
     improvements.forEach(function(item) {
+        var scoreColor = item.currentScore >= 90 ? '#69f0ae' : item.currentScore >= 70 ? '#ffaa00' : '#ff5555';
         var solutions = item.issues.map(function(i) { return i.solution; }).join('<br>');
-        html += `
-            <tr>
-                <td>${item.category}</td>
-                <td class="${item.currentScore >= 90 ? 'score-high' : item.currentScore >= 70 ? 'score-medium' : 'score-low'}">${item.currentScore}점</td>
-                <td>100점</td>
-                <td>${solutions}</td>
-            </tr>
-        `;
+        html += '<tr>' +
+            '<td style="padding:10px;border:1px solid #444;color:#fff;font-weight:bold;">' + item.category + '</td>' +
+            '<td style="padding:10px;border:1px solid #444;color:' + scoreColor + ';text-align:center;font-weight:bold;">' + item.currentScore + '점</td>' +
+            '<td style="padding:10px;border:1px solid #444;color:#69f0ae;text-align:center;">100점</td>' +
+            '<td style="padding:10px;border:1px solid #444;color:#aaa;">' + solutions + '</td>' +
+            '</tr>';
     });
     
-    html += `
-                </tbody>
-            </table>
-        </div>
-    `;
+    html += '</tbody></table></div>';
     
-    // 100점 대본 영역
     if (state.perfectScript) {
-        html += `
-            <div class="perfect-script-section">
-                <h4>✨ 100점 수정 대본</h4>
-                <div class="perfect-script-content" id="perfect-script-content">
-                    ${state.perfectScript.replace(/\n/g, '<br>')}
-                </div>
-        `;
+        html += '<div style="background:#1e1e1e;border-radius:10px;padding:15px;margin-bottom:20px;">' +
+            '<h4 style="color:#69f0ae;margin-bottom:15px;">✨ 100점 수정 대본</h4>' +
+            '<div class="perfect-script-content" style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;max-height:400px;overflow-y:auto;">' +
+            escapeHtml(state.perfectScript) +
+            '</div>';
         
         if (state.changePoints && state.changePoints.length > 0) {
-            html += `<div class="change-points"><strong>주요 변경 포인트:</strong><ul>`;
+            html += '<div class="change-points-section" style="margin-top:15px;">' +
+                '<div class="change-points-title" style="color:#ffaa00;font-weight:bold;margin-bottom:10px;">📍 주요 변경 포인트 (클릭하면 해당 위치로 이동)</div>';
+            
             state.changePoints.forEach(function(point, index) {
-                html += `<li><a href="#" onclick="scrollToPerfectScriptChange(${index}); return false;">${point.summary || '변경 ' + (index + 1)}</a></li>`;
+                var displayText = point.original ? point.original.substring(0, 25) + (point.original.length > 25 ? '...' : '') : '변경 ' + (index + 1);
+                html += '<a href="#" class="change-point-item" data-point-index="' + index + '" style="display:inline-block;background:#2d2d2d;color:#69f0ae;padding:8px 12px;margin:5px;border-radius:5px;cursor:pointer;font-size:12px;border-left:3px solid #69f0ae;text-decoration:none;">' +
+                    (index + 1) + '. ' + displayText + '</a>';
             });
-            html += `</ul></div>`;
+            
+            html += '</div>';
         }
         
-        html += `
-                <div class="perfect-script-actions">
-                    <button onclick="downloadPerfectScript()" class="btn-download">📥 100점 대본 다운로드</button>
-                    <button onclick="openCompareModal()" class="btn-compare">🔍 대본 비교</button>
-                </div>
-            </div>
-        `;
+        html += '<div style="text-align:center;margin-top:15px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">' +
+            '<button onclick="downloadPerfectScript()" style="background:#69f0ae;color:#000;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-weight:bold;">📥 100점 대본 다운로드</button>' +
+            '<button onclick="openCompareModal()" style="background:#9c27b0;color:#fff;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-weight:bold;">🔍 대본 비교하기</button>' +
+            '</div></div>';
     }
     
+    html += '</div>';
+    
     scoreSection.innerHTML = html;
-    scoreSection.style.display = 'block';
+    
+    document.querySelectorAll('.change-point-item').forEach(function(item) {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            var idx = parseInt(this.getAttribute('data-point-index'));
+            scrollToPerfectScriptChange(idx, state.changePoints);
+        });
+    });
+    
+    var downloadBtn = document.getElementById('btn-download');
+    if (downloadBtn) downloadBtn.disabled = false;
     
     console.log('📊 점수 표시 완료 - 평균:', avgScore);
 }
