@@ -1907,85 +1907,6 @@ function getCategoryColor(category) {
     return colors[category] || '#69f0ae';
 }
 
-function generateDefaultImprovements(scores) {
-    var improvements = [];
-    
-    if (scores.senior < 100) {
-        improvements.push({
-            category: '시니어적합도',
-            currentScore: scores.senior,
-            targetScore: 100,
-            issues: [
-                { location: '전체', solution: '긴 문장을 짧게 분리하고 호칭을 명확히 해야 합니다', problem: '문장이 길어 이해 어려움' }
-            ]
-        });
-    }
-    
-    if (scores.fun < 100) {
-        improvements.push({
-            category: '재미요소',
-            currentScore: scores.fun,
-            targetScore: 100,
-            issues: [
-                { location: '전체', solution: '갈등 대사를 강화하고 긴장감을 높여야 합니다', problem: '갈등/긴장감 부족' }
-            ]
-        });
-    }
-    
-    if (scores.flow < 100) {
-        improvements.push({
-            category: '이야기흐름',
-            currentScore: scores.flow,
-            targetScore: 100,
-            issues: [
-                { location: '전체', solution: '장면 연결 대사를 추가하고 인과관계를 명확히 해야 합니다', problem: '장면 연결 어색' }
-            ]
-        });
-    }
-    
-    if (scores.retention < 100) {
-        improvements.push({
-            category: '시청자이탈방지',
-            currentScore: scores.retention,
-            targetScore: 100,
-            issues: [
-                { location: '전체', solution: '초반 호기심 유발 요소를 추가하고 장면 끝 궁금증을 높여야 합니다', problem: '초반 몰입도 부족' }
-            ]
-        });
-    }
-    
-    console.log('📋 기본 개선 제안 생성: ' + improvements.length + '개 항목');
-    
-    return improvements;
-}
-    
-    if (scores.flow < 100) {
-        improvements.push({
-            category: '이야기흐름',
-            currentScore: scores.flow,
-            targetScore: 100,
-            issues: [
-                { location: '전체', solution: '장면 연결 대사를 추가하고 인과관계를 명확히 해야 합니다', problem: '장면 연결 어색' }
-            ]
-        });
-    }
-    
-    if (scores.retention < 100) {
-        improvements.push({
-            category: '시청자이탈방지',
-            currentScore: scores.retention,
-            targetScore: 100,
-            issues: [
-                { location: '전체', solution: '초반 호기심 유발 요소를 추가하고 장면 끝 궁금증을 높여야 합니다', problem: '초반 몰입도 부족' }
-            ]
-        });
-    }
-    
-    console.log('📋 기본 개선 제안 생성: ' + improvements.length + '개 항목');
-    
-    return improvements;
-}
-
 function displayScoresAndPerfectScript(scores, improvements, perfectScript, changePoints) {
     var scoreDisplay = document.getElementById('score-display');
     if (!scoreDisplay) return;
@@ -2011,35 +1932,23 @@ function displayScoresAndPerfectScript(scores, improvements, perfectScript, chan
         '<div style="font-size:16px;color:' + (passed ? '#69f0ae' : '#ff5555') + ';">' + (passed ? '✅ 합격' : '❌ 미합격') + '</div>' +
         '</div>';
     
-       var improvementsList = improvements && improvements.length > 0 ? improvements : generateDefaultImprovements(scores);
-    
-    if (improvementsList && improvementsList.length > 0) {
-        html += '<div><h4 style="color:#ffaa00;margin-bottom:10px;font-size:14px;">💡 개선 제안 (100점 달성 방법)</h4>';
-        improvementsList.forEach(function(imp) {
-            var categoryColor = getCategoryColor(imp.category);
+    if (improvements && improvements.length > 0) {
+        html += '<div><h4 style="color:#ffaa00;margin-bottom:10px;font-size:14px;">💡 개선 제안</h4>';
+        improvements.forEach(function(imp) {
             var issuesHtml = '';
             if (imp.issues && imp.issues.length > 0) {
                 imp.issues.forEach(function(issue) {
-                    var beforeAfter = '';
-                    if (issue.before && issue.after) {
-                        beforeAfter = '<div style="font-size:9px;color:#ff9800;margin-top:2px;">변경 전: ' + escapeHtml(issue.before.substring(0, 30)) + '...</div>' +
-                            '<div style="font-size:9px;color:#69f0ae;margin-top:1px;">변경 후: ' + escapeHtml(issue.after.substring(0, 30)) + '...</div>';
-                    }
-                    issuesHtml += '<div style="font-size:10px;color:#aaa;margin-top:5px;padding:5px;background:#1a1a1a;border-radius:4px;">' +
-                        '• <strong>' + escapeHtml(issue.location || '') + '</strong>: ' + escapeHtml(issue.solution || issue.problem || '') +
-                        beforeAfter + '</div>';
+                    issuesHtml += '<div style="font-size:10px;color:#aaa;margin-top:3px;">• ' + escapeHtml(issue.location) + ': ' + escapeHtml(issue.solution) + '</div>';
                 });
+            } else if (imp.suggestion) {
+                issuesHtml = '<div style="color:#aaa;font-size:11px;margin-top:5px;">' + escapeHtml(imp.suggestion) + '</div>';
             }
-            html += '<div style="background:#2d2d2d;padding:10px;border-radius:6px;margin-bottom:8px;border-left:3px solid ' + categoryColor + ';">' +
-                '<div style="color:' + categoryColor + ';font-weight:bold;font-size:12px;">' + escapeHtml(imp.category) + 
-                ' (' + (imp.currentScore || 0) + '점 → ' + (imp.targetScore || 100) + '점)</div>' +
+            html += '<div style="background:#2d2d2d;padding:10px;border-radius:6px;margin-bottom:8px;border-left:3px solid #ffaa00;">' +
+                '<div style="color:#fff;font-weight:bold;font-size:12px;">' + escapeHtml(imp.category) + ' (' + (imp.currentScore || '') + '점)</div>' +
                 issuesHtml + '</div>';
         });
         html += '</div>';
-        
-        console.log('💡 개선 제안 표시 완료: ' + improvementsList.length + '개 카테고리');
     }
-
     html += '</div>';
     
     var formattedScript = formatPerfectScript(perfectScript || '100점 수정 대본이 생성되지 않았습니다.');
