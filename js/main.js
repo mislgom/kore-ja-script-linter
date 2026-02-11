@@ -1853,11 +1853,28 @@ function scrollToPerfectScriptChange(index, changePoints) {
 }
 
 function createScoreCard(label, score, color) {
+    var tips = getImprovementTips(label, score);
+    var tipsHtml = score < 100 && tips ? '<div style="color:#ffaa00;font-size:9px;margin-top:5px;text-align:left;line-height:1.3;">' + tips + '</div>' : '';
+    
     return '<div style="background:#2d2d2d;padding:10px;border-radius:6px;text-align:center;">' +
         '<div style="color:#aaa;font-size:10px;margin-bottom:3px;">' + label + '</div>' +
         '<div style="font-size:24px;font-weight:bold;color:' + color + ';">' + score + '</div>' +
         '<div style="width:100%;background:#444;height:6px;border-radius:3px;margin-top:5px;">' +
-        '<div style="width:' + score + '%;background:' + color + ';height:100%;border-radius:3px;"></div></div></div>';
+        '<div style="width:' + score + '%;background:' + color + ';height:100%;border-radius:3px;"></div></div>' +
+        tipsHtml + '</div>';
+}
+
+function getImprovementTips(label, score) {
+    if (score >= 100) return '';
+    
+    var tips = {
+        '시니어 적합도': '💡 문장을 짧게, 호칭을 명확히, 관계 설명 추가',
+        '이야기 흐름': '💡 장면 연결어 추가, 시간 순서 명시, 인과관계 강화',
+        '재미 요소': '💡 갈등 심화, 반전 추가, 감정 대사 강화',
+        '시청자 이탈 방지': '💡 초반 호기심 유발, 장면 끝 궁금증 추가'
+    };
+    
+    return tips[label] || '';
 }
 
 function enableStage1Buttons(hasErrors) {
