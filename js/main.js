@@ -1217,16 +1217,135 @@ function scrollToTableRow(stage, markerId) {
 
 function scrollToMarker(stage, markerId) {
     var container = document.getElementById('revised-' + stage);
-    if (!container) return;
+    if (!container) {
+        console.log('⚠️ scrollToMarker: 컨테이너를 찾을 수 없음 - revised-' + stage);
+        return;
+    }
     
+    // 방법 1: data-marker-id로 찾기
     var marker = container.querySelector('.correction-marker[data-marker-id="' + markerId + '"]');
-    if (marker) {
-        marker.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        var isRevised = marker.classList.contains('marker-revised');
-        marker.classList.add(isRevised ? 'highlight-active' : 'highlight-active-orange');
+    
+    // 방법 2: 마커를 못 찾으면 에러 객체에서 원문으로 직접 찾기
+    if (!marker) {
+        console.log('⚠️ 마커 ID로 찾기 실패, 원문 텍스트로 검색 시도: ' + markerId);
+        
+        var errors = state[stage].allErrors || [];
+        var targetError = null;
+        
+        for (var i = 0; i < errors.length; i++) {
+            if (errors[i].id === markerId) {
+                targetError = errors[i];
+                break;
+            }
+        }
+        
+        if (targetError && targetError.original) {
+            // 컨테이너 내에서 원문 텍스트 포함하는 마커 찾기
+            var allMarkers = container.querySelectorAll('.correction-marker');
+            for (var j = 0; j < allMarkers.length; j++) {
+                var markerText = allMarkers[j].textContent || '';
+                var originalText = targetError.original;
+                var revisedText = targetError.revised ? cleanRevisedText(targetError.revised) : '';
+                
+                if (markerText === originalText || markerText === revisedText || 
+                    markerText.indexOf(originalText) !== -1 || 
+                    (revisedText && markerText.indexOf(revisedText) !== -1)) {
+                    marker = allMarkers[j];
+                    console.log('✅ 텍스트 매칭으로 마커 찾음: ' + markerText);
+                    break;
+                }
+            }
+        }
+    }
+    
+    // 방법 3: 그래도 못 찾으면 원문 텍스트를 컨테이너에서 직접 검색
+    if (!marker) {
+        var errors = state[stage].allErrors || [];
+        var targetError = null;
+        
+        for (var i = 0; i < errors.length; i++) {
+            if (errors[i].id === markerId) {
+                targetError = errors[i];
+                break;
+            }
+        }
+        
+        if (targetError && targetError.original) {
+            var containerText = container.innerText || container.textContent || '';
+            var searchText = targetError.useRevised ? cleanRevisedText(targetError.revised) : targetError.original;
+            var textIndex = containerText.indexOf(searchText);
+            
+            if (textIndex !== -1) {
+                console.log('✅ 텍스트 위치 찾음, 스크롤 이동: ' + searchText.substring(0, 20) + '...');
+                
+                // 텍스트 위치 기반으로 스크롤 계산
+                var totalLength = containerText.length;
+                var scrollRatio = textIndex / totalLength;
+                var scrollTarget = container.scrollHeight * scrollRatio;
+                
+                container.scrollTo({
+                    top: Math.max(0, scrollTarget - 100),
+                    behavior: 'smooth'
+                });
+                
+                // 하이라이트 효과를 위해 임시 표시
+                highlightTextInContainer(container, searchText, stage);
+                return;
+            }
+        }
+        
+        console.log('⚠️ scrollToMarker: 마커를 찾을 수 없음 - ' + markerId);
+        return;
+    }
+    
+    // 마커 찾음 - 스크롤 및 하이라이트
+    marker.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    var isRevised = marker.classList.contains('marker-revised');
+    marker.classList.add(isRevised ? 'highlight-active' : 'highlight-active-orange');
+    
+    setTimeout(function() {
+        marker.classList.remove('highlight-active');
+        marker.classList.remove('highlight-active-orange');
+    }, 1600);
+    
+    console.log('✅ 마커로 스크롤 이동 완료: ' + markerId);
+}
+
+// 텍스트 하이라이트 헬퍼 함수
+function highlightTextInContainer(container, searchText, stage) {
+    if (!searchText || searchText.length < 2) return;
+    
+    var innerDiv = container.querySelector('div');
+    if (!innerDiv) innerDiv = container;
+    
+    var originalHtml = innerDiv.innerHTML;
+    var escapedSearch = escapeHtml(searchText);
+    
+    // 검색 텍스트가 HTML에 있는지 확인
+    if (originalHtml.indexOf(escapedSearch) === -1) {
+        // 짧은 버전으로 재시도
+        var shortSearch = searchText.substring(0, Math.min(15, searchText.length));
+        escapedSearch = escapeHtml(shortSearch);
+        if (originalHtml.indexOf(escapedSearch) === -1) {
+            console.log('⚠️ 하이라이트할 텍스트를 찾을 수 없음');
+            return;
+        }
+    }
+    
+    var highlightId = 'temp-highlight-' + Date.now();
+    var highlightHtml = '<span id="' + highlightId + '" style="background:#ffeb3b;color:#000;padding:2px 4px;border-radius:3px;transition:background 0.3s;">' + escapedSearch + '</span>';
+    
+    innerDiv.innerHTML = originalHtml.replace(escapedSearch, highlightHtml);
+    
+    var highlightEl = document.getElementById(highlightId);
+    if (highlightEl) {
+        highlightEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // 1.6초 후 하이라이트 제거
         setTimeout(function() {
-            marker.classList.remove('highlight-active');
-            marker.classList.remove('highlight-active-orange');
+            if (highlightEl && highlightEl.parentNode) {
+                highlightEl.outerHTML = escapedSearch;
+            }
         }, 1600);
     }
 }
