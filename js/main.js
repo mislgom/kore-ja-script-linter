@@ -929,6 +929,30 @@ function downloadScript(script) {
         alert('다운로드 중 오류가 발생했습니다: ' + e.message);
     }
 }
+function downloadPerfectScript() {
+    var script = state.perfectScript;
+    if (!script || script.trim() === '') {
+        alert('다운로드할 100점 대본이 없습니다.\n2차 분석을 먼저 완료해주세요.');
+        return;
+    }
+    
+    try {
+        var blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = '100점수정본_' + new Date().toISOString().slice(0, 10) + '.txt';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function() {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 200);
+    } catch (e) {
+        alert('다운로드 중 오류가 발생했습니다: ' + e.message);
+    }
+}
 
 function initRevertButtons() {
     var r1 = document.getElementById('revised-stage1');
@@ -1944,41 +1968,6 @@ function displayScoresAndPerfectScript(scores, deductions, improvements) {
     console.log('📊 점수 표시 완료 - 평균:', avgScore);
 }
     
-    console.log('📍 변경 포인트 표시 완료: ' + (changePoints ? changePoints.length : 0) + '개');
-    
-    html += '<div style="text-align:center;margin-top:15px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">' +
-        '<button id="btn-download-perfect" style="background:#69f0ae;color:#000;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-weight:bold;">📥 100점 대본 다운로드</button>' +
-        '<button id="btn-compare-scripts" style="background:#9c27b0;color:#fff;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-weight:bold;">🔍 대본 비교하기</button>' +
-        '</div></div></div>';
-    
-    scoreDisplay.innerHTML = html;
-    
-    var downloadBtn = document.getElementById('btn-download-perfect');
-    if (downloadBtn) {
-        downloadBtn.addEventListener('click', function() {
-            if (perfectScript) {
-                downloadScript(perfectScript);
-            } else {
-                alert('100점 수정 대본이 없습니다.');
-            }
-        });
-    }
-    
-    var compareBtn = document.getElementById('btn-compare-scripts');
-    if (compareBtn) {
-        compareBtn.addEventListener('click', function() {
-            openCompareModal();
-        });
-    }
-    
-    document.querySelectorAll('.change-point-item').forEach(function(item) {
-        item.addEventListener('click', function() {
-            var idx = parseInt(this.getAttribute('data-point-index'));
-            scrollToPerfectScriptChange(idx, changePoints);
-        });
-    });
-}
-
 function formatPerfectScript(script) {
     if (!script) return '';
     
