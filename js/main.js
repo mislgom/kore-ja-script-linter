@@ -1893,6 +1893,20 @@ function displayStage2Results() {
     console.log('📊 2차 분석 결과 표시 완료: 오류 ' + (errors ? errors.length : 0) + '개, 점수/100점 대본 표시 진행');
 }
 
+function getCategoryColor(category) {
+    var colors = {
+        '시니어적합도': '#4CAF50',
+        '재미요소': '#FF9800',
+        '이야기흐름': '#2196F3',
+        '시청자이탈방지': '#9C27B0',
+        '시대착오': '#f44336',
+        '인물설정': '#00BCD4',
+        '캐릭터일관성': '#FFEB3B',
+        '장면연결성': '#E91E63'
+    };
+    return colors[category] || '#69f0ae';
+}
+
 function displayScoresAndPerfectScript(scores, improvements, perfectScript, changePoints) {
     var scoreDisplay = document.getElementById('score-display');
     if (!scoreDisplay) return;
@@ -1945,16 +1959,19 @@ function displayScoresAndPerfectScript(scores, improvements, perfectScript, chan
     
     if (changePoints && changePoints.length > 0) {
         html += '<div class="change-points-section">' +
-            '<div class="change-points-title">📍 변경 포인트 (' + changePoints.length + '개)</div>';
+            '<div class="change-points-title">📍 변경 포인트 (' + changePoints.length + '개) - 클릭하면 해당 위치로 이동</div>';
         changePoints.forEach(function(point, idx) {
-            html += '<div class="change-point-item" data-point-index="' + idx + '">' +
+            var categoryColor = getCategoryColor(point.category);
+            html += '<div class="change-point-item" data-point-index="' + idx + '" data-search-text="' + escapeHtml(point.description.substring(0, 20)) + '" style="border-left-color:' + categoryColor + ';">' +
+                '<span style="background:' + categoryColor + ';color:#000;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:bold;margin-right:8px;">' + escapeHtml(point.category) + '</span>' +
                 '<strong>[' + escapeHtml(point.location) + ']</strong> ' + 
-                escapeHtml(point.description) + 
-                ' <span style="color:#888;font-size:10px;">(' + escapeHtml(point.category) + ')</span>' +
+                escapeHtml(point.description) +
                 '</div>';
         });
         html += '</div>';
     }
+    
+    console.log('📍 변경 포인트 표시 완료: ' + (changePoints ? changePoints.length : 0) + '개');
     
     html += '<div style="text-align:center;margin-top:15px;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">' +
         '<button id="btn-download-perfect" style="background:#69f0ae;color:#000;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-weight:bold;">📥 100점 대본 다운로드</button>' +
@@ -2005,30 +2022,58 @@ function scrollToPerfectScriptChange(index, changePoints) {
     var scriptContent = document.querySelector('.perfect-script-content');
     if (!scriptContent) return;
     
-    var location = point.location;
-    var text = scriptContent.innerHTML;
+    var originalHtml = scriptContent.innerHTML;
+    var searchTexts = [
+        point.location,
+        point.description.substring(0, 15),
+        point.description.split(' ')[0]
+    ];
     
-    var searchText = escapeHtml(location);
-    var startIdx = text.indexOf(searchText);
+    var found = false;
     
-    if (startIdx !== -1) {
-        var highlightId = 'temp-highlight-' + index;
-        var before = text.substring(0, startIdx);
-        var match = text.substring(startIdx, startIdx + searchText.length);
-        var after = text.substring(startIdx + searchText.length);
+    for (var i = 0; i < searchTexts.length && !found; i++) {
+        var searchText = searchTexts[i];
+        if (!searchText || searchText.length < 2) continue;
         
-        scriptContent.innerHTML = before + '<span id="' + highlightId + '" style="background:#69f0ae;color:#000;padding:2px 4px;border-radius:3px;">' + match + '</span>' + after;
+        var escapedSearch = escapeHtml(searchText);
+        var startIdx = originalHtml.indexOf(escapedSearch);
         
-        var highlightEl = document.getElementById(highlightId);
-        if (highlightEl) {
-            highlightEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (startIdx !== -1) {
+            found = true;
+            var highlightId = 'temp-highlight-' + index + '-' + Date.now();
+            var before = originalHtml.substring(0, startIdx);
+            var match = originalHtml.substring(startIdx, startIdx + escapedSearch.length);
+            var after = originalHtml.substring(startIdx + escapedSearch.length);
             
-            setTimeout(function() {
-                highlightEl.outerHTML = match;
-            }, 2000);
+            scriptContent.innerHTML = before + 
+                '<span id="' + highlightId + '" style="background:#69f0ae80;color:#000;padding:2px 6px;border-radius:4px;border:2px solid #69f0ae;transition:all 0.3s;">' + 
+                match + '</span>' + after;
+            
+            var highlightEl = document.getElementById(highlightId);
+            if (highlightEl) {
+                highlightEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                setTimeout(function() {
+                    if (highlightEl && highlightEl.parentNode) {
+                        highlightEl.style.background = '#69f0ae40';
+                        highlightEl.style.border = '1px solid #69f0ae';
+                    }
+                }, 2000);
+                
+                setTimeout(function() {
+                    if (highlightEl && highlightEl.parentNode) {
+                        highlightEl.outerHTML = match;
+                    }
+                }, 5000);
+            }
+            
+            console.log('📍 변경 포인트 이동: [' + point.location + '] ' + point.category + ' - "' + searchText + '" 찾음');
         }
-    } else {
+    }
+    
+    if (!found) {
         scriptContent.scrollTop = 0;
+        console.log('⚠️ 변경 포인트 위치 찾기 실패: ' + point.location);
     }
 }
 
