@@ -1273,8 +1273,8 @@ function findApproximatePosition(text, searchText) {
 }
 
 /**
- * 수정 반영 영역에 마커를 렌더링하는 함수 (전체 대본 표시 보장)
- * v4.53 수정: 전체 대본이 절대 잘리지 않도록 완전히 재작성
+ * 수정 반영 영역에 마커를 렌더링하는 함수
+ * v4.53 최종 수정: 전체 대본 100% 표시 보장 + 마커 정확도 향상
  * @param {string} stage - 'stage1' 또는 'stage2'
  */
 function renderScriptWithMarkers(stage) {
@@ -1307,199 +1307,160 @@ function renderScriptWithMarkers(stage) {
     
     // 오류가 없으면 원본 그대로 표시
     if (!errors || errors.length === 0) {
-        var escapedOriginal = escapeHtml(originalText);
-        container.innerHTML = '<div style="white-space: pre-wrap; padding: 15px; font-size: 14px; line-height: 1.8; word-break: break-word;">' + escapedOriginal + '</div>';
+        container.innerHTML = '<div style="white-space: pre-wrap; padding: 15px; font-size: 14px; line-height: 1.8; word-break: break-word;">' + escapeHtml(originalText) + '</div>';
         console.log('🔧 오류 없음, 원본 대본 그대로 표시 (' + originalText.length + '자)');
         return;
     }
     
     // ================================================================
-    // 핵심 로직: 마커 위치 수집 (유효한 것만)
+    // 새로운 방식: 원본 텍스트를 먼저 escape하고, 그 안에서 마커 삽입
+    // 이 방식은 전체 텍스트가 절대 잘리지 않음을 보장
     // ================================================================
-    var validMarkers = [];
+    
+    // 1단계: 유효한 마커 위치 찾기
+    var markers = [];
     
     for (var i = 0; i < errors.length; i++) {
         var err = errors[i];
         
-        if (!err.original || err.original.length === 0) {
-            console.log('   ⚠️ 원문 없음: 오류 #' + err.id);
+        if (!err.original || err.original.trim().length === 0) {
             continue;
         }
         
-        // 원본 텍스트에서 직접 위치 찾기
-        var position = originalText.indexOf(err.original);
+        var searchText = err.original.trim();
+        var position = -1;
+        var matchedLength = 0;
+        var matchedText = '';
         
-        // 정확한 매칭 실패 시 부분 매칭 시도
-        if (position === -1) {
-            // 공백 정규화 후 시도
-            var normalizedOriginal = originalText.replace(/\s+/g, ' ');
-            var normalizedSearch = err.original.replace(/\s+/g, ' ');
-            var normalizedPos = normalizedOriginal.indexOf(normalizedSearch);
-            
-            if (normalizedPos !== -1) {
-                // 정규화된 위치를 원본 위치로 변환 (대략적)
-                position = normalizedPos;
-            }
-        }
-        
-        // 그래도 못 찾으면 첫 10글자로 시도
-        if (position === -1 && err.original.length > 10) {
-            var shortSearch = err.original.substring(0, 10);
-            position = originalText.indexOf(shortSearch);
-        }
-        
-        // 유효한 위치를 찾은 경우에만 추가
+        // 방법 1: 정확한 매칭
+        position = originalText.indexOf(searchText);
         if (position !== -1) {
-            var matchLength = err.original.length;
-            
-            // 실제 매칭된 텍스트 확인
-            var actualMatch = originalText.substring(position, position + matchLength);
-            if (actualMatch.length === 0) {
-                actualMatch = err.original;
+            matchedLength = searchText.length;
+            matchedText = searchText;
+        }
+        
+        // 방법 2: 줄바꿈/공백 정규화 후 매칭
+        if (position === -1) {
+            var normalized = searchText.replace(/\s+/g, ' ').trim();
+            if (normalized.length >= 5) {
+                // 원본에서 유사 패턴 찾기
+                var searchRegex = normalized.split(' ').join('\\s*');
+                try {
+                    var regex = new RegExp(searchRegex);
+                    var match = originalText.match(regex);
+                    if (match && match.index !== undefined) {
+                        position = match.index;
+                        matchedLength = match[0].length;
+                        matchedText = match[0];
+                    }
+                } catch (e) {
+                    // regex 오류 무시
+                }
             }
-            
-            validMarkers.push({
+        }
+        
+        // 방법 3: 핵심 키워드로 찾기 (최소 5글자 이상 단어)
+        if (position === -1) {
+            var words = searchText.split(/\s+/).filter(function(w) { return w.length >= 5; });
+            for (var j = 0; j < words.length && position === -1; j++) {
+                var wordPos = originalText.indexOf(words[j]);
+                if (wordPos !== -1) {
+                    position = wordPos;
+                    matchedLength = words[j].length;
+                    matchedText = words[j];
+                    console.log('   🔍 키워드 매칭: "' + words[j] + '" at ' + wordPos);
+                }
+            }
+        }
+        
+        if (position !== -1 && matchedLength > 0) {
+            markers.push({
                 error: err,
                 position: position,
-                length: matchLength,
-                matchedText: actualMatch
+                length: matchedLength,
+                matchedText: matchedText
             });
-            
-            err.matchedOriginal = actualMatch;
-            console.log('   ✅ 마커 위치 확인: #' + err.id + ' (위치: ' + position + ')');
+            err.matchedOriginal = matchedText;
+            console.log('   ✅ 마커 #' + err.id + ': 위치=' + position + ', 길이=' + matchedLength);
         } else {
-            console.log('   ❌ 매칭 실패: #' + err.id + ' - "' + err.original.substring(0, 20) + '..."');
-            // 대략적 위치 저장 (스크롤용)
-            err.approximatePosition = 0.5;
+            console.log('   ❌ 매칭 실패 #' + err.id + ': "' + searchText.substring(0, 25) + '..."');
         }
     }
     
-    console.log('   📊 유효한 마커: ' + validMarkers.length + '개');
-    
-    // ================================================================
-    // 마커가 하나도 없으면 원본 그대로 표시
-    // ================================================================
-    if (validMarkers.length === 0) {
-        var escapedOriginal = escapeHtml(originalText);
-        container.innerHTML = '<div style="white-space: pre-wrap; padding: 15px; font-size: 14px; line-height: 1.8; word-break: break-word;">' + escapedOriginal + '</div>';
+    // 2단계: 마커가 없으면 원본 그대로 표시
+    if (markers.length === 0) {
+        container.innerHTML = '<div style="white-space: pre-wrap; padding: 15px; font-size: 14px; line-height: 1.8; word-break: break-word;">' + escapeHtml(originalText) + '</div>';
         console.log('🔧 유효한 마커 없음, 원본 대본 그대로 표시');
         return;
     }
     
-    // ================================================================
-    // 위치순 정렬 (앞에서부터)
-    // ================================================================
-    validMarkers.sort(function(a, b) {
-        return a.position - b.position;
-    });
+    // 3단계: 위치순 정렬
+    markers.sort(function(a, b) { return a.position - b.position; });
     
-    // ================================================================
-    // 겹치는 마커 제거
-    // ================================================================
-    var filteredMarkers = [];
+    // 4단계: 겹치는 마커 제거
+    var finalMarkers = [];
     var lastEnd = 0;
-    
-    for (var i = 0; i < validMarkers.length; i++) {
-        var info = validMarkers[i];
-        if (info.position >= lastEnd) {
-            filteredMarkers.push(info);
-            lastEnd = info.position + info.length;
-        } else {
-            console.log('   ⚠️ 겹치는 마커 제외: #' + info.error.id);
+    for (var i = 0; i < markers.length; i++) {
+        if (markers[i].position >= lastEnd) {
+            finalMarkers.push(markers[i]);
+            lastEnd = markers[i].position + markers[i].length;
         }
     }
     
     // ================================================================
-    // HTML 생성 (전체 텍스트 보장)
+    // 5단계: HTML 조립 (핵심 - 전체 텍스트 보장)
     // ================================================================
-    var resultHtml = '';
-    var currentPos = 0;
+    var html = '';
+    var pos = 0;
     
-    for (var i = 0; i < filteredMarkers.length; i++) {
-        var info = filteredMarkers[i];
-        var err = info.error;
+    for (var i = 0; i < finalMarkers.length; i++) {
+        var m = finalMarkers[i];
+        var err = m.error;
         
-        // 마커 이전 텍스트 추가 (중요: 이 부분이 전체 텍스트 보장)
-        if (info.position > currentPos) {
-            var beforeText = originalText.substring(currentPos, info.position);
-            resultHtml += escapeHtml(beforeText);
+        // 마커 이전 텍스트 (이 부분이 전체 텍스트의 앞부분을 보장)
+        if (m.position > pos) {
+            html += escapeHtml(originalText.substring(pos, m.position));
         }
         
-        // 마커 생성
-        var displayText;
-        var markerClass;
+        // 마커 HTML
+        var display = (err.useRevised && err.revised) ? cleanRevisedText(err.revised) : m.matchedText;
+        var cls = (err.useRevised && err.revised) ? 'marker-revised' : 'marker-original';
+        var title = (err.original + ' → ' + (err.revised || '')).replace(/"/g, '&quot;');
         
-        if (err.useRevised && err.revised) {
-            displayText = cleanRevisedText(err.revised);
-            markerClass = 'marker-revised';
-        } else {
-            displayText = info.matchedText;
-            markerClass = 'marker-original';
-        }
+        html += '<span class="correction-marker ' + cls + '" data-marker-id="' + err.id + '" data-stage="' + stage + '" title="' + title + '">' + escapeHtml(display) + '</span>';
         
-        var escapedDisplay = escapeHtml(displayText);
-        var titleText = (err.original + ' → ' + (err.revised || '')).replace(/"/g, '&quot;');
-        
-        resultHtml += '<span class="correction-marker ' + markerClass + '" ' +
-            'data-marker-id="' + err.id + '" ' +
-            'data-stage="' + stage + '" ' +
-            'title="' + titleText + '">' +
-            escapedDisplay + '</span>';
-        
-        // 현재 위치 업데이트
-        currentPos = info.position + info.length;
+        pos = m.position + m.length;
+    }
+    
+    // 마지막 마커 이후 텍스트 (이 부분이 전체 텍스트의 뒷부분을 보장)
+    if (pos < originalText.length) {
+        html += escapeHtml(originalText.substring(pos));
     }
     
     // ================================================================
-    // 마지막 마커 이후 텍스트 추가 (중요: 끝부분 보장)
+    // 6단계: 렌더링
     // ================================================================
-    if (currentPos < originalText.length) {
-        var afterText = originalText.substring(currentPos);
-        resultHtml += escapeHtml(afterText);
-    }
-    
-    // ================================================================
-    // 최종 렌더링
-    // ================================================================
-    container.innerHTML = '<div style="white-space: pre-wrap; padding: 15px; font-size: 14px; line-height: 1.8; word-break: break-word;">' + resultHtml + '</div>';
+    container.innerHTML = '<div style="white-space: pre-wrap; padding: 15px; font-size: 14px; line-height: 1.8; word-break: break-word;">' + html + '</div>';
     container.scrollTop = scrollTop;
     
-    // ================================================================
-    // 마커 클릭 이벤트 연결
-    // ================================================================
-    var markers = container.querySelectorAll('.correction-marker');
-    markers.forEach(function(marker) {
-        marker.addEventListener('click', function() {
-            var markerId = this.getAttribute('data-marker-id');
-            var markerStage = this.getAttribute('data-stage');
-            
-            var errorIndex = -1;
-            var stageErrors = state[markerStage] ? state[markerStage].allErrors : [];
-            for (var j = 0; j < stageErrors.length; j++) {
-                if (stageErrors[j].id === markerId) {
-                    errorIndex = j;
-                    break;
-                }
+    // 7단계: 클릭 이벤트
+    container.querySelectorAll('.correction-marker').forEach(function(el) {
+        el.addEventListener('click', function() {
+            var id = this.getAttribute('data-marker-id');
+            var st = this.getAttribute('data-stage');
+            var idx = -1;
+            var errs = state[st] ? state[st].allErrors : [];
+            for (var k = 0; k < errs.length; k++) {
+                if (errs[k].id === id) { idx = k; break; }
             }
-            
-            if (errorIndex !== -1) {
-                if (typeof setCurrentError === 'function') {
-                    setCurrentError(markerStage, errorIndex);
-                }
-                if (typeof scrollToTableRow === 'function') {
-                    scrollToTableRow(markerStage, markerId);
-                }
+            if (idx !== -1) {
+                if (typeof setCurrentError === 'function') setCurrentError(st, idx);
+                if (typeof scrollToTableRow === 'function') scrollToTableRow(st, id);
             }
         });
     });
     
-    // ================================================================
-    // 완료 로그
-    // ================================================================
-    console.log('🔧 수정 반영 렌더링 완료: ' + stage);
-    console.log('   - 원본 텍스트: ' + originalText.length + '자');
-    console.log('   - 결과 HTML: ' + resultHtml.length + '자');
-    console.log('   - 마커 생성: ' + filteredMarkers.length + '개');
+    console.log('🔧 렌더링 완료: ' + stage + ' (원본 ' + originalText.length + '자 → HTML ' + html.length + '자, 마커 ' + finalMarkers.length + '개)');
 }
 
 function cleanRevisedText(text) {
