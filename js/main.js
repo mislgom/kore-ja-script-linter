@@ -1466,20 +1466,46 @@ function renderScriptWithMarkers(stage) {
 function cleanRevisedText(text) {
     if (!text) return '';
     
-    var cleaned = text
-        .replace(/\s*\/\s*/g, '')
-        .replace(/\s*\|\s*/g, '')
-        .replace(/\([^)]*\)/g, '')
-        .replace(/\[[^\]]*\]/g, '')
-        .replace(/\{[^}]*\}/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
+    var cleaned = text;
     
-    var firstOption = cleaned.split(/[,、]/)[0].trim();
+    // 슬래시(/)로 구분된 여러 옵션이 있으면 첫 번째만 사용
+    // 예: "옵션1 / 옵션2" → "옵션1"
+    if (cleaned.indexOf(' / ') !== -1) {
+        cleaned = cleaned.split(' / ')[0].trim();
+    }
     
-    console.log('🧹 수정안 정제: "' + text + '" → "' + firstOption + '"');
+    // 파이프(|)로 구분된 여러 옵션이 있으면 첫 번째만 사용
+    // 예: "옵션1 | 옵션2" → "옵션1"
+    if (cleaned.indexOf(' | ') !== -1) {
+        cleaned = cleaned.split(' | ')[0].trim();
+    }
     
-    return firstOption || cleaned || text;
+    // 괄호 안의 설명 제거 (단, 문장 전체가 괄호인 경우는 제외)
+    // 예: "수정문 (설명)" → "수정문"
+    if (cleaned.indexOf('(') !== -1 && !cleaned.startsWith('(')) {
+        cleaned = cleaned.replace(/\s*\([^)]*\)\s*$/g, '').trim();
+    }
+    
+    // 대괄호 안의 설명 제거
+    // 예: "수정문 [참고]" → "수정문"
+    if (cleaned.indexOf('[') !== -1 && !cleaned.startsWith('[')) {
+        cleaned = cleaned.replace(/\s*\[[^\]]*\]\s*$/g, '').trim();
+    }
+    
+    // 연속 공백 정리
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    
+    // 결과가 비어있으면 원본 반환
+    if (!cleaned || cleaned.length === 0) {
+        return text;
+    }
+    
+    // 로그는 실제로 변경된 경우에만 출력
+    if (cleaned !== text) {
+        console.log('🧹 수정안 정제: "' + text.substring(0, 30) + (text.length > 30 ? '...' : '') + '" → "' + cleaned.substring(0, 30) + (cleaned.length > 30 ? '...' : '') + '"');
+    }
+    
+    return cleaned;
 }
 
 function findErrorIndexById(stage, markerId) {
