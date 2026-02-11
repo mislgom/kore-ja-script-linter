@@ -1138,19 +1138,34 @@ function renderScriptWithMarkers(stage) {
     var s = state[stage];
     var text = s.originalScript;
     var errors = s.allErrors || [];
+    
+    // 매칭 성공/실패 카운터
+    var matchedCount = 0;
+    var unmatchedErrors = [];
 
+    // 에러별로 원문 위치 찾기 (부분 매칭 포함)
     var sortedErrors = errors.slice().sort(function(a, b) {
-        var posA = text.indexOf(a.original);
-        var posB = text.indexOf(b.original);
+        var posA = findTextPosition(text, a.original);
+        var posB = findTextPosition(text, b.original);
         return posB - posA;
     });
 
     sortedErrors.forEach(function(err) {
-        if (err.original && text.includes(err.original)) {
-            var displayText = err.useRevised ? cleanRevisedText(err.revised) : err.original;
+        if (!err.original) return;
+        
+        // 1차: 정확한 매칭 시도
+        var matchResult = findBestMatch(text, err.original);
+        
+        if (matchResult.found) {
+            var displayText = err.useRevised ? cleanRevisedText(err.revised) : matchResult.matchedText;
             var markerClass = err.useRevised ? 'marker-revised' : 'marker-original';
             var markerHtml = '<span class="correction-marker ' + markerClass + '" data-marker-id="' + err.id + '" data-stage="' + stage + '" title="' + escapeHtml(err.original) + ' → ' + escapeHtml(cleanRevisedText(err.revised)) + '">' + escapeHtml(displayText) + '</span>';
-            text = text.replace(err.original, markerHtml);
+            text = text.replace(matchResult.matchedText, markerHtml);
+            matchedCount++;
+            console.log('✅ 마커 생성: [' + err.id + '] "' + matchResult.matchedText.substring(0, 25) + '..."');
+        } else {
+            unmatchedErrors.push(err);
+            console.log('⚠️ 매칭 실패: [' + err.id + '] "' + err.original.substring(0, 25) + '..."');
         }
     });
 
@@ -1169,7 +1184,111 @@ function renderScriptWithMarkers(stage) {
         });
     });
     
-    console.log('🖊️ 수정 반영 렌더링 완료: ' + stage + ' (' + errors.length + '개 항목, 특수문자 정제 적용)');
+    console.log('🖊️ 수정 반영 렌더링 완료: ' + stage + ' (총 ' + errors.length + '개 중 ' + matchedCount + '개 마커 생성)');
+    
+    // 매칭 실패한 에러들의 위치 정보 저장 (스크롤용)
+    if (unmatchedErrors.length > 0) {
+        unmatchedErrors.forEach(function(err) {
+            err.unmatchedPosition = findApproximatePosition(s.originalScript, err.original);
+        });
+    }
+}
+
+// 텍스트 위치 찾기 (부분 매칭 포함)
+function findTextPosition(text, searchText) {
+    if (!text || !searchText) return -1;
+    
+    // 정확한 매칭
+    var pos = text.indexOf(searchText);
+    if (pos !== -1) return pos;
+    
+    // 앞부분만 매칭 (첫 20자)
+    var shortSearch = searchText.substring(0, Math.min(20, searchText.length));
+    return text.indexOf(shortSearch);
+}
+
+// 최적의 매칭 찾기
+function findBestMatch(text, searchText) {
+    if (!text || !searchText) return { found: false, matchedText: '' };
+    
+    // 1. 정확한 매칭
+    if (text.indexOf(searchText) !== -1) {
+        return { found: true, matchedText: searchText };
+    }
+    
+    // 2. 공백/줄바꿈 정규화 후 매칭
+    var normalizedSearch = searchText.replace(/\s+/g, ' ').trim();
+    var normalizedText = text.replace(/\s+/g, ' ');
+    if (normalizedText.indexOf(normalizedSearch) !== -1) {
+        // 원본 텍스트에서 해당 부분 찾기
+        var startWords = normalizedSearch.split(' ').slice(0, 3).join(' ');
+        var idx = text.indexOf(startWords);
+        if (idx !== -1) {
+            var endIdx = idx + normalizedSearch.length + 20;
+            var candidate = text.substring(idx, Math.min(endIdx, text.length));
+            var endMatch = candidate.indexOf('.');
+            if (endMatch === -1) endMatch = candidate.indexOf('\n');
+            if (endMatch === -1) endMatch = candidate.length;
+            var matched = candidate.substring(0, endMatch + 1).trim();
+            if (matched.length >= 5) {
+                return { found: true, matchedText: matched };
+            }
+        }
+    }
+    
+    // 3. 앞부분 15자 이상 매칭
+    for (var len = Math.min(40, searchText.length); len >= 15; len -= 5) {
+        var partial = searchText.substring(0, len);
+        var partialIdx = text.indexOf(partial);
+        if (partialIdx !== -1) {
+            // 문장 끝까지 확장
+            var extendEnd = text.indexOf('.', partialIdx);
+            if (extendEnd === -1) extendEnd = text.indexOf('\n', partialIdx);
+            if (extendEnd === -1) extendEnd = partialIdx + len;
+            var matched = text.substring(partialIdx, extendEnd + 1).trim();
+            if (matched.length >= 10) {
+                return { found: true, matchedText: matched };
+            }
+        }
+    }
+    
+    // 4. 핵심 키워드 매칭 (명사/동사 추출)
+    var keywords = searchText.match(/[가-힣]{2,}(?:은|는|이|가|을|를|에|로|으로)?/g) || [];
+    if (keywords.length >= 2) {
+        var keywordPattern = keywords.slice(0, 3).join('.*?');
+        try {
+            var regex = new RegExp(keywordPattern);
+            var match = text.match(regex);
+            if (match && match[0].length >= 10 && match[0].length <= 100) {
+                return { found: true, matchedText: match[0] };
+            }
+        } catch (e) {
+            // 정규식 오류 무시
+        }
+    }
+    
+    return { found: false, matchedText: '' };
+}
+
+// 대략적인 위치 찾기 (스크롤용)
+function findApproximatePosition(text, searchText) {
+    if (!text || !searchText) return 0;
+    
+    // 첫 10자로 검색
+    var shortSearch = searchText.substring(0, Math.min(10, searchText.length));
+    var idx = text.indexOf(shortSearch);
+    if (idx !== -1) return idx;
+    
+    // 단어 단위로 검색
+    var words = searchText.split(/\s+/);
+    for (var i = 0; i < Math.min(3, words.length); i++) {
+        if (words[i].length >= 3) {
+            idx = text.indexOf(words[i]);
+            if (idx !== -1) return idx;
+        }
+    }
+    
+    return 0;
 }
 
 function cleanRevisedText(text) {
