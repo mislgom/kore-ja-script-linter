@@ -2295,18 +2295,17 @@ async function startStage1Analysis() {
 }
 
 // ============================================================
-// startStage2Analysis - 2차 분석 실행 (v4.53 강화 버전)
-// 수정: 100점 대본에 1차/2차 수정 내용이 모두 반영되도록 개선
+// startStage2Analysis - 2차 분석 실행 (v4.53 최종 수정)
+// 핵심: 1차 수정 반영 대본 → 2차 분석 → 최종 수정 반영 → 100점 대본
 // ============================================================
 async function startStage2Analysis() {
-    console.log('🔬 2차 분석 시작...');
+    console.log('🔬 ========================================');
+    console.log('🔬 2차 분석 시작 (v4.53 최종 수정)');
+    console.log('🔬 ========================================');
     
     // ============================================================
-    // 1단계: 1차 수정이 반영된 스크립트 생성
+    // 1단계: 1차 분석 완료 여부 확인
     // ============================================================
-    var stage1FixedScript = '';
-    
-    // 1차 분석 원본 가져오기
     var stage1Original = state.stage1 ? state.stage1.originalScript : '';
     var stage1Errors = state.stage1 ? state.stage1.allErrors : [];
     
@@ -2315,27 +2314,55 @@ async function startStage2Analysis() {
         return;
     }
     
-    // 1차 수정 내용 적용 (useRevised가 true인 항목만)
-    stage1FixedScript = stage1Original;
+    console.log('📋 1단계: 1차 분석 데이터 확인');
+    console.log('   - 원본 대본 길이: ' + stage1Original.length + '자');
+    console.log('   - 1차 오류 수: ' + stage1Errors.length + '개');
+    
+    // ============================================================
+    // 2단계: 1차 수정이 반영된 대본 생성 (핵심!)
+    // ============================================================
+    console.log('📋 2단계: 1차 수정 반영 대본 생성');
+    
+    var stage1FixedScript = stage1Original;
     var stage1AppliedCount = 0;
+    var stage1AppliedList = [];
     
     for (var i = 0; i < stage1Errors.length; i++) {
         var err = stage1Errors[i];
         if (err.useRevised && err.original && err.revised) {
+            var originalText = err.original;
             var revisedText = cleanRevisedText(err.revised);
-            if (stage1FixedScript.indexOf(err.original) !== -1) {
-                stage1FixedScript = stage1FixedScript.split(err.original).join(revisedText);
+            
+            // 원본 텍스트가 대본에 존재하는지 확인
+            if (stage1FixedScript.indexOf(originalText) !== -1) {
+                stage1FixedScript = stage1FixedScript.split(originalText).join(revisedText);
                 stage1AppliedCount++;
-                console.log('   ✅ 1차 수정 적용 [' + i + ']: "' + err.original.substring(0, 20) + '..." → "' + revisedText.substring(0, 20) + '..."');
+                stage1AppliedList.push({
+                    index: i,
+                    original: originalText.substring(0, 30),
+                    revised: revisedText.substring(0, 30)
+                });
+                console.log('   ✅ 1차 수정 [' + i + ']: "' + originalText.substring(0, 25) + '..." → "' + revisedText.substring(0, 25) + '..."');
+            } else {
+                console.log('   ⚠️ 1차 수정 [' + i + '] 매칭 실패: "' + originalText.substring(0, 25) + '..."');
             }
         }
     }
     
-    console.log('📄 1차 수정 적용 완료: ' + stage1AppliedCount + '개 항목');
-    console.log('📄 1차 수정본 길이: ' + stage1FixedScript.length + '자');
+    console.log('📄 1차 수정 적용 결과:');
+    console.log('   - 적용된 수정: ' + stage1AppliedCount + '개');
+    console.log('   - 1차 수정본 길이: ' + stage1FixedScript.length + '자');
     
-    // 1차 수정본 저장
+    // 1차 수정본을 state에 저장
     state.stage1.revisedScript = stage1FixedScript;
+    state.stage1.fixedScript = stage1FixedScript;
+    
+    // 검증: 1차 수정이 실제로 적용되었는지 확인
+    if (stage1AppliedCount > 0) {
+        console.log('✅ 1차 수정이 성공적으로 적용됨');
+    } else if (stage1Errors.length > 0) {
+        console.log('⚠️ 1차 오류가 있지만 적용된 수정이 없음 - 원본 사용');
+    }
     
     // 스크립트 최소 길이 검사
     if (stage1FixedScript.trim().length < 10) {
@@ -2344,19 +2371,28 @@ async function startStage2Analysis() {
     }
     
     showProgress('2차 정밀 분석 중...');
+    updateProgress(10, '1차 수정본 기반 2차 분석 준비...');
     
     try {
         // ============================================================
-        // 2단계: AI API 호출 (1차 수정본 기반)
+        // 3단계: AI API 호출 (1차 수정본 기반으로 2차 분석)
         // ============================================================
+        console.log('📋 3단계: AI API 호출 (1차 수정본 기반)');
+        console.log('   - 분석 대상: 1차 수정 반영 대본 (' + stage1FixedScript.length + '자)');
+        
+        updateProgress(20, 'AI 분석 요청 중...');
         var prompt = buildStage2Prompt(stage1FixedScript);
+        
+        updateProgress(30, 'Gemini API 응답 대기 중...');
         var response = await callGeminiAPI(prompt);
         
-        console.log('📥 2차 분석 응답 수신');
+        console.log('📥 2차 분석 API 응답 수신 완료');
+        updateProgress(50, '분석 결과 처리 중...');
         
         // ============================================================
-        // 3단계: JSON 파싱 (다중 방법 시도)
+        // 4단계: JSON 파싱
         // ============================================================
+        console.log('📋 4단계: JSON 파싱');
         var analysisResult = null;
         
         // 방법 1: 코드 블록에서 추출
@@ -2364,9 +2400,9 @@ async function startStage2Analysis() {
         if (jsonMatch) {
             try {
                 analysisResult = JSON.parse(jsonMatch[1]);
-                console.log('✅ JSON 블록 파싱 성공');
+                console.log('   ✅ JSON 블록 파싱 성공');
             } catch (e) {
-                console.log('JSON 블록 파싱 실패, 다른 방법 시도');
+                console.log('   ⚠️ JSON 블록 파싱 실패: ' + e.message);
             }
         }
         
@@ -2377,16 +2413,16 @@ async function startStage2Analysis() {
             if (jsonStart !== -1 && jsonEnd !== -1) {
                 try {
                     analysisResult = JSON.parse(response.substring(jsonStart, jsonEnd + 1));
-                    console.log('✅ 직접 JSON 파싱 성공');
+                    console.log('   ✅ 직접 JSON 파싱 성공');
                 } catch (e) {
-                    console.log('직접 JSON 파싱 실패');
+                    console.log('   ⚠️ 직접 JSON 파싱 실패: ' + e.message);
                 }
             }
         }
         
         // 방법 3: 기본값 사용
         if (!analysisResult) {
-            console.log('⚠️ JSON 파싱 실패, 기본값 사용');
+            console.log('   ⚠️ JSON 파싱 실패, 기본값 사용');
             analysisResult = {
                 issues: [],
                 scores: { senior: 75, fun: 75, flow: 75, retention: 75 },
@@ -2396,25 +2432,31 @@ async function startStage2Analysis() {
             };
         }
         
+        updateProgress(60, '오류 필터링 중...');
+        
         // ============================================================
-        // 4단계: 나레이션 오류 필터링
+        // 5단계: 나레이션 오류 필터링
         // ============================================================
+        console.log('📋 5단계: 나레이션 오류 필터링');
         var rawIssues = analysisResult.issues || [];
         var filteredIssues = [];
         
         try {
             filteredIssues = filterNarrationErrors(rawIssues, stage1FixedScript);
         } catch (filterError) {
-            console.error('⚠️ 나레이션 필터링 오류:', filterError);
+            console.error('   ⚠️ 필터링 오류:', filterError);
             filteredIssues = rawIssues;
         }
         
-        console.log('🔍 필터링 전 이슈: ' + rawIssues.length + '개');
-        console.log('🔍 필터링 후 이슈: ' + filteredIssues.length + '개');
+        console.log('   - 필터링 전: ' + rawIssues.length + '개');
+        console.log('   - 필터링 후: ' + filteredIssues.length + '개');
+        
+        updateProgress(70, '점수 계산 중...');
         
         // ============================================================
-        // 5단계: 점수 계산
+        // 6단계: 점수 계산
         // ============================================================
+        console.log('📋 6단계: 점수 계산');
         var aiScores = analysisResult.scores || { senior: 75, fun: 75, flow: 75, retention: 75 };
         var scoreDetails = analysisResult.scoreDetails || {};
         
@@ -2422,36 +2464,40 @@ async function startStage2Analysis() {
         try {
             scoreResult = calculateScoresFromAnalysis(stage1FixedScript, aiScores, scoreDetails);
         } catch (scoreError) {
-            console.error('⚠️ 점수 계산 오류:', scoreError);
+            console.error('   ⚠️ 점수 계산 오류:', scoreError);
             scoreResult = {
                 finalScores: aiScores,
                 deductions: { senior: [], fun: [], flow: [], retention: [] }
             };
         }
         
-        console.log('📈 점수 계산 결과:', scoreResult);
+        console.log('   - 최종 점수:', JSON.stringify(scoreResult.finalScores));
         
         state.scores = scoreResult.finalScores;
         state.scoreDeductions = scoreResult.deductions;
         
         // ============================================================
-        // 6단계: 개선 방안 생성
+        // 7단계: 개선 방안 생성
         // ============================================================
+        console.log('📋 7단계: 개선 방안 생성');
         var improvements = [];
         try {
             improvements = buildImprovementsFromDeductions(scoreResult.deductions, scoreResult.finalScores);
         } catch (impError) {
-            console.error('⚠️ 개선 방안 생성 오류:', impError);
+            console.error('   ⚠️ 개선 방안 생성 오류:', impError);
             improvements = [];
         }
+        console.log('   - 생성된 개선 방안: ' + improvements.length + '개');
         
-        console.log('💡 생성된 개선 방안: ' + improvements.length + '개');
+        updateProgress(80, '2차 수정 적용 중...');
         
         // ============================================================
-        // 7단계: 상태 저장
+        // 8단계: state.stage2 저장 (2차 분석 기준 = 1차 수정본)
         // ============================================================
+        console.log('📋 8단계: state.stage2 저장');
+        
         state.stage2 = {
-            originalScript: stage1FixedScript,  // 1차 수정본을 2차의 원본으로 사용
+            originalScript: stage1FixedScript,  // 핵심! 1차 수정본을 2차의 원본으로 사용
             analysis: analysisResult,
             allErrors: filteredIssues.map(function(err, idx) {
                 return {
@@ -2467,82 +2513,130 @@ async function startStage2Analysis() {
             scores: scoreResult.finalScores,
             scoreDetails: scoreResult.deductions,
             improvements: improvements,
+            revisedScript: '',
+            fixedScript: '',
             currentErrorIndex: 0,
             isCompleted: true,
             isFixed: false
         };
         
-        // ============================================================
-        // 8단계: 100점 대본 생성 (핵심 수정!)
-        // 1차 수정 + 2차 수정이 모두 반영된 대본을 기반으로 100점 대본 생성
-        // ============================================================
+        console.log('   - stage2.originalScript 길이: ' + state.stage2.originalScript.length + '자');
+        console.log('   - stage2.allErrors 수: ' + state.stage2.allErrors.length + '개');
         
-        // 2차 수정 내용 적용
-        var stage2FixedScript = stage1FixedScript;
+        // ============================================================
+        // 9단계: 최종 수정 반영 대본 생성 (1차 수정본 + 2차 수정)
+        // ============================================================
+        console.log('📋 9단계: 최종 수정 반영 대본 생성');
+        
+        var finalFixedScript = stage1FixedScript;  // 1차 수정본에서 시작
         var stage2Errors = state.stage2.allErrors;
         var stage2AppliedCount = 0;
         
         for (var j = 0; j < stage2Errors.length; j++) {
             var err2 = stage2Errors[j];
             if (err2.useRevised && err2.original && err2.revised) {
+                var originalText2 = err2.original;
                 var revisedText2 = cleanRevisedText(err2.revised);
-                if (stage2FixedScript.indexOf(err2.original) !== -1) {
-                    stage2FixedScript = stage2FixedScript.split(err2.original).join(revisedText2);
+                
+                if (finalFixedScript.indexOf(originalText2) !== -1) {
+                    finalFixedScript = finalFixedScript.split(originalText2).join(revisedText2);
                     stage2AppliedCount++;
-                    console.log('   ✅ 2차 수정 적용 [' + j + ']: "' + err2.original.substring(0, 20) + '..." → "' + revisedText2.substring(0, 20) + '..."');
+                    console.log('   ✅ 2차 수정 [' + j + ']: "' + originalText2.substring(0, 25) + '..." → "' + revisedText2.substring(0, 25) + '..."');
+                } else {
+                    console.log('   ⚠️ 2차 수정 [' + j + '] 매칭 실패: "' + originalText2.substring(0, 25) + '..."');
                 }
             }
         }
         
-        console.log('📄 2차 수정 적용 완료: ' + stage2AppliedCount + '개 항목');
-        console.log('📄 2차 수정본(최종) 길이: ' + stage2FixedScript.length + '자');
+        console.log('📄 최종 수정 반영 결과:');
+        console.log('   - 2차 수정 적용: ' + stage2AppliedCount + '개');
+        console.log('   - 최종 수정본 길이: ' + finalFixedScript.length + '자');
         
-        // 2차 수정본 저장
-        state.stage2.revisedScript = stage2FixedScript;
-        state.stage2.fixedScript = stage2FixedScript;
-        state.finalScript = stage2FixedScript;
+        // 최종 수정본 저장
+        state.stage2.revisedScript = finalFixedScript;
+        state.stage2.fixedScript = finalFixedScript;
+        state.finalScript = finalFixedScript;
         
-        // 100점 대본 결정:
-        // AI가 제공한 perfectScript가 있고, 실제 수정이 반영되어 있으면 사용
-        // 그렇지 않으면 2차 수정본(stage2FixedScript)을 100점 대본으로 사용
+        updateProgress(90, '100점 대본 생성 중...');
+        
+        // ============================================================
+        // 10단계: 100점 대본 생성
+        // ============================================================
+        console.log('📋 10단계: 100점 대본 생성');
+        
         var aiPerfectScript = analysisResult.perfectScript || '';
         
+        // AI가 제공한 100점 대본이 있고, 충분히 길면 사용
+        // 단, 1차/2차 수정 내용이 반영되어 있는지 검증
+        var usePerfectFromAI = false;
+        
         if (aiPerfectScript && aiPerfectScript.trim().length > 100) {
-            // AI가 제공한 100점 대본 사용 (단, 1차/2차 수정 내용이 반영되어야 함)
-            state.perfectScript = aiPerfectScript;
-            console.log('💯 100점 대본: AI 제공본 사용 (' + aiPerfectScript.length + '자)');
-        } else {
-            // AI가 제공하지 않았으면 2차 수정본을 100점 대본으로 사용
-            state.perfectScript = stage2FixedScript;
-            console.log('💯 100점 대본: 2차 수정본 사용 (' + stage2FixedScript.length + '자)');
+            // 1차 수정 내용이 AI 100점 대본에 반영되어 있는지 확인
+            var stage1ReflectedInAI = true;
+            for (var k = 0; k < stage1AppliedList.length && k < 3; k++) {
+                var applied = stage1AppliedList[k];
+                if (aiPerfectScript.indexOf(applied.revised) === -1) {
+                    stage1ReflectedInAI = false;
+                    console.log('   ⚠️ AI 100점 대본에 1차 수정 미반영: "' + applied.revised + '"');
+                    break;
+                }
+            }
+            
+            if (stage1ReflectedInAI) {
+                usePerfectFromAI = true;
+                console.log('   ✅ AI 100점 대본에 1차 수정 내용 반영 확인됨');
+            }
         }
         
-        // 변경 포인트 추출 (원본과 100점 대본 비교)
+        if (usePerfectFromAI) {
+            state.perfectScript = aiPerfectScript;
+            console.log('   💯 100점 대본: AI 제공본 사용 (' + aiPerfectScript.length + '자)');
+        } else {
+            // AI 대본을 사용하지 않고 최종 수정본을 100점 대본으로 사용
+            state.perfectScript = finalFixedScript;
+            console.log('   💯 100점 대본: 최종 수정본 사용 (' + finalFixedScript.length + '자)');
+        }
+        
+        // ============================================================
+        // 11단계: 변경 포인트 추출 (원본과 100점 대본 비교)
+        // ============================================================
+        console.log('📋 11단계: 변경 포인트 추출');
+        
         state.changePoints = [];
         try {
             var changes = findDifferences(stage1Original, state.perfectScript);
             state.changePoints = changes.slice(0, 10);
-            console.log('📍 변경 포인트: ' + state.changePoints.length + '개');
+            console.log('   - 변경 포인트: ' + state.changePoints.length + '개');
         } catch (diffError) {
-            console.error('⚠️ 변경 포인트 추출 오류:', diffError);
+            console.error('   ⚠️ 변경 포인트 추출 오류:', diffError);
             state.changePoints = [];
         }
         
-        console.log('✅ 2차 분석 상태 저장 완료');
-        console.log('   - stage2.allErrors: ' + state.stage2.allErrors.length + '개');
-        console.log('   - scores: ' + JSON.stringify(state.scores));
-        console.log('   - improvements: ' + improvements.length + '개');
-        console.log('   - perfectScript: ' + state.perfectScript.length + '자');
-        console.log('   - changePoints: ' + state.changePoints.length + '개');
+        updateProgress(95, '결과 표시 중...');
         
         // ============================================================
-        // 9단계: 결과 표시
+        // 12단계: 결과 표시
         // ============================================================
+        console.log('📋 12단계: 결과 표시');
+        
         displayStage2Results(filteredIssues);
         displayScoresAndPerfectScript(scoreResult.finalScores, scoreResult.deductions, improvements);
         
-        hideProgress();
-        console.log('🎉 2차 분석 완료!');
+        updateProgress(100, '2차 분석 완료!');
+        
+        console.log('🔬 ========================================');
+        console.log('🔬 2차 분석 완료!');
+        console.log('🔬 ========================================');
+        console.log('📊 최종 요약:');
+        console.log('   - 원본 대본: ' + stage1Original.length + '자');
+        console.log('   - 1차 수정 적용: ' + stage1AppliedCount + '개');
+        console.log('   - 1차 수정본: ' + stage1FixedScript.length + '자');
+        console.log('   - 2차 수정 적용: ' + stage2AppliedCount + '개');
+        console.log('   - 최종 수정본: ' + finalFixedScript.length + '자');
+        console.log('   - 100점 대본: ' + state.perfectScript.length + '자');
+        console.log('   - 평균 점수: ' + Math.round((scoreResult.finalScores.senior + scoreResult.finalScores.fun + scoreResult.finalScores.flow + scoreResult.finalScores.retention) / 4) + '점');
+        
+        setTimeout(hideProgress, 1000);
         
     } catch (error) {
         console.error('❌ 2차 분석 오류:', error);
