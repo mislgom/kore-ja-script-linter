@@ -1362,156 +1362,77 @@ function buildStage1Prompt(script) {
 }
 
 function buildStage2Prompt(script) {
-    console.log('📝 2차 분석 프롬프트 생성: 정밀 검토 + 놓친 오류 + 점수 산출 + 100점 대본 생성');
-    
-    return '당신은 조선시대 사극 대본 전문 작가이자 최고급 품질 검수 전문가입니다.\n' +
-        '1차 분석에서 놓친 미세한 오류를 찾고, 대본 품질을 정밀 평가하고, 100점짜리 완벽한 대본을 만들어주세요.\n\n' +
-        '## 🎯 2차 분석 목적: 정밀 검토 + 점수 산출 + 100점 대본 생성\n\n' +
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-        '## ✅ 검사항목 1: 시간 왜곡 (미세한 부분)\n' +
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
-        '- 1차에서 놓친 미묘한 시간 순서 오류\n' +
-        '- "잠시 후", "이윽고" 등의 시간 표현 일관성\n' +
-        '- 하루 중 시간대 흐름의 자연스러움\n\n' +
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-        '## ✅ 검사항목 2: 이야기 흐름 (감정선 연결)\n' +
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
-        '- 인물의 감정 변화가 자연스럽게 연결되는가\n' +
-        '- 갑작스러운 감정 전환이 있는가\n' +
-        '- 감정의 고조와 해소가 적절한가\n\n' +
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-        '## ✅ 검사항목 3: 쌩뚱맞은 표현 (대사 자연스러움)\n' +
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
-        '- 대사가 상황에 맞게 자연스러운가\n' +
-        '- 어색하거나 부자연스러운 문장 구조\n' +
-        '- 조선시대 말투로서 어색한 표현\n\n' +
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-        '## ✅ 검사항목 4: 캐릭터 일관성 (호칭 일관성)\n' +
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
-        '- 같은 인물을 부르는 호칭이 일관되는가\n' +
-        '- 신분에 맞는 호칭을 사용하는가\n' +
-        '- 관계 변화에 따른 호칭 변화가 자연스러운가\n\n' +
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-        '## ✅ 검사항목 5: 장면 연결성 (복선/떡밥 회수)\n' +
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
-        '- 앞에서 언급된 복선이 회수되는가\n' +
-        '- 떡밥(암시)이 적절히 해소되는가\n' +
-        '- 미완결된 이야기 요소가 있는가\n\n' +
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-        '## ✅ 검사항목 6: 역사적 사실 오류\n' +
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
-        '- 조선시대 역사적 사실과 맞지 않는 내용\n' +
-        '- 실존 인물/사건의 잘못된 묘사\n' +
-        '- 시대별 제도/문화의 오류\n\n' +
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-        '## 📊 점수 산출 (4개 항목, 각 100점 만점) + 100점 달성 방법\n' +
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
-        '### 1. 시니어 적합도 (senior) - 100점 만들기\n' +
-        '- 긴 문장 → 짧은 문장 2개로 분리\n' +
-        '- 어려운 한자어 → 쉬운 우리말로 교체\n' +
-        '- 호칭 불명확 → 관계를 알 수 있는 호칭 추가\n' +
-        '- 100점 기준: 60대 이상이 한 번에 이해 가능\n\n' +
-        '### 2. 재미 요소 (fun) - 100점 만들기\n' +
-        '- 갈등 약함 → 대립 대사 강화\n' +
-        '- 긴장감 없음 → 위기 상황 암시 추가\n' +
-        '- 속마음 안 보임 → 혼잣말/독백 추가\n' +
-        '- 100점 기준: 다음 장면이 궁금해지는 몰입감\n\n' +
-        '### 3. 이야기 흐름 (flow) - 100점 만들기\n' +
-        '- 장면 전환 어색 → 연결 대사/지문 추가\n' +
-        '- 인과관계 불명확 → 이유 설명 대사 추가\n' +
-        '- 시간 점프 → "며칠 후" 등 시간 표시 추가\n' +
-        '- 100점 기준: 논리적 비약 없이 술술 읽힘\n\n' +
-        '### 4. 시청자 이탈 방지 (retention) - 100점 만들기\n' +
-        '- 초반 지루 → 첫 대사에 호기심 유발 요소\n' +
-        '- 장면 끝 밋밋 → 긴장감 있는 마무리 대사\n' +
-        '- 중간 늘어짐 → 불필요한 대사 삭제/압축\n' +
-        '- 100점 기준: 끝까지 보고 싶어지는 구성\n\n' +
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-        '## ⛔ 오류로 판정하지 말 것\n' +
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
-        '- 나레이션 (나레이션:, NA:, N: 등)\n' +
-        '- 지문/설명 (괄호 안 행동 묘사)\n' +
-        '- 음향효과 ([SE], [BGM] 등)\n\n' +
-        '## 📝 분석 대상 대본:\n```\n' + script + '\n```\n\n' +
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-        '## 🏆 100점 수정 대본 작성 규칙 (매우 중요!!!)\n' +
-        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
-        '**perfectScript에는 반드시 아래 4가지를 모두 적용한 완성본을 작성하세요:**\n\n' +
-        '### 🔴 시니어 적합도 100점 적용\n' +
-        '- 모든 긴 문장을 2개 이하 짧은 문장으로 분리\n' +
-        '- 모든 호칭에 관계가 드러나게 수정 (예: "그가" → "사위가")\n' +
-        '- 어려운 단어를 쉬운 말로 교체\n\n' +
-        '### 🟠 재미 요소 100점 적용\n' +
-        '- 갈등 장면에 긴장감 있는 대사 추가\n' +
-        '- 인물의 속마음을 드러내는 표현 추가\n' +
-        '- 반전/의외성 요소 강화\n\n' +
-        '### 🟢 이야기 흐름 100점 적용\n' +
-        '- 모든 장면 전환에 연결 표현 추가\n' +
-        '- 인과관계가 명확하게 드러나도록 수정\n' +
-        '- 시간/공간 이동 시 설명 추가\n\n' +
-        '### 🔵 시청자 이탈 방지 100점 적용\n' +
-        '- 첫 장면에 호기심 유발 요소 강화\n' +
-        '- 각 장면 끝에 다음이 궁금해지는 마무리\n' +
-        '- 지루한 부분 삭제/압축\n\n' +
-        '## 📤 응답 형식 (반드시 JSON만, 수정안에 / 또는 괄호 금지!):\n' +
-        '```json\n' +
-        '{\n' +
-        '  "errors": [\n' +
-        '    {"type": "오류유형", "original": "원문", "revised": "수정안 하나만", "reason": "사유 15자 이내", "severity": "high/medium/low"}\n' +
-        '  ],\n' +
-        '  "scores": {\n' +
-        '    "senior": 75,\n' +
-        '    "fun": 70,\n' +
-        '    "flow": 80,\n' +
-        '    "retention": 65\n' +
-        '  },\n' +
-        '  "improvements": [\n' +
-        '    {\n' +
-        '      "category": "시니어적합도",\n' +
-        '      "currentScore": 75,\n' +
-        '      "targetScore": 100,\n' +
-        '      "issues": [\n' +
-        '        {"location": "S#1", "problem": "문장이 길어 이해 어려움", "solution": "두 문장으로 분리", "before": "원문", "after": "수정문"}\n' +
-        '      ]\n' +
-        '    },\n' +
-        '    {\n' +
-        '      "category": "재미요소",\n' +
-        '      "currentScore": 70,\n' +
-        '      "targetScore": 100,\n' +
-        '      "issues": [\n' +
-        '        {"location": "S#2", "problem": "갈등이 약함", "solution": "긴장감 대사 추가", "before": "원문", "after": "수정문"}\n' +
-        '      ]\n' +
-        '    },\n' +
-        '    {\n' +
-        '      "category": "이야기흐름",\n' +
-        '      "currentScore": 80,\n' +
-        '      "targetScore": 100,\n' +
-        '      "issues": [\n' +
-        '        {"location": "S#3", "problem": "장면 연결 어색", "solution": "연결 대사 추가", "before": "원문", "after": "수정문"}\n' +
-        '      ]\n' +
-        '    },\n' +
-        '    {\n' +
-        '      "category": "시청자이탈방지",\n' +
-        '      "currentScore": 65,\n' +
-        '      "targetScore": 100,\n' +
-        '      "issues": [\n' +
-        '        {"location": "S#1", "problem": "초반 호기심 부족", "solution": "궁금증 유발 대사 추가", "before": "원문", "after": "수정문"}\n' +
-        '      ]\n' +
-        '    }\n' +
-        '  ],\n' +
-        '  "changePoints": [\n' +
-        '    {"location": "S#1", "description": "문장 분리로 가독성 향상", "category": "시니어적합도"},\n' +
-        '    {"location": "S#2", "description": "갈등 대사 추가", "category": "재미요소"},\n' +
-        '    {"location": "S#3", "description": "장면 연결 대사 추가", "category": "이야기흐름"},\n' +
-        '    {"location": "S#1", "description": "호기심 유발 대사 추가", "category": "시청자이탈방지"}\n' +
-        '  ],\n' +
-        '  "perfectScript": "위 4가지 개선사항을 모두 적용한 100점짜리 완성 대본 전체"\n' +
-        '}\n' +
-        '```\n\n' +
-        '⚠️ 최종 확인:\n' +
-        '1. perfectScript에 improvements의 모든 수정사항이 실제로 반영되었는지 확인!\n' +
-        '2. 나레이션은 오류로 넣지 말 것!\n' +
-        '3. revised에 / 또는 () 넣지 말 것!';
+    return `당신은 한국 시니어 대상 낭독 대본 전문 검수자입니다.
+
+## 검수 대상 대본:
+${script}
+
+## 검수 항목 (6가지):
+1. **시간 왜곡 검사**: 시제 혼란, 시간 순서 오류
+2. **이야기 흐름**: 논리적 연결성, 장면 전환의 자연스러움
+3. **대사 자연스러움**: 구어체 적절성, 어색한 표현
+4. **호칭 일관성**: 같은 인물에 대한 호칭 통일
+5. **장면 연결성**: 장면 간 이동의 명확성
+6. **역사적 오류**: 시대에 맞지 않는 용어나 상황
+
+## 점수 산출 기준 (구체적 감점 방식):
+
+### 시니어 적합도 (100점 시작):
+- 50자 초과 문장 1개당: -5점
+- 30~50자 문장 1개당: -3점
+- 불명확한 호칭(그가, 그녀가 등) 1개당: -4점
+- 어려운 한자어/외래어 1개당: -2점
+
+### 재미 요소 (100점 시작):
+- 갈등 요소 없음: -15점
+- 반전/의외성 없음: -10점
+- 감정 표현 부족: -8점
+- 긴장감 부족: -10점
+
+### 이야기 흐름 (100점 시작):
+- 장면 전환 설명 부족 1건당: -5점
+- 인과관계 표현 부족: -7점
+- 시간 순서 혼란: -10점
+
+### 시청자 이탈 방지 (100점 시작):
+- 초반(첫 500자) 훅 없음: -12점
+- 클리프행어 없음: -8점
+- 중반 처짐 구간 존재: -10점
+
+## 응답 형식 (반드시 JSON):
+\`\`\`json
+{
+    "issues": [
+        {
+            "type": "검사항목명",
+            "location": "위치 설명",
+            "original": "원본 텍스트",
+            "suggestion": "수정 제안",
+            "reason": "수정 이유"
+        }
+    ],
+    "scores": {
+        "senior": 점수,
+        "fun": 점수,
+        "flow": 점수,
+        "retention": 점수
+    },
+    "scoreDetails": {
+        "senior": ["감점사유1 (-N점)", "감점사유2 (-N점)"],
+        "fun": ["감점사유1 (-N점)"],
+        "flow": ["감점사유1 (-N점)"],
+        "retention": ["감점사유1 (-N점)"]
+    },
+    "perfectScript": "모든 문제를 수정한 100점 대본 전문"
+}
+\`\`\`
+
+## 중요 규칙:
+1. 나레이션의 조선어투는 오류가 아닙니다 (허용)
+2. 점수는 반드시 감점 기준에 따라 계산하세요
+3. 100점은 감점 사유가 전혀 없을 때만 부여하세요
+4. scoreDetails에 구체적인 감점 내역을 필수로 작성하세요
+5. perfectScript는 모든 감점 사유를 해결한 대본이어야 합니다`;
 }
 
 function filterNarrationErrors(errors, script) {
@@ -1752,75 +1673,103 @@ async function startStage1Analysis() {
 }
 
 async function startStage2Analysis() {
-    var script = state.stage1.fixedScript || state.stage1.originalScript;
-    if (!script) { alert('1차 분석을 먼저 완료해주세요.'); return; }
-    var apiKey = localStorage.getItem('GEMINI_API_KEY');
-    if (!apiKey) { alert('API 키를 먼저 설정해주세요.'); return; }
-
-    showProgress('2차 분석 시작...');
-    updateProgress(10, 'AI 정밀 분석 요청 중...');
-
+    console.log('🔬 2차 분석 시작...');
+    
+    var stage1Script = state.stage1?.revisedScript || '';
+    if (!stage1Script) {
+        alert('1차 분석을 먼저 완료해주세요.');
+        return;
+    }
+    
+    showProgress('2차 정밀 분석 중...');
+    
     try {
-        state.stage2.originalScript = script;
-        state.stage2.isFixed = false;
-        state.stage2.currentErrorIndex = -1;
-        var prompt = buildStage2Prompt(script);
-        updateProgress(30, 'Gemini API 응답 대기 중...');
+        var prompt = buildStage2Prompt(stage1Script);
         var response = await callGeminiAPI(prompt);
-        updateProgress(70, '분석 결과 처리 중...');
-        var result = parseApiResponse(response);
         
-        console.log('📥 2차 분석 API 응답 파싱 결과:', result);
+        console.log('📥 2차 분석 응답 수신');
         
-        var filteredErrors = filterNarrationErrors(result.errors || [], script);
+        // JSON 파싱 시도
+        var analysisResult = null;
         
-        state.stage2.analysis = result;
-        state.stage2.allErrors = filteredErrors.map(function(err, idx) {
-            return { id: 'stage2-error-' + idx, type: err.type, original: err.original, revised: err.revised, reason: err.reason, severity: err.severity, useRevised: true };
-        });
-        
-        if (result.scores) {
-            state.scores = result.scores;
-            console.log('✅ 점수 저장됨:', result.scores);
-        } else {
-            state.scores = { senior: 70, fun: 70, flow: 70, retention: 70 };
-            console.log('⚠️ 점수 없음, 기본값 사용:', state.scores);
+        // 방법 1: 코드 블록에서 추출
+        var jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+        if (jsonMatch) {
+            try {
+                analysisResult = JSON.parse(jsonMatch[1]);
+            } catch (e) {
+                console.log('JSON 블록 파싱 실패, 다른 방법 시도');
+            }
         }
         
-        if (result.perfectScript) {
-            state.perfectScript = result.perfectScript;
-            console.log('✅ 100점 대본 저장됨: ' + result.perfectScript.length + '자');
-        } else {
-            state.perfectScript = script;
-            console.log('⚠️ 100점 대본 없음, 원본 사용');
+        // 방법 2: 전체 응답에서 JSON 추출
+        if (!analysisResult) {
+            var jsonStart = response.indexOf('{');
+            var jsonEnd = response.lastIndexOf('}');
+            if (jsonStart !== -1 && jsonEnd !== -1) {
+                try {
+                    analysisResult = JSON.parse(response.substring(jsonStart, jsonEnd + 1));
+                } catch (e) {
+                    console.log('직접 JSON 파싱 실패');
+                }
+            }
         }
         
-        if (result.changePoints) {
-            state.changePoints = result.changePoints;
-        } else {
-            state.changePoints = [];
+        // 방법 3: 기본값 사용
+        if (!analysisResult) {
+            console.log('⚠️ JSON 파싱 실패, 기본값 사용');
+            analysisResult = {
+                issues: [],
+                scores: { senior: 70, fun: 70, flow: 70, retention: 70 },
+                scoreDetails: {},
+                perfectScript: stage1Script
+            };
         }
         
-        updateProgress(90, '결과 표시 중...');
-        displayStage2Results();
+        // 나레이션 오류 필터링
+        var filteredIssues = filterNarrationErrors(analysisResult.issues || []);
         
-        displayScoresAndPerfectScript(
-            state.scores, 
-            result.improvements || [], 
-            state.perfectScript, 
-            state.changePoints
-        );
+        // AI 점수 추출
+        var aiScores = analysisResult.scores || { senior: 70, fun: 70, flow: 70, retention: 70 };
+        var scoreDetails = analysisResult.scoreDetails || {};
         
-        console.log('🏆 2차 분석 완료: 점수 및 100점 대본 표시됨');
+        // 로컬 점수 계산 및 보정
+        var scoreResult = calculateScoresFromAnalysis(stage1Script, aiScores, scoreDetails);
         
-        updateProgress(100, '2차 분석 완료!');
-        setTimeout(hideProgress, 1000);
-    } catch (error) {
-        if (error.name !== 'AbortError') { 
-            console.error('❌ 2차 분석 오류:', error);
-            alert('분석 중 오류가 발생했습니다: ' + error.message); 
+        // 최종 점수 적용
+        state.scores = scoreResult.finalScores;
+        state.scoreDeductions = scoreResult.deductions;
+        
+        // 상태 저장
+        state.stage2 = {
+            analysis: analysisResult,
+            allErrors: filteredIssues,
+            currentErrorIndex: 0
+        };
+        
+        state.perfectScript = analysisResult.perfectScript || stage1Script;
+        state.changePoints = [];
+        
+        // 변경 포인트 추출
+        if (state.perfectScript !== stage1Script) {
+            var changes = findDifferences(stage1Script, state.perfectScript);
+            state.changePoints = changes.slice(0, 10);
         }
+        
+        // 개선사항 생성
+        var improvements = buildImprovementsFromDeductions(scoreResult.deductions, scoreResult.finalScores);
+        
+        // 결과 표시
+        displayStage2Results(filteredIssues);
+        displayScoresAndPerfectScript(scoreResult.finalScores, scoreResult.deductions, improvements);
+        
         hideProgress();
+        console.log('✅ 2차 분석 완료');
+        
+    } catch (error) {
+        console.error('2차 분석 오류:', error);
+        hideProgress();
+        alert('2차 분석 중 오류가 발생했습니다: ' + error.message);
     }
 }
 
@@ -1907,94 +1856,93 @@ function getCategoryColor(category) {
     return colors[category] || '#69f0ae';
 }
 
-function displayScoresAndPerfectScript(scores, improvements, perfectScript, changePoints) {
-    var scoreDisplay = document.getElementById('score-display');
-    if (!scoreDisplay) return;
+function displayScoresAndPerfectScript(scores, deductions, improvements) {
+    var scoreSection = document.getElementById('score-section');
+    if (!scoreSection) return;
     
-    var senior = scores.senior || 0;
-    var fun = scores.fun || 0;
-    var flow = scores.flow || 0;
-    var retention = scores.retention || 0;
-    var average = Math.round((senior + fun + flow + retention) / 4);
-    var passed = average >= 95;
+    var avgScore = Math.round((scores.senior + scores.fun + scores.flow + scores.retention) / 4);
+    var passClass = avgScore >= 80 ? 'pass' : 'fail';
+    var passText = avgScore >= 80 ? '합격' : '재검토 필요';
     
-    var html = '<div class="score-perfect-container">' +
-        '<div class="score-panel">' +
-        '<h3 style="color:#fff;margin-bottom:15px;text-align:center;">📊 품질 평가 점수</h3>' +
-        '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:15px;">' +
-        createScoreCard('시니어 적합도', senior, '#4CAF50') +
-        createScoreCard('이야기 흐름', flow, '#2196F3') +
-        createScoreCard('재미 요소', fun, '#FF9800') +
-        createScoreCard('시청자 이탈 방지', retention, '#9C27B0') +
-        '</div>' +
-        '<div style="text-align:center;padding:15px;background:#2d2d2d;border-radius:8px;margin-bottom:15px;">' +
-        '<div style="font-size:20px;color:#fff;">평균: <span style="color:' + (passed ? '#69f0ae' : '#ff5555') + ';font-weight:bold;">' + average + '점</span></div>' +
-        '<div style="font-size:16px;color:' + (passed ? '#69f0ae' : '#ff5555') + ';">' + (passed ? '✅ 합격' : '❌ 미합격') + '</div>' +
-        '</div>';
+    var html = `
+        <div class="score-header">
+            <h3>📊 대본 분석 점수</h3>
+            <div class="average-score ${passClass}">
+                평균: ${avgScore}점 (${passText})
+            </div>
+        </div>
+        
+        <div class="score-cards">
+            ${createScoreCard('시니어 적합도', scores.senior, deductions.senior)}
+            ${createScoreCard('재미 요소', scores.fun, deductions.fun)}
+            ${createScoreCard('이야기 흐름', scores.flow, deductions.flow)}
+            ${createScoreCard('시청자 이탈 방지', scores.retention, deductions.retention)}
+        </div>
+        
+        <div class="improvement-section">
+            <h4>📈 100점 달성 개선방안</h4>
+            <table class="improvement-table">
+                <thead>
+                    <tr>
+                        <th>항목</th>
+                        <th>현재</th>
+                        <th>목표</th>
+                        <th>개선 방안</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
     
-    html += '<div style="margin-top:15px;">' +
-        '<h4 style="color:#ffaa00;margin-bottom:10px;font-size:14px;text-align:center;">📋 100점 달성 개선방안</h4>' +
-        '<table style="width:100%;border-collapse:collapse;font-size:11px;">' +
-        '<thead>' +
-        '<tr style="background:#333;">' +
-        '<th style="border:1px solid #555;padding:8px;color:#fff;width:25%;">항목</th>' +
-        '<th style="border:1px solid #555;padding:8px;color:#fff;width:15%;">현재</th>' +
-        '<th style="border:1px solid #555;padding:8px;color:#fff;width:60%;">개선방안</th>' +
-        '</tr>' +
-        '</thead>' +
-        '<tbody>';
+    improvements.forEach(function(item) {
+        var solutions = item.issues.map(function(i) { return i.solution; }).join('<br>');
+        html += `
+            <tr>
+                <td>${item.category}</td>
+                <td class="${item.currentScore >= 90 ? 'score-high' : item.currentScore >= 70 ? 'score-medium' : 'score-low'}">${item.currentScore}점</td>
+                <td>100점</td>
+                <td>${solutions}</td>
+            </tr>
+        `;
+    });
     
-    var seniorImprovement = getImprovementDetail('시니어 적합도', senior, improvements);
-    html += '<tr>' +
-        '<td style="border:1px solid #555;padding:8px;color:#4CAF50;font-weight:bold;">시니어 적합도</td>' +
-        '<td style="border:1px solid #555;padding:8px;color:#fff;text-align:center;">' + senior + '점</td>' +
-        '<td style="border:1px solid #555;padding:8px;color:#aaa;">' + seniorImprovement + '</td>' +
-        '</tr>';
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
     
-    var flowImprovement = getImprovementDetail('이야기흐름', flow, improvements);
-    html += '<tr>' +
-        '<td style="border:1px solid #555;padding:8px;color:#2196F3;font-weight:bold;">이야기 흐름</td>' +
-        '<td style="border:1px solid #555;padding:8px;color:#fff;text-align:center;">' + flow + '점</td>' +
-        '<td style="border:1px solid #555;padding:8px;color:#aaa;">' + flowImprovement + '</td>' +
-        '</tr>';
-    
-    var funImprovement = getImprovementDetail('재미요소', fun, improvements);
-    html += '<tr>' +
-        '<td style="border:1px solid #555;padding:8px;color:#FF9800;font-weight:bold;">재미 요소</td>' +
-        '<td style="border:1px solid #555;padding:8px;color:#fff;text-align:center;">' + fun + '점</td>' +
-        '<td style="border:1px solid #555;padding:8px;color:#aaa;">' + funImprovement + '</td>' +
-        '</tr>';
-    
-    var retentionImprovement = getImprovementDetail('시청자이탈방지', retention, improvements);
-    html += '<tr>' +
-        '<td style="border:1px solid #555;padding:8px;color:#9C27B0;font-weight:bold;">시청자 이탈 방지</td>' +
-        '<td style="border:1px solid #555;padding:8px;color:#fff;text-align:center;">' + retention + '점</td>' +
-        '<td style="border:1px solid #555;padding:8px;color:#aaa;">' + retentionImprovement + '</td>' +
-        '</tr>';
-    
-    html += '</tbody></table></div>';
-    
-    html += '</div>';
-    
-    var formattedScript = formatPerfectScript(perfectScript || '100점 수정 대본이 생성되지 않았습니다.');
-    
-    html += '<div class="perfect-panel">' +
-        '<h3 style="color:#69f0ae;margin-bottom:15px;text-align:center;">💯 100점 수정 대본</h3>' +
-        '<div class="perfect-script-content">' + formattedScript + '</div>';
-    
-    if (changePoints && changePoints.length > 0) {
-        html += '<div class="change-points-section">' +
-            '<div class="change-points-title">📍 변경 포인트 (' + changePoints.length + '개) - 클릭하면 해당 위치로 이동</div>';
-        changePoints.forEach(function(point, idx) {
-            var categoryColor = getCategoryColor(point.category);
-            html += '<div class="change-point-item" data-point-index="' + idx + '" data-search-text="' + escapeHtml(point.description.substring(0, 20)) + '" style="border-left-color:' + categoryColor + ';">' +
-                '<span style="background:' + categoryColor + ';color:#000;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:bold;margin-right:8px;">' + escapeHtml(point.category) + '</span>' +
-                '<strong>[' + escapeHtml(point.location) + ']</strong> ' + 
-                escapeHtml(point.description) +
-                '</div>';
-        });
-        html += '</div>';
+    // 100점 대본 영역
+    if (state.perfectScript) {
+        html += `
+            <div class="perfect-script-section">
+                <h4>✨ 100점 수정 대본</h4>
+                <div class="perfect-script-content" id="perfect-script-content">
+                    ${state.perfectScript.replace(/\n/g, '<br>')}
+                </div>
+        `;
+        
+        if (state.changePoints && state.changePoints.length > 0) {
+            html += `<div class="change-points"><strong>주요 변경 포인트:</strong><ul>`;
+            state.changePoints.forEach(function(point, index) {
+                html += `<li><a href="#" onclick="scrollToPerfectScriptChange(${index}); return false;">${point.summary || '변경 ' + (index + 1)}</a></li>`;
+            });
+            html += `</ul></div>`;
+        }
+        
+        html += `
+                <div class="perfect-script-actions">
+                    <button onclick="downloadPerfectScript()" class="btn-download">📥 100점 대본 다운로드</button>
+                    <button onclick="openCompareModal()" class="btn-compare">🔍 대본 비교</button>
+                </div>
+            </div>
+        `;
     }
+    
+    scoreSection.innerHTML = html;
+    scoreSection.style.display = 'block';
+    
+    console.log('📊 점수 표시 완료 - 평균:', avgScore);
+}
     
     console.log('📍 변경 포인트 표시 완료: ' + (changePoints ? changePoints.length : 0) + '개');
     
@@ -2102,27 +2050,270 @@ function scrollToPerfectScriptChange(index, changePoints) {
     }
 }
 
-function createScoreCard(label, score, color) {
-    return '<div style="background:#2d2d2d;padding:10px;border-radius:6px;text-align:center;">' +
-        '<div style="color:#aaa;font-size:10px;margin-bottom:3px;">' + label + '</div>' +
-        '<div style="font-size:24px;font-weight:bold;color:' + color + ';">' + score + '</div>' +
-        '<div style="width:100%;background:#444;height:6px;border-radius:3px;margin-top:5px;">' +
-        '<div style="width:' + score + '%;background:' + color + ';height:100%;border-radius:3px;"></div></div>' +
-        '</div>';
+function createScoreCard(label, score, deductions) {
+    var scoreClass = score >= 90 ? 'high' : score >= 70 ? 'medium' : 'low';
+    var deductionText = '';
+    
+    if (deductions && deductions.length > 0) {
+        deductionText = '<div class="score-deductions">';
+        deductions.slice(0, 3).forEach(function(d) {
+            deductionText += '<div class="deduction-item">• ' + d + '</div>';
+        });
+        deductionText += '</div>';
+    } else {
+        deductionText = '<div class="score-deductions"><div class="deduction-item">• 감점 사항 없음</div></div>';
+    }
+    
+    return `
+        <div class="score-card">
+            <div class="score-label">${label}</div>
+            <div class="score-value ${scoreClass}">${score}점</div>
+            ${deductionText}
+        </div>
+    `;
 }
 
-function getImprovementTips(label, score) {
-    if (score >= 100) return '';
-    
+function getImprovementTips(category, score) {
     var tips = {
-        '시니어 적합도': '💡 문장을 짧게, 호칭을 명확히, 관계 설명 추가',
-        '이야기 흐름': '💡 장면 연결어 추가, 시간 순서 명시, 인과관계 강화',
-        '재미 요소': '💡 갈등 심화, 반전 추가, 감정 대사 강화',
-        '시청자 이탈 방지': '💡 초반 호기심 유발, 장면 끝 궁금증 추가'
+        senior: {
+            high: '시니어 친화도가 우수합니다.',
+            medium: '일부 문장이 길거나 호칭이 불명확합니다.',
+            low: '긴 문장과 불명확한 호칭이 많습니다.'
+        },
+        fun: {
+            high: '재미 요소가 충분합니다.',
+            medium: '갈등이나 반전 요소를 보강하세요.',
+            low: '갈등, 반전, 감정 표현이 부족합니다.'
+        },
+        flow: {
+            high: '이야기 흐름이 자연스럽습니다.',
+            medium: '장면 전환 설명을 보완하세요.',
+            low: '장면 연결과 인과관계가 부족합니다.'
+        },
+        retention: {
+            high: '시청자 이탈 방지 요소가 좋습니다.',
+            medium: '초반 훅이나 클리프행어를 추가하세요.',
+            low: '초반 훅과 클리프행어가 부족합니다.'
+        }
     };
     
-    return tips[label] || '';
+    var level = score >= 90 ? 'high' : score >= 70 ? 'medium' : 'low';
+    return tips[category] ? tips[category][level] : '분석 정보 없음';
 }
+
+function calculateScoresFromAnalysis(script, aiScores, scoreDetails) {
+    console.log('📊 점수 검증 및 보정 시작...');
+    
+    var lines = script.split('\n');
+    var totalChars = script.length;
+    
+    // 1. 시니어 적합도 점수 계산
+    var seniorScore = 100;
+    var seniorDeductions = [];
+    
+    var longSentences = 0;
+    var veryLongSentences = 0;
+    lines.forEach(function(line) {
+        if (line.trim().length > 50) {
+            veryLongSentences++;
+        } else if (line.trim().length > 30) {
+            longSentences++;
+        }
+    });
+    
+    if (veryLongSentences > 0) {
+        var deduct = Math.min(veryLongSentences * 5, 25);
+        seniorScore -= deduct;
+        seniorDeductions.push('50자 초과 문장 ' + veryLongSentences + '개 (-' + deduct + '점)');
+    }
+    if (longSentences > 0) {
+        var deduct = Math.min(longSentences * 3, 15);
+        seniorScore -= deduct;
+        seniorDeductions.push('30자 초과 문장 ' + longSentences + '개 (-' + deduct + '점)');
+    }
+    
+    var unclearPronouns = (script.match(/그가|그녀가|그는|그녀는|그들이/g) || []).length;
+    if (unclearPronouns > 3) {
+        var deduct = Math.min((unclearPronouns - 3) * 4, 20);
+        seniorScore -= deduct;
+        seniorDeductions.push('불명확한 호칭 ' + unclearPronouns + '개 (-' + deduct + '점)');
+    }
+    
+    // 2. 재미 요소 점수 계산
+    var funScore = 100;
+    var funDeductions = [];
+    
+    var conflictKeywords = ['갈등', '다투', '싸우', '대립', '충돌', '반대', '거부', '분노', '화가'];
+    var hasConflict = conflictKeywords.some(function(kw) { return script.includes(kw); });
+    if (!hasConflict) {
+        funScore -= 15;
+        funDeductions.push('갈등 요소 부재 (-15점)');
+    }
+    
+    var twistKeywords = ['그런데', '하지만', '그러나', '뜻밖에', '갑자기', '놀랍게도', '반전'];
+    var twistCount = twistKeywords.reduce(function(count, kw) {
+        return count + (script.match(new RegExp(kw, 'g')) || []).length;
+    }, 0);
+    if (twistCount < 2) {
+        funScore -= 10;
+        funDeductions.push('반전/의외성 부족 (-10점)');
+    }
+    
+    var emotionKeywords = ['기뻐', '슬퍼', '화가', '두려', '설레', '그리워', '미안', '고마워', '사랑'];
+    var emotionCount = emotionKeywords.reduce(function(count, kw) {
+        return count + (script.match(new RegExp(kw, 'g')) || []).length;
+    }, 0);
+    if (emotionCount < 3) {
+        funScore -= 8;
+        funDeductions.push('감정 표현 부족 (-8점)');
+    }
+    
+    // 3. 이야기 흐름 점수 계산
+    var flowScore = 100;
+    var flowDeductions = [];
+    
+    var sceneTransitions = ['그때', '한편', '다음 날', '며칠 후', '그 후', '잠시 후', '얼마 뒤'];
+    var transitionCount = sceneTransitions.reduce(function(count, kw) {
+        return count + (script.match(new RegExp(kw, 'g')) || []).length;
+    }, 0);
+    if (transitionCount < 2) {
+        flowScore -= 10;
+        flowDeductions.push('장면 전환 설명 부족 (-10점)');
+    }
+    
+    var causalKeywords = ['때문에', '그래서', '따라서', '덕분에', '결국', '그 결과'];
+    var causalCount = causalKeywords.reduce(function(count, kw) {
+        return count + (script.match(new RegExp(kw, 'g')) || []).length;
+    }, 0);
+    if (causalCount < 2) {
+        flowScore -= 7;
+        flowDeductions.push('인과관계 표현 부족 (-7점)');
+    }
+    
+    // 4. 시청자 이탈 방지 점수 계산
+    var retentionScore = 100;
+    var retentionDeductions = [];
+    
+    var firstPart = script.substring(0, Math.min(500, script.length));
+    var hookKeywords = ['비밀', '충격', '놀라운', '믿기 힘든', '알려지지 않은', '숨겨진'];
+    var hasHook = hookKeywords.some(function(kw) { return firstPart.includes(kw); });
+    if (!hasHook) {
+        retentionScore -= 12;
+        retentionDeductions.push('초반 훅 부족 (-12점)');
+    }
+    
+    var lastPart = script.substring(Math.max(0, script.length - 500));
+    var cliffhangerKeywords = ['과연', '어떻게 될까', '다음에', '계속', '기대', '궁금'];
+    var hasCliffhanger = cliffhangerKeywords.some(function(kw) { return lastPart.includes(kw); });
+    if (!hasCliffhanger) {
+        retentionScore -= 8;
+        retentionDeductions.push('클리프행어 부족 (-8점)');
+    }
+    
+    // 점수 범위 제한 (30-100)
+    seniorScore = Math.max(30, Math.min(100, seniorScore));
+    funScore = Math.max(30, Math.min(100, funScore));
+    flowScore = Math.max(30, Math.min(100, flowScore));
+    retentionScore = Math.max(30, Math.min(100, retentionScore));
+    
+    var localScores = {
+        senior: seniorScore,
+        fun: funScore,
+        flow: flowScore,
+        retention: retentionScore
+    };
+    
+    // AI 점수와 로컬 점수 보정
+    var finalScores = {};
+    var categories = ['senior', 'fun', 'flow', 'retention'];
+    
+    categories.forEach(function(cat) {
+        var ai = aiScores[cat] || 70;
+        var local = localScores[cat];
+        
+        if (ai === 100 && local < 90) {
+            finalScores[cat] = local;
+        } else if (ai === 100 && local >= 90) {
+            finalScores[cat] = Math.round((ai + local) / 2);
+        } else {
+            finalScores[cat] = Math.round((ai + local) / 2);
+        }
+    });
+    
+    console.log('📊 로컬 점수:', localScores);
+    console.log('📊 AI 점수:', aiScores);
+    console.log('📊 최종 점수:', finalScores);
+    
+    return {
+        localScores: localScores,
+        finalScores: finalScores,
+        deductions: {
+            senior: seniorDeductions,
+            fun: funDeductions,
+            flow: flowDeductions,
+            retention: retentionDeductions
+        }
+    };
+}
+
+function buildImprovementsFromDeductions(deductions, scores) {
+    var improvements = [];
+    
+    var categoryMap = {
+        senior: '시니어 적합도',
+        fun: '재미 요소',
+        flow: '이야기 흐름',
+        retention: '시청자 이탈 방지'
+    };
+    
+    var solutionMap = {
+        '50자 초과': '긴 문장을 2-3개로 나누세요',
+        '30자 초과': '문장을 더 짧고 간결하게 수정하세요',
+        '불명확한 호칭': '대명사를 구체적인 이름이나 관계로 바꾸세요',
+        '갈등 요소': '인물 간 갈등이나 내적 갈등을 추가하세요',
+        '반전': '예상을 깨는 전개나 의외의 사실을 추가하세요',
+        '감정 표현': '인물의 감정을 더 구체적으로 표현하세요',
+        '장면 전환': '"그때", "한편" 등 전환 표현을 추가하세요',
+        '인과관계': '"때문에", "그래서" 등 인과 표현을 추가하세요',
+        '초반 훅': '첫 부분에 호기심을 유발하는 요소를 추가하세요',
+        '클리프행어': '끝부분에 궁금증을 유발하는 요소를 추가하세요'
+    };
+    
+    Object.keys(categoryMap).forEach(function(cat) {
+        var catDeductions = deductions[cat] || [];
+        var issues = [];
+        
+        catDeductions.forEach(function(d) {
+            var solution = '개선이 필요합니다';
+            Object.keys(solutionMap).forEach(function(key) {
+                if (d.includes(key)) {
+                    solution = solutionMap[key];
+                }
+            });
+            issues.push({
+                problem: d,
+                solution: solution
+            });
+        });
+        
+        if (issues.length === 0) {
+            issues.push({
+                problem: '감점 사항 없음',
+                solution: '현재 상태 유지'
+            });
+        }
+        
+        improvements.push({
+            category: categoryMap[cat],
+            currentScore: scores[cat] || 70,
+            targetScore: 100,
+            issues: issues
+        });
+    });
+    
+    return improvements;
+}
+
 function getImprovementDetail(category, score, improvements) {
     if (improvements && improvements.length > 0) {
         for (var i = 0; i < improvements.length; i++) {
