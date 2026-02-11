@@ -1946,10 +1946,17 @@ function displayScoresAndPerfectScript(scores, deductions, improvements) {
         '<th style="padding:10px;border:1px solid #444;color:#fff;">개선 방안</th>' +
         '</tr></thead><tbody>';
     
-    improvements.forEach(function(item) {
+    var categoryKeywords = {
+        '시니어 적합도': ['문장', '호칭', '그가', '그녀가', '그는', '그녀는'],
+        '재미 요소': ['갈등', '반전', '감정', '긴장'],
+        '이야기 흐름': ['그때', '한편', '다음', '때문에', '그래서', '장면'],
+        '시청자 이탈 방지': ['비밀', '충격', '과연', '궁금', '계속']
+    };
+    
+    improvements.forEach(function(item, index) {
         var scoreColor = item.currentScore >= 90 ? '#69f0ae' : item.currentScore >= 70 ? '#ffaa00' : '#ff5555';
         var solutions = item.issues.map(function(i) { return i.solution; }).join('<br>');
-        html += '<tr>' +
+        html += '<tr class="improvement-row" data-category="' + item.category + '" data-index="' + index + '" style="cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background=\'#2a2a2a\'" onmouseout="this.style.background=\'\'">' +
             '<td style="padding:10px;border:1px solid #444;color:#fff;font-weight:bold;">' + item.category + '</td>' +
             '<td style="padding:10px;border:1px solid #444;color:' + scoreColor + ';text-align:center;font-weight:bold;">' + item.currentScore + '점</td>' +
             '<td style="padding:10px;border:1px solid #444;color:#69f0ae;text-align:center;">100점</td>' +
@@ -1957,12 +1964,14 @@ function displayScoresAndPerfectScript(scores, deductions, improvements) {
             '</tr>';
     });
     
-    html += '</tbody></table></div>';
+    html += '</tbody></table>' +
+        '<p style="color:#888;font-size:11px;margin-top:10px;text-align:center;">💡 항목을 클릭하면 100점 대본에서 관련 부분으로 이동합니다</p>' +
+        '</div>';
     
     if (state.perfectScript) {
         html += '<div style="background:#1e1e1e;border-radius:10px;padding:15px;margin-bottom:20px;">' +
             '<h4 style="color:#69f0ae;margin-bottom:15px;">✨ 100점 수정 대본</h4>' +
-            '<div class="perfect-script-content" style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;max-height:400px;overflow-y:auto;">' +
+            '<div id="perfect-script-content" class="perfect-script-content" style="background:#2d2d2d;padding:15px;border-radius:8px;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;max-height:400px;overflow-y:auto;">' +
             escapeHtml(state.perfectScript) +
             '</div>';
         
@@ -1989,6 +1998,15 @@ function displayScoresAndPerfectScript(scores, deductions, improvements) {
     
     scoreSection.innerHTML = html;
     
+    // 개선방안 테이블 행 클릭 이벤트
+    document.querySelectorAll('.improvement-row').forEach(function(row) {
+        row.addEventListener('click', function() {
+            var category = this.getAttribute('data-category');
+            scrollToImprovementInScript(category, categoryKeywords);
+        });
+    });
+    
+    // 변경 포인트 클릭 이벤트
     document.querySelectorAll('.change-point-item').forEach(function(item) {
         item.addEventListener('click', function(e) {
             e.preventDefault();
@@ -2001,6 +2019,160 @@ function displayScoresAndPerfectScript(scores, deductions, improvements) {
     if (downloadBtn) downloadBtn.disabled = false;
     
     console.log('📊 점수 표시 완료 - 평균:', avgScore);
+}
+
+function scrollToImprovementInScript(category, categoryKeywords) {
+    var scriptContent = document.getElementById('perfect-script-content');
+    if (!scriptContent || !state.perfectScript) {
+        console.log('⚠️ 100점 대본을 찾을 수 없습니다');
+        return;
+    }
+    
+    var keywords = categoryKeywords[category] || [];
+    var scriptText = state.perfectScript;
+    var foundKeyword = null;
+    var foundPosition = -1;
+    
+    // 카테고리에 맞는 키워드 찾기
+    for (var i = 0; i < keywords.length; i++) {
+        var pos = scriptText.indexOf(keywords[i]);
+        if (pos !== -1) {
+            foundKeyword = keywords[i];
+            foundPosition = pos;
+            break;
+        }
+    }
+    
+    if (!foundKeyword) {
+        // 키워드를 못 찾으면 카테고리별 기본 위치로 이동
+        var categoryPositions = {
+            '시니어 적합도': 0.1,
+            '재미 요소': 0.3,
+            '이야기 흐름': 0.5,
+            '시청자 이탈 방지': 0.8
+        };
+        var ratio = categoryPositions[category] || 0.5;
+        scriptContent.scrollTop = scriptContent.scrollHeight * ratio;
+        
+        // 해당 위치 근처 텍스트 하이라이트
+        highlightScriptSection(scriptContent, ratio);
+        console.log('📍 ' + category + ' 위치로 이동 (비율: ' + (ratio * 100) + '%)');
+        return;
+    }
+    
+    // 키워드 주변 텍스트 하이라이트
+    highlightKeywordInScript(scriptContent, foundKeyword, category);
+    console.log('📍 ' + category + ' - "' + foundKeyword + '" 키워드 위치로 이동');
+}
+
+function highlightKeywordInScript(container, keyword, category) {
+    var originalHtml = escapeHtml(state.perfectScript);
+    var escapedKeyword = escapeHtml(keyword);
+    
+    // 기존 하이라이트 제거
+    container.innerHTML = originalHtml;
+    
+    var keywordIndex = originalHtml.indexOf(escapedKeyword);
+    if (keywordIndex === -1) return;
+    
+    // 키워드 주변 문장 찾기 (앞뒤로 50자씩)
+    var startIdx = Math.max(0, keywordIndex - 30);
+    var endIdx = Math.min(originalHtml.length, keywordIndex + escapedKeyword.length + 30);
+    
+    // 문장 경계 찾기
+    var lineStart = originalHtml.lastIndexOf('\n', keywordIndex);
+    if (lineStart === -1) lineStart = 0;
+    else lineStart += 1;
+    
+    var lineEnd = originalHtml.indexOf('\n', keywordIndex);
+    if (lineEnd === -1) lineEnd = originalHtml.length;
+    
+    var highlightText = originalHtml.substring(lineStart, lineEnd);
+    var highlightId = 'improvement-highlight-' + Date.now();
+    
+    var before = originalHtml.substring(0, lineStart);
+    var after = originalHtml.substring(lineEnd);
+    
+    container.innerHTML = before + 
+        '<span id="' + highlightId + '" style="background:rgba(105,240,174,0.3);border-left:3px solid #69f0ae;padding:2px 5px;display:inline;transition:background 0.3s;">' + 
+        highlightText + '</span>' + after;
+    
+    var highlightEl = document.getElementById(highlightId);
+    if (highlightEl) {
+        highlightEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // 하이라이트 강조 효과
+        setTimeout(function() {
+            if (highlightEl) {
+                highlightEl.style.background = 'rgba(105,240,174,0.5)';
+            }
+        }, 300);
+        
+        // 3초 후 하이라이트 약하게
+        setTimeout(function() {
+            if (highlightEl) {
+                highlightEl.style.background = 'rgba(105,240,174,0.2)';
+            }
+        }, 3000);
+        
+        // 6초 후 하이라이트 제거
+        setTimeout(function() {
+            if (highlightEl && highlightEl.parentNode) {
+                highlightEl.outerHTML = highlightText;
+            }
+        }, 6000);
+    }
+}
+
+function highlightScriptSection(container, ratio) {
+    var originalHtml = escapeHtml(state.perfectScript);
+    var lines = originalHtml.split('\n');
+    var targetLineIndex = Math.floor(lines.length * ratio);
+    
+    if (targetLineIndex >= lines.length) targetLineIndex = lines.length - 1;
+    if (targetLineIndex < 0) targetLineIndex = 0;
+    
+    var targetLine = lines[targetLineIndex];
+    if (!targetLine || targetLine.trim().length < 5) {
+        // 빈 줄이면 다음 줄 찾기
+        for (var i = targetLineIndex; i < lines.length; i++) {
+            if (lines[i] && lines[i].trim().length >= 5) {
+                targetLineIndex = i;
+                targetLine = lines[i];
+                break;
+            }
+        }
+    }
+    
+    if (!targetLine) return;
+    
+    var highlightId = 'section-highlight-' + Date.now();
+    lines[targetLineIndex] = '<span id="' + highlightId + '" style="background:rgba(105,240,174,0.3);border-left:3px solid #69f0ae;padding:2px 5px;display:inline;">' + targetLine + '</span>';
+    
+    container.innerHTML = lines.join('\n');
+    
+    var highlightEl = document.getElementById(highlightId);
+    if (highlightEl) {
+        highlightEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        setTimeout(function() {
+            if (highlightEl) {
+                highlightEl.style.background = 'rgba(105,240,174,0.5)';
+            }
+        }, 300);
+        
+        setTimeout(function() {
+            if (highlightEl) {
+                highlightEl.style.background = 'rgba(105,240,174,0.2)';
+            }
+        }, 3000);
+        
+        setTimeout(function() {
+            if (highlightEl && highlightEl.parentNode) {
+                highlightEl.outerHTML = targetLine;
+            }
+        }, 6000);
+    }
 }
     
 function formatPerfectScript(script) {
