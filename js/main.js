@@ -2790,11 +2790,16 @@ async function startStage1Analysis() {
             
             console.log('📦 청크 ' + (i + 1) + '/' + chunks.length + ' 분석 시작 (' + chunk.text.length + '자)');
             
-            // 맥락 정보를 포함한 프롬프트 생성
+             // 맥락 정보를 포함한 프롬프트 생성 (1패스 요약 포함)
             var contextInfo = '\n\n## 📌 대본 전체 맥락 정보 (이 정보를 참고하여 분석하세요)\n';
             contextInfo += '현재 분석 구간: 전체 ' + script.length + '자 중 ' + chunk.startIndex + '~' + chunk.endIndex + '자 (' + (i + 1) + '/' + chunks.length + ' 구간)\n\n';
-            
+
+            if (state.scriptSummary) {
+                contextInfo += '### 📖 전체 대본 요약 (참고용):\n' + state.scriptSummary + '\n\n';
+            }
+
             if (scriptContext.characters.length > 0) {
+
                 contextInfo += '### 등장인물 목록:\n';
                 for (var c = 0; c < scriptContext.characters.length; c++) {
                     var ch = scriptContext.characters[c];
