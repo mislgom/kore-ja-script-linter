@@ -3585,7 +3585,7 @@ async function startStage2Analysis() {
         console.log('   - 원본 대본: ' + stage1Original.length + '자');
         console.log('   - 1차 수정 적용: ' + stage1AppliedCount + '개');
         console.log('   - 1차 수정본: ' + stage1FixedScript.length + '자');
-        console.log('   - 2차 수정 적용: ' + stage2AppliedCount + '개');
+        console.log('   - 2차 이슈: ' + (state.stage2.allErrors ? state.stage2.allErrors.length : 0) + '개');
         console.log('   - 최종 수정본: ' + finalFixedScript.length + '자');
         console.log('   - 100점 대본: ' + state.perfectScript.length + '자');
         console.log('   - 평균 점수: ' + Math.round((scoreResult.finalScores.senior + scoreResult.finalScores.fun + scoreResult.finalScores.flow + scoreResult.finalScores.retention) / 4) + '점');
