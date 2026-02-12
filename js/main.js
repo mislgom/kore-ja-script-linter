@@ -2208,157 +2208,331 @@ function buildStage1Prompt(script) {
         '⚠️ 다시 한번 강조: 시간 표현이 여러 개 나오면 반드시 모순 검사! 오류가 없다고 하지 말고 개선점을 찾으세요!';
 }
 
-function buildStage2Prompt(script) {
-    return `당신은 한국 시니어 대상 낭독 대본 전문 검수자입니다.
-⚠️ 중요: 오류가 없다고 하지 마세요! 반드시 최소 5개 이상의 개선점을 찾아내야 합니다!
-
-## 검수 대상 대본:
-${script}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-## 🎯 2차 분석 목표: 1차에서 놓친 오류 + 품질 개선점 검출
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-## ✅ 필수 검사항목 (6가지) - 각 항목에서 최소 1개씩 찾을 것!
-
-### 1. 대사 자연스러움 검사 🗣️
-- 어색하거나 부자연스러운 대사 표현
-- 문어체가 섞인 대사 (구어체로 수정 필요)
-- 같은 단어가 반복되는 대사
-- 너무 긴 대사 (50자 초과)
-**예시**: "나는 그것을 하였다" → "내가 했어요"
-
-### 2. 호칭 일관성 검사 👤
-- 같은 인물을 다르게 부르는 경우 (아버지/아빠/부친)
-- "그가", "그녀가" 등 불명확한 대명사 사용
-- 신분에 맞지 않는 호칭
-**예시**: "그가 말했다" → "영감님이 말했다"
-
-### 3. 장면 연결성 검사 🎬
-- 장면 전환 시 설명 부족
-- 시간 경과 표현 누락
-- 장소 이동 설명 부족
-**예시**: (갑자기 다른 장소) → "한편, 마을 어귀에서는..."
-
-### 4. 감정선 연결 검사 💭
-- 인물의 감정 변화가 급작스러운 경우
-- 감정 표현이 부족한 대사
-- 상황에 맞지 않는 감정 반응
-**예시**: "알겠습니다" → "알겠습니다... (눈시울을 붉히며)"
-
-### 5. 문장 구조 검사 📝
-- 30자 초과 긴 문장 (시니어 청취 어려움)
-- 복잡한 문장 구조
-- 이중 부정 등 이해하기 어려운 표현
-**예시**: "그는 그것이 아니라고 생각하지 않았다" → "그는 그렇다고 생각했다"
-
-### 6. 이야기 흐름 검사 📖
-- 앞뒤 맥락이 맞지 않는 부분
-- 갑작스러운 전개
-- 설명 없이 등장하는 새로운 요소
-**예시**: (갑자기 새 인물 등장) → "마을에서 소문난 박 첨지가 나타났다"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-## ⛔ 오류로 판정하지 말 것
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- 나레이션 (나레이션:, NA:, N: 으로 시작하는 줄)
-- 나레이션의 조선어투/문어체 (허용됨)
-- 지문/설명 (괄호 안의 행동 묘사)
-- 음향효과 ([SE], [BGM] 등)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-## 📊 점수 산출 기준
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-### 시니어 적합도 (100점 시작):
-- 50자 초과 문장 1개당: -5점
-- 30~50자 문장 1개당: -3점
-- 불명확한 호칭 1개당: -4점
-- 어려운 한자어/외래어 1개당: -2점
-
-### 재미 요소 (100점 시작):
-- 갈등 요소 없음: -15점
-- 반전/의외성 없음: -10점
-- 감정 표현 부족: -8점
-- 긴장감 부족: -10점
-
-### 이야기 흐름 (100점 시작):
-- 장면 전환 설명 부족 1건당: -5점
-- 인과관계 표현 부족: -7점
-- 시간 순서 혼란: -10점
-
-### 시청자 이탈 방지 (100점 시작):
-- 초반 훅 없음: -12점
-- 클리프행어 없음: -8점
-- 중반 처짐 구간: -10점
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-## 🚨🚨🚨 필수 응답 규칙 🚨🚨🚨
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1. **반드시 최소 5개 이상의 issues를 찾아야 합니다!**
-2. 오류가 없어 보여도 개선할 수 있는 부분을 찾으세요!
-3. 나레이션은 절대 오류로 넣지 마세요!
-4. suggestion에 / 또는 () 넣지 마세요! 수정안 하나만!
-5. perfectScript는 모든 issues를 반영한 완전한 대본!
-
-## 📤 응답 형식 (반드시 JSON만):
-\`\`\`json
-{
-    "issues": [
-        {
-            "type": "대사자연스러움",
-            "original": "원문 그대로 복사",
-            "suggestion": "수정안 하나만 (슬래시 금지)",
-            "reason": "수정 이유 15자 이내",
-            "severity": "high/medium/low"
-        },
-        {
-            "type": "호칭일관성",
-            "original": "원문",
-            "suggestion": "수정안",
-            "reason": "사유",
-            "severity": "medium"
-        },
-        {
-            "type": "장면연결성",
-            "original": "원문",
-            "suggestion": "수정안",
-            "reason": "사유",
-            "severity": "medium"
-        },
-        {
-            "type": "감정선연결",
-            "original": "원문",
-            "suggestion": "수정안",
-            "reason": "사유",
-            "severity": "low"
-        },
-        {
-            "type": "문장구조",
-            "original": "원문",
-            "suggestion": "수정안",
-            "reason": "사유",
-            "severity": "medium"
+function calculateScoresFromAnalysis(script, aiScores, scoreDetails) {
+    console.log('📊 점수 검증 및 보정 시작 (v4.55 사극 감독 페르소나)...');
+    
+    var lines = script.split('\n');
+    var totalChars = script.length;
+    
+    // ============================================================
+    // 1. 시니어 적합도 점수 계산 (6개 감점 항목)
+    // ============================================================
+    var seniorScore = 100;
+    var seniorDeductions = [];
+    
+    // 1-1. 50자 초과 대사 (-5점/개, 최대 -25점)
+    var veryLongSentences = 0;
+    lines.forEach(function(line) {
+        if (line.trim().length > 50) {
+            veryLongSentences++;
         }
-    ],
-    "scores": {
-        "senior": 75,
-        "fun": 70,
-        "flow": 80,
-        "retention": 72
-    },
-    "scoreDetails": {
-        "senior": ["50자 초과 문장 3개 (-15점)", "불명확한 호칭 2개 (-8점)"],
-        "fun": ["갈등 요소 부족 (-15점)", "반전 부족 (-10점)"],
-        "flow": ["장면 전환 설명 부족 2건 (-10점)"],
-        "retention": ["초반 훅 부족 (-12점)", "클리프행어 부족 (-8점)"]
-    },
-    "perfectScript": "모든 issues를 수정 반영한 완전한 대본 전문을 여기에 작성"
-}
-\`\`\`
-
-⚠️ 다시 한번 강조: "추가 오류가 없습니다"라고 하지 말고, 반드시 개선점을 찾아주세요!`;
+    });
+    if (veryLongSentences > 0) {
+        var deduct = Math.min(veryLongSentences * 5, 25);
+        seniorScore -= deduct;
+        seniorDeductions.push('50자 초과 대사 ' + veryLongSentences + '개 (-' + deduct + '점)');
+    }
+    
+    // 1-2. 30~50자 대사 (-2점/개, 최대 -14점)
+    var longSentences = 0;
+    lines.forEach(function(line) {
+        var len = line.trim().length;
+        if (len > 30 && len <= 50) {
+            longSentences++;
+        }
+    });
+    if (longSentences > 0) {
+        var deduct = Math.min(longSentences * 2, 14);
+        seniorScore -= deduct;
+        seniorDeductions.push('30~50자 대사 ' + longSentences + '개 (-' + deduct + '점)');
+    }
+    
+    // 1-3. 불명확한 대명사 (-3점/개, 3개 초과분부터, 최대 -18점)
+    var unclearPronouns = (script.match(/그가|그녀가|그는|그녀는|그들이/g) || []).length;
+    if (unclearPronouns > 3) {
+        var deduct = Math.min((unclearPronouns - 3) * 3, 18);
+        seniorScore -= deduct;
+        seniorDeductions.push('불명확한 대명사 ' + unclearPronouns + '개 (-' + deduct + '점)');
+    }
+    
+    // 1-4. 어려운 한자어/전문용어 (-2점/개, 최대 -12점)
+    var difficultWords = (script.match(/운명적|필연적|불가피|가히|차마|진실로|참으로|마땅히|응당|결단코|단연코|가령|비록|설령|하물며/g) || []).length;
+    if (difficultWords > 0) {
+        var deduct = Math.min(difficultWords * 2, 12);
+        seniorScore -= deduct;
+        seniorDeductions.push('어려운 한자어/전문용어 ' + difficultWords + '개 (-' + deduct + '점)');
+    }
+    
+    // 1-5. 같은 단어 3회 이상 반복 (-3점, 최대 -9점)
+    var wordCounts = {};
+    var words = script.replace(/[^가-힣\s]/g, '').split(/\s+/);
+    words.forEach(function(w) {
+        if (w.length >= 2) {
+            wordCounts[w] = (wordCounts[w] || 0) + 1;
+        }
+    });
+    var repeatedWords = 0;
+    for (var w in wordCounts) {
+        if (wordCounts[w] >= 10) {
+            repeatedWords++;
+        }
+    }
+    if (repeatedWords > 0) {
+        var deduct = Math.min(repeatedWords * 3, 9);
+        seniorScore -= deduct;
+        seniorDeductions.push('과도 반복 단어 ' + repeatedWords + '종 (-' + deduct + '점)');
+    }
+    
+    // 1-6. 문어체 섞인 대사 (-3점/개, 최대 -15점)
+    var literaryInDialog = 0;
+    lines.forEach(function(line) {
+        var trimmed = line.trim();
+        if (trimmed.match(/^[가-힣]{2,4}\s*[:：]/) && !trimmed.match(/^나레이션|^NA|^N:/i)) {
+            if (trimmed.match(/하였다|되었다|있었다|하였으며|되었으며|것이다|바이다|함이라/)) {
+                literaryInDialog++;
+            }
+        }
+    });
+    if (literaryInDialog > 0) {
+        var deduct = Math.min(literaryInDialog * 3, 15);
+        seniorScore -= deduct;
+        seniorDeductions.push('문어체 대사 ' + literaryInDialog + '개 (-' + deduct + '점)');
+    }
+    
+    // ============================================================
+    // 2. 재미 요소 점수 계산 (5개 감점 항목)
+    // ============================================================
+    var funScore = 100;
+    var funDeductions = [];
+    
+    // 2-1. 갈등/대립 구조 부재 (-15점)
+    var conflictKeywords = ['갈등', '다투', '싸우', '대립', '충돌', '반대', '거부', '분노', '화가', '원망', '배신', '의심', '질투', '시기'];
+    var hasConflict = conflictKeywords.some(function(kw) { return script.includes(kw); });
+    if (!hasConflict) {
+        funScore -= 15;
+        funDeductions.push('갈등/대립 구조 부재 (-15점)');
+    }
+    
+    // 2-2. 반전/의외성 부재 (-10점)
+    var twistKeywords = ['그런데', '하지만', '그러나', '뜻밖에', '갑자기', '놀랍게도', '반전', '알고 보니', '사실은', '비밀', '숨기'];
+    var twistCount = twistKeywords.reduce(function(count, kw) {
+        return count + (script.match(new RegExp(kw, 'g')) || []).length;
+    }, 0);
+    if (twistCount < 2) {
+        funScore -= 10;
+        funDeductions.push('반전/의외성 부족 (-10점)');
+    }
+    
+    // 2-3. 감정 표현 부족 (-8점)
+    var emotionKeywords = ['기뻐', '슬퍼', '화가', '두려', '설레', '그리워', '미안', '고마워', '사랑', '눈물', '울먹', '떨리', '가슴이'];
+    var emotionCount = emotionKeywords.reduce(function(count, kw) {
+        return count + (script.match(new RegExp(kw, 'g')) || []).length;
+    }, 0);
+    if (emotionCount < 3) {
+        funScore -= 8;
+        funDeductions.push('감정 표현 부족 (-8점)');
+    }
+    
+    // 2-4. 긴장과 이완의 리듬 부재 (-10점)
+    var tensionKeywords = ['긴박', '위기', '급히', '서둘러', '다급', '절체절명', '위험', '목숨'];
+    var relaxKeywords = ['웃음', '미소', '평화', '고요', '편안', '따뜻', '포근', '한가로'];
+    var hasTension = tensionKeywords.some(function(kw) { return script.includes(kw); });
+    var hasRelax = relaxKeywords.some(function(kw) { return script.includes(kw); });
+    if (!hasTension || !hasRelax) {
+        funScore -= 10;
+        funDeductions.push('긴장/이완 리듬 부재 (-10점)');
+    }
+    
+    // 2-5. 인물 간 관계 변화 부재 (-7점)
+    var relationKeywords = ['용서', '화해', '결별', '재회', '약속', '맹세', '다짐', '변심', '마음이 변'];
+    var hasRelationChange = relationKeywords.some(function(kw) { return script.includes(kw); });
+    if (!hasRelationChange) {
+        funScore -= 7;
+        funDeductions.push('인물 간 관계 변화 부재 (-7점)');
+    }
+    
+    // ============================================================
+    // 3. 이야기 흐름 점수 계산 (5개 감점 항목)
+    // ============================================================
+    var flowScore = 100;
+    var flowDeductions = [];
+    
+    // 3-1. 장면 전환 설명 부족 (-5점, 전환 표현 2개 미만)
+    var sceneTransitions = ['그때', '한편', '다음 날', '며칠 후', '그 후', '잠시 후', '얼마 뒤', '이튿날', '그날 밤', '새벽녘', '해 질 무렵'];
+    var transitionCount = sceneTransitions.reduce(function(count, kw) {
+        return count + (script.match(new RegExp(kw, 'g')) || []).length;
+    }, 0);
+    if (transitionCount < 2) {
+        flowScore -= 10;
+        flowDeductions.push('장면 전환 설명 부족 (-10점)');
+    } else if (transitionCount < 4) {
+        flowScore -= 5;
+        flowDeductions.push('장면 전환 설명 다소 부족 (-5점)');
+    }
+    
+    // 3-2. 인과관계 미약 (-7점)
+    var causalKeywords = ['때문에', '그래서', '따라서', '덕분에', '결국', '그 결과', '그러므로', '탓에', '바람에', '까닭에'];
+    var causalCount = causalKeywords.reduce(function(count, kw) {
+        return count + (script.match(new RegExp(kw, 'g')) || []).length;
+    }, 0);
+    if (causalCount < 2) {
+        flowScore -= 7;
+        flowDeductions.push('인과관계 표현 부족 (-7점)');
+    }
+    
+    // 3-3. 시간 순서 혼란 (-10점)
+    var timeConfusionPatterns = ['그제서야|뒤늦게|이미.*전에|나중에 알고 보니';
+    // 시간 역전 표현이 과도하면 감점
+    var timeConfusion = (script.match(/그제서야|뒤늦게/g) || []).length;
+    if (timeConfusion > 3) {
+        flowScore -= 10;
+        flowDeductions.push('시간 순서 혼란 의심 (-10점)');
+    }
+    
+    // 3-4. 복선 미회수 (-8점) — 복선 키워드 대비 회수 키워드 비율로 추정
+    var foreshadowKeywords = ['언젠가', '반드시', '두고 보자', '잊지 않겠', '기억해', '약속', '맹세'];
+    var payoffKeywords = ['드디어', '마침내', '결국', '그때 그', '약속대로', '맹세대로'];
+    var foreshadowCount = foreshadowKeywords.reduce(function(count, kw) {
+        return count + (script.match(new RegExp(kw, 'g')) || []).length;
+    }, 0);
+    var payoffCount = payoffKeywords.reduce(function(count, kw) {
+        return count + (script.match(new RegExp(kw, 'g')) || []).length;
+    }, 0);
+    if (foreshadowCount > 0 && payoffCount === 0) {
+        flowScore -= 8;
+        flowDeductions.push('복선 ' + foreshadowCount + '건 제시, 회수 0건 (-8점)');
+    }
+    
+    // 3-5. 새 인물/요소 설명 없이 등장 (-5점) — 대사 화자가 맥락 없이 첫 등장하는 경우 추정
+    var speakerPattern = /^([가-힣]{2,4})\s*[:：]/gm;
+    var speakerMatch;
+    var speakerFirstAppear = {};
+    var lineNum = 0;
+    var scriptLines = script.split('\n');
+    for (var li = 0; li < scriptLines.length; li++) {
+        var spMatch = scriptLines[li].match(/^([가-힣]{2,4})\s*[:：]/);
+        if (spMatch) {
+            var spName = spMatch[1];
+            if (!speakerFirstAppear[spName] && ['나레이션', '내레이션', '해설'].indexOf(spName) === -1) {
+                speakerFirstAppear[spName] = li;
+            }
+        }
+    }
+    // 인물 소개 없이 중반 이후 첫 등장하는 인물 수 체크
+    var totalLines = scriptLines.length;
+    var lateIntroCount = 0;
+    for (var sp in speakerFirstAppear) {
+        if (speakerFirstAppear[sp] > totalLines * 0.5) {
+            lateIntroCount++;
+        }
+    }
+    if (lateIntroCount > 1) {
+        var deduct = Math.min(lateIntroCount * 5, 15);
+        flowScore -= deduct;
+        flowDeductions.push('후반부 신규 등장 인물 ' + lateIntroCount + '명 (-' + deduct + '점)');
+    }
+    
+    // ============================================================
+    // 4. 시청자 이탈 방지 점수 계산 (5개 감점 항목)
+    // ============================================================
+    var retentionScore = 100;
+    var retentionDeductions = [];
+    
+    // 4-1. 초반 3분 내 훅 부재 (-12점)
+    var firstPart = script.substring(0, Math.min(500, script.length));
+    var hookKeywords = ['비밀', '충격', '놀라운', '믿기 힘든', '알려지지 않은', '숨겨진', '사건', '변사체', '피', '비명', '급보', '파발'];
+    var hasHook = hookKeywords.some(function(kw) { return firstPart.includes(kw); });
+    if (!hasHook) {
+        retentionScore -= 12;
+        retentionDeductions.push('초반 훅 부재 (-12점)');
+    }
+    
+    // 4-2. 회차 끝 클리프행어 부재 (-8점)
+    var lastPart = script.substring(Math.max(0, script.length - 500));
+    var cliffhangerKeywords = ['과연', '어떻게 될까', '다음에', '계속', '기대', '궁금', '설마', '아니', '그럴 리가', '이게 무슨'];
+    var hasCliffhanger = cliffhangerKeywords.some(function(kw) { return lastPart.includes(kw); });
+    if (!hasCliffhanger) {
+        retentionScore -= 8;
+        retentionDeductions.push('클리프행어 부재 (-8점)');
+    }
+    
+    // 4-3. 중반 긴장 이완 구간 (-10점) — 중간 30% 구간에 사건 키워드 부재
+    var midStart = Math.floor(script.length * 0.35);
+    var midEnd = Math.floor(script.length * 0.65);
+    var midPart = script.substring(midStart, midEnd);
+    var midEventKeywords = ['갑자기', '그때', '놀라', '급히', '비명', '충격', '발견', '들이닥', '나타나'];
+    var hasMidEvent = midEventKeywords.some(function(kw) { return midPart.includes(kw); });
+    if (!hasMidEvent) {
+        retentionScore -= 10;
+        retentionDeductions.push('중반 긴장 이완 구간 (-10점)');
+    }
+    
+    // 4-4. 지문/무대지시 부족 (-5점)
+    var stageDirections = (script.match(/\([^)]+\)/g) || []).length;
+    var stageDirectionRatio = stageDirections / Math.max(lines.length, 1);
+    if (stageDirectionRatio < 0.1) {
+        retentionScore -= 5;
+        retentionDeductions.push('지문/무대지시 부족 (-5점)');
+    }
+    
+    // 4-5. 감각적 묘사 부족 (-5점)
+    var sensoryKeywords = ['빛', '어둠', '소리', '냄새', '바람', '차가운', '뜨거운', '축축', '거친', '부드러', '향기', '악취', '고요', '시끄러'];
+    var sensoryCount = sensoryKeywords.reduce(function(count, kw) {
+        return count + (script.match(new RegExp(kw, 'g')) || []).length;
+    }, 0);
+    if (sensoryCount < 3) {
+        retentionScore -= 5;
+        retentionDeductions.push('감각적 묘사 부족 (-5점)');
+    }
+    
+    // ============================================================
+    // 점수 범위 제한 (30-100)
+    // ============================================================
+    seniorScore = Math.max(30, Math.min(100, seniorScore));
+    funScore = Math.max(30, Math.min(100, funScore));
+    flowScore = Math.max(30, Math.min(100, flowScore));
+    retentionScore = Math.max(30, Math.min(100, retentionScore));
+    
+    var localScores = {
+        senior: seniorScore,
+        fun: funScore,
+        flow: flowScore,
+        retention: retentionScore
+    };
+    
+    // ============================================================
+    // AI 점수와 로컬 점수 보정
+    // ============================================================
+    var finalScores = {};
+    var categories = ['senior', 'fun', 'flow', 'retention'];
+    
+    categories.forEach(function(cat) {
+        var ai = aiScores[cat] || 70;
+        var local = localScores[cat];
+        
+        if (ai === 100 && local < 90) {
+            finalScores[cat] = local;
+        } else if (ai === 100 && local >= 90) {
+            finalScores[cat] = Math.round((ai + local) / 2);
+        } else {
+            finalScores[cat] = Math.round((ai + local) / 2);
+        }
+    });
+    
+    console.log('📊 로컬 점수:', localScores);
+    console.log('📊 AI 점수:', aiScores);
+    console.log('📊 최종 점수:', finalScores);
+    
+    return {
+        localScores: localScores,
+        finalScores: finalScores,
+        deductions: {
+            senior: seniorDeductions,
+            fun: funDeductions,
+            flow: flowDeductions,
+            retention: retentionDeductions
+        }
+    };
 }
 
 function filterNarrationErrors(errors, script) {
