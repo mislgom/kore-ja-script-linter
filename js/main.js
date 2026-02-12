@@ -4277,7 +4277,7 @@ function createScoreCard(label, score, deductions) {
     
     if (deductions && deductions.length > 0) {
         deductionText = '<div class="score-deductions">';
-        deductions.slice(0, 3).forEach(function(d) {
+        deductions.slice(0, 5).forEach(function(d) {
             deductionText += '<div class="deduction-item">• ' + d + '</div>';
         });
         deductionText += '</div>';
@@ -4285,13 +4285,101 @@ function createScoreCard(label, score, deductions) {
         deductionText = '<div class="score-deductions"><div class="deduction-item">• 감점 사항 없음</div></div>';
     }
     
+    // 카테고리 키 매핑
+    var catKey = '';
+    if (label.indexOf('시니어') > -1) catKey = 'senior';
+    else if (label.indexOf('재미') > -1) catKey = 'fun';
+    else if (label.indexOf('흐름') > -1) catKey = 'flow';
+    else if (label.indexOf('이탈') > -1) catKey = 'retention';
+    
+    // 개선방안 텍스트 생성
+    var improvementText = '';
+    if (score < 100) {
+        var tip = getImprovementTips(catKey, score);
+        var specificTips = getSpecificImprovementTips(catKey, score, deductions);
+        improvementText = '<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);">' +
+            '<div style="font-size:11px;color:#ffaa00;font-weight:bold;margin-bottom:4px;">💡 개선방안</div>' +
+            '<div style="font-size:11px;color:#aaa;line-height:1.5;">' + specificTips + '</div>' +
+            '</div>';
+    } else {
+        improvementText = '<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);">' +
+            '<div style="font-size:11px;color:#69f0ae;font-weight:bold;">✅ 만점! 수정 불필요</div>' +
+            '</div>';
+    }
+    
     return `
         <div class="score-card">
             <div class="score-label">${label}</div>
             <div class="score-value ${scoreClass}">${score}점</div>
             ${deductionText}
+            ${improvementText}
         </div>
     `;
+}
+
+function getSpecificImprovementTips(catKey, score, deductions) {
+    var tips = [];
+    
+    if (!deductions || deductions.length === 0) {
+        var generalTip = getImprovementTips(catKey, score);
+        return generalTip;
+    }
+    
+    deductions.forEach(function(d) {
+        if (d.indexOf('50자 초과') > -1) {
+            tips.push('긴 대사를 2~3문장으로 분리하세요');
+        } else if (d.indexOf('30~50자') > -1 || d.indexOf('30자') > -1) {
+            tips.push('문장을 더 짧고 간결하게 다듬으세요');
+        } else if (d.indexOf('대명사') > -1 || d.indexOf('호칭') > -1) {
+            tips.push('대명사를 구체적 이름/관계로 바꾸세요');
+        } else if (d.indexOf('한자어') > -1 || d.indexOf('전문용어') > -1) {
+            tips.push('어려운 용어를 쉬운 말로 풀어쓰세요');
+        } else if (d.indexOf('반복') > -1) {
+            tips.push('반복 단어를 유의어로 교체하세요');
+        } else if (d.indexOf('문어체') > -1) {
+            tips.push('문어체를 자연스러운 구어체로 수정하세요');
+        } else if (d.indexOf('갈등') > -1 || d.indexOf('대립') > -1) {
+            tips.push('인물 간 갈등/대립 구조를 추가하세요');
+        } else if (d.indexOf('반전') > -1 || d.indexOf('의외') > -1) {
+            tips.push('예상을 깨는 전개를 삽입하세요');
+        } else if (d.indexOf('감정') > -1) {
+            tips.push('감정 표현을 더 구체적으로 추가하세요');
+        } else if (d.indexOf('긴장') > -1 || d.indexOf('이완') > -1) {
+            tips.push('긴장/이완 리듬을 조절하세요');
+        } else if (d.indexOf('관계 변화') > -1) {
+            tips.push('인물 관계에 변화 포인트를 만드세요');
+        } else if (d.indexOf('장면 전환') > -1) {
+            tips.push('장면 전환 시 연결 설명을 추가하세요');
+        } else if (d.indexOf('인과') > -1) {
+            tips.push('사건 간 인과관계를 명확히 하세요');
+        } else if (d.indexOf('시간') > -1) {
+            tips.push('시간 흐름 표현을 명확히 하세요');
+        } else if (d.indexOf('복선') > -1) {
+            tips.push('심어둔 복선을 회수하세요');
+        } else if (d.indexOf('등장') > -1) {
+            tips.push('후반부 신규 인물 도입을 자제하세요');
+        } else if (d.indexOf('초반') > -1 || d.indexOf('훅') > -1) {
+            tips.push('도입부에 강렬한 훅을 추가하세요');
+        } else if (d.indexOf('클리프') > -1) {
+            tips.push('끝에 궁금증 유발 장치를 넣으세요');
+        } else if (d.indexOf('지문') > -1 || d.indexOf('무대지시') > -1) {
+            tips.push('지문/무대지시를 보강하세요');
+        } else if (d.indexOf('감각') > -1 || d.indexOf('묘사') > -1) {
+            tips.push('감각적 묘사를 추가하세요');
+        }
+    });
+    
+    if (tips.length === 0) {
+        return getImprovementTips(catKey, score);
+    }
+    
+    // 중복 제거 후 최대 3개
+    var uniqueTips = [];
+    tips.forEach(function(t) {
+        if (uniqueTips.indexOf(t) === -1) uniqueTips.push(t);
+    });
+    
+    return uniqueTips.slice(0, 3).join('<br>');
 }
 
 function getImprovementTips(category, score) {
