@@ -3033,77 +3033,12 @@ async function startStage2Analysis() {
 
         var filteredIssues = allIssues;
 
-        updateProgress(68, '점수 계산 중...');
-        
-        // ============================================================
-        // 6단계: 점수 계산
-        // ============================================================
-        console.log('📋 6단계: 점수 계산');
-        
-        // 마지막 청크의 scores 사용, 없으면 기본값
-        var aiScores = { senior: 0, fun: 0, flow: 0, retention: 0 };
-var scoreDetails = {};
-var scoreCount = 0;
-
-for (var si = 0; si < allAnalysisResults.length; si++) {
-    if (allAnalysisResults[si].scores) {
-        var s = allAnalysisResults[si].scores;
-        aiScores.senior += (s.senior || 0);
-        aiScores.fun += (s.fun || 0);
-        aiScores.flow += (s.flow || 0);
-        aiScores.retention += (s.retention || 0);
-        scoreCount++;
-    }
-    if (allAnalysisResults[si].scoreDetails) {
-        scoreDetails = allAnalysisResults[si].scoreDetails;
-    }
-}
-
-if (scoreCount > 0) {
-    aiScores.senior = Math.round(aiScores.senior / scoreCount);
-    aiScores.fun = Math.round(aiScores.fun / scoreCount);
-    aiScores.flow = Math.round(aiScores.flow / scoreCount);
-    aiScores.retention = Math.round(aiScores.retention / scoreCount);
-} else {
-    aiScores = { senior: 75, fun: 75, flow: 75, retention: 75 };
-}
-
-console.log('📊 점수 산출: ' + scoreCount + '개 청크 평균');
-console.log('  - 시니어: ' + aiScores.senior + ', 재미: ' + aiScores.fun + ', 흐름: ' + aiScores.flow + ', 몰입: ' + aiScores.retention);
-        
-        var scoreResult = null;
-        try {
-            scoreResult = calculateScoresFromAnalysis(stage1FixedScript, aiScores, scoreDetails);
-        } catch (scoreError) {
-            console.error('   ⚠️ 점수 계산 오류:', scoreError);
-            scoreResult = {
-                finalScores: aiScores,
-                deductions: { senior: [], fun: [], flow: [], retention: [] }
-            };
-        }
-        
-        console.log('   - 최종 점수:', JSON.stringify(scoreResult.finalScores));
-        
-        state.scores = scoreResult.finalScores;
-        state.scoreDeductions = scoreResult.deductions;
-        
-        // ============================================================
-        // 7단계: 개선 방안 생성
-        // ============================================================
-        console.log('📋 7단계: 개선 방안 생성');
-        var improvements = [];
-        try {
-            improvements = buildImprovementsFromDeductions(scoreResult.deductions, scoreResult.finalScores);
-        } catch (impError) {
-            console.error('   ⚠️ 개선 방안 생성 오류:', impError);
-            improvements = [];
-        }
-        console.log('   - 생성된 개선 방안: ' + improvements.length + '개');
-        
-        updateProgress(75, '2차 수정 적용 중...');
+ updateProgress(68, '2차 수정 적용 중...');
         
         // ============================================================
         // 8단계: state.stage2 저장 (2차 분석 기준 = 1차 수정본)
+        // ※ v4.55: 점수 계산을 최종 수정본 기반으로 변경하기 위해
+        //   8단계(저장) → 9단계(최종 수정본) → 6단계(점수) → 7단계(개선) 순서로 이동
         // ============================================================
         console.log('📋 8단계: state.stage2 저장');
         
@@ -3114,59 +3049,104 @@ console.log('  - 시니어: ' + aiScores.senior + ', 재미: ' + aiScores.fun + 
                 return {
                     id: 'stage2-error-' + idx,
                     type: err.type || '기타',
-                    original: err.original || err.location || '',
-                    revised: err.suggestion || err.revised || '',
+                    original: err.original || '',
+                    revised: err.revised || err.suggestion || '',
                     reason: err.reason || '',
                     severity: err.severity || 'medium',
-                    useRevised: true
+                    useRevised: true,
+                    _from3rdPass: err._from3rdPass || false
                 };
             }),
-            scores: scoreResult.finalScores,
-            scoreDetails: scoreResult.deductions,
-            improvements: improvements,
-            revisedScript: '',
             fixedScript: '',
-            currentErrorIndex: 0,
-            isCompleted: true,
+            currentErrorIndex: -1,
             isFixed: false
         };
         
-        console.log('   - stage2.originalScript 길이: ' + state.stage2.originalScript.length + '자');
-        console.log('   - stage2.allErrors 수: ' + state.stage2.allErrors.length + '개');
+        console.log('   ✅ state.stage2 저장 완료');
+        console.log('   - 2차 오류: ' + state.stage2.allErrors.length + '개');
         
         // ============================================================
-        // 9단계: 최종 수정 반영 대본 생성 (1차 수정본 + 2차 수정)
+        // 9단계: 최종 수정 반영 대본 생성
         // ============================================================
         console.log('📋 9단계: 최종 수정 반영 대본 생성');
         
-        var finalFixedScript = stage1FixedScript;  // 1차 수정본에서 시작
-        var stage2Errors = state.stage2.allErrors;
-        var stage2AppliedCount = 0;
-        
-        for (var j = 0; j < stage2Errors.length; j++) {
-            var err2 = stage2Errors[j];
-            if (err2.useRevised && err2.original && err2.revised) {
-                var originalText2 = err2.original;
-                var revisedText2 = cleanRevisedText(err2.revised);
-                
-                if (finalFixedScript.indexOf(originalText2) !== -1) {
-                    finalFixedScript = finalFixedScript.split(originalText2).join(revisedText2);
-                    stage2AppliedCount++;
-                    console.log('   ✅ 2차 수정 [' + j + ']: "' + originalText2.substring(0, 25) + '..." → "' + revisedText2.substring(0, 25) + '..."');
+        var finalFixedScript = stage1FixedScript;
+        state.stage2.allErrors.forEach(function(err) {
+            if (err.useRevised && err.original && err.revised) {
+                var fixedRevised = cleanRevisedText(err.revised);
+                if (fixedRevised === '__DELETE__') {
+                    finalFixedScript = finalFixedScript.split(err.original).join('');
                 } else {
-                    console.log('   ⚠️ 2차 수정 [' + j + '] 매칭 실패: "' + originalText2.substring(0, 25) + '..."');
+                    finalFixedScript = finalFixedScript.split(err.original).join(fixedRevised);
                 }
             }
-        }
+        });
+        finalFixedScript = finalFixedScript.replace(/\n\s*\n\s*\n/g, '\n\n');
         
-        console.log('📄 최종 수정 반영 결과:');
-        console.log('   - 2차 수정 적용: ' + stage2AppliedCount + '개');
-        console.log('   - 최종 수정본 길이: ' + finalFixedScript.length + '자');
-        
-        // 최종 수정본 저장
-        state.stage2.revisedScript = finalFixedScript;
+        console.log('   ✅ 최종 수정 반영 대본 생성 완료 (' + finalFixedScript.length + '자)');
         state.stage2.fixedScript = finalFixedScript;
         state.finalScript = finalFixedScript;
+        
+        updateProgress(75, '점수 계산 중...');
+        
+        // ============================================================
+        // 6단계: 점수 계산 (v4.55: 최종 수정본 finalFixedScript 기반으로 변경)
+        // ============================================================
+        console.log('📋 6단계: 점수 계산 (최종 수정본 기반)');
+        
+        // AI 청크별 점수 평균 산출
+        var aiScores = { senior: 0, fun: 0, flow: 0, retention: 0 };
+        var scoreDetails = {};
+        var scoreCount = 0;
+
+        for (var si = 0; si < allAnalysisResults.length; si++) {
+            if (allAnalysisResults[si].scores) {
+                var s = allAnalysisResults[si].scores;
+                aiScores.senior += (s.senior || 0);
+                aiScores.fun += (s.fun || 0);
+                aiScores.flow += (s.flow || 0);
+                aiScores.retention += (s.retention || 0);
+                scoreCount++;
+            }
+            if (allAnalysisResults[si].scoreDetails) {
+                scoreDetails = allAnalysisResults[si].scoreDetails;
+            }
+        }
+
+        if (scoreCount > 0) {
+            aiScores.senior = Math.round(aiScores.senior / scoreCount);
+            aiScores.fun = Math.round(aiScores.fun / scoreCount);
+            aiScores.flow = Math.round(aiScores.flow / scoreCount);
+            aiScores.retention = Math.round(aiScores.retention / scoreCount);
+        } else {
+            aiScores = { senior: 75, fun: 75, flow: 75, retention: 75 };
+        }
+
+        console.log('📊 점수 산출: ' + scoreCount + '개 청크 평균');
+        console.log('  - 시니어: ' + aiScores.senior + ', 재미: ' + aiScores.fun + ', 흐름: ' + aiScores.flow + ', 몰입: ' + aiScores.retention);
+        
+        var scoreResult = null;
+        try {
+            // v4.55 핵심 변경: stage1FixedScript → finalFixedScript
+            scoreResult = calculateScoresFromAnalysis(finalFixedScript, aiScores, scoreDetails);
+            state.scores = scoreResult;
+            console.log('   ✅ 점수 계산 완료 (최종 수정본 기반)');
+        } catch (scoreError) {
+            console.error('   ⚠️ 점수 계산 오류:', scoreError);
+            state.scores = { senior: aiScores.senior, fun: aiScores.fun, flow: aiScores.flow, retention: aiScores.retention };
+        }
+        
+        // ============================================================
+        // 7단계: 개선 방안 생성
+        // ============================================================
+        console.log('📋 7단계: 개선 방안 생성');
+        var improvements = [];
+        for (var ii = 0; ii < allAnalysisResults.length; ii++) {
+            if (allAnalysisResults[ii].improvements) {
+                improvements = improvements.concat(allAnalysisResults[ii].improvements);
+            }
+        }
+        console.log('   - 생성된 개선 방안: ' + improvements.length + '개');
         
         updateProgress(85, '100점 대본 생성 중...');
         
