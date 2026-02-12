@@ -723,3 +723,39 @@ body {
         font-size: 1.8rem;
     }
 }
+
+/* ============================================================
+   v4.56: score-card 내 개선방안 표시 스타일 보강
+   ============================================================ */
+.score-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.score-deductions {
+    margin-top: 8px;
+    text-align: left;
+}
+
+.deduction-item {
+    font-size: 12px;
+    color: #ccc;
+    line-height: 1.6;
+    padding: 1px 0;
+}
+
+.dark-mode .deduction-item {
+    color: #ccc;
+}
+
+.score-value.high {
+    color: #69f0ae;
+}
+
+.score-value.medium {
+    color: #ffaa00;
+}
+
+.score-value.low {
+    color: #ff5555;
+}
