@@ -1864,6 +1864,120 @@ function getHistoricalRulesString() {
     return rules.join(', ');
 }
 
+// ============================================================
+// splitScriptIntoChunks - 대본을 5000자 단위로 분할 (v4.54 추가)
+// 줄 단위로 분할하여 문장이 잘리지 않도록 보장
+// ============================================================
+function splitScriptIntoChunks(script, chunkSize) {
+    if (!script || script.length === 0) return [];
+    if (!chunkSize) chunkSize = 5000;
+    
+    if (script.length <= chunkSize) {
+        return [{ text: script, startIndex: 0, endIndex: script.length, chunkNum: 1, totalChunks: 1 }];
+    }
+    
+    var chunks = [];
+    var startIndex = 0;
+    
+    while (startIndex < script.length) {
+        var endIndex = Math.min(startIndex + chunkSize, script.length);
+        
+        // 줄 끝에서 자르기 (문장이 잘리지 않도록)
+        if (endIndex < script.length) {
+            var lastNewline = script.lastIndexOf('\n', endIndex);
+            if (lastNewline > startIndex) {
+                endIndex = lastNewline + 1;
+            }
+        }
+        
+        chunks.push({
+            text: script.substring(startIndex, endIndex),
+            startIndex: startIndex,
+            endIndex: endIndex,
+            chunkNum: chunks.length + 1,
+            totalChunks: 0 // 나중에 설정
+        });
+        
+        startIndex = endIndex;
+    }
+    
+    // totalChunks 설정
+    for (var i = 0; i < chunks.length; i++) {
+        chunks[i].totalChunks = chunks.length;
+    }
+    
+    console.log('📦 대본 분할 완료: ' + script.length + '자 → ' + chunks.length + '개 청크 (각 약 ' + chunkSize + '자)');
+    for (var j = 0; j < chunks.length; j++) {
+        console.log('   청크 ' + (j + 1) + '/' + chunks.length + ': ' + chunks[j].text.length + '자 (위치: ' + chunks[j].startIndex + '~' + chunks[j].endIndex + ')');
+    }
+    
+    return chunks;
+}
+
+// ============================================================
+// extractScriptContext - 대본 전체에서 맥락 정보 추출 (v4.54 추가)
+// 각 청크 분석 시 전체 맥락을 함께 전달하기 위한 요약 정보
+// ============================================================
+function extractScriptContext(script) {
+    var context = {
+        characters: [],
+        timeExpressions: [],
+        scenes: []
+    };
+    
+    // 인물 추출: 이름(나이세, 특성) 패턴
+    var charPattern = /([가-힣]{2,4})\s*\(\s*(\d{1,3})세[,\s]*([^)]*)\)/g;
+    var charMatch;
+    var charSet = {};
+    while ((charMatch = charPattern.exec(script)) !== null) {
+        var name = charMatch[1];
+        if (!charSet[name]) {
+            charSet[name] = { name: name, age: charMatch[2] + '세', trait: charMatch[3].trim() };
+        }
+    }
+    
+    // 대사에서 인물명 추출
+    var dialogPattern = /^([가-힣]{2,4})\s*[:：]/gm;
+    var dialogMatch;
+    while ((dialogMatch = dialogPattern.exec(script)) !== null) {
+        var dName = dialogMatch[1];
+        if (!charSet[dName] && ['나레이션', '내레이션', '해설', 'NA', '자막'].indexOf(dName) === -1) {
+            charSet[dName] = { name: dName, age: '', trait: '' };
+        }
+    }
+    
+    for (var key in charSet) {
+        context.characters.push(charSet[key]);
+    }
+    
+    // 시간 표현 추출
+    var timePattern = /(일|이|삼|사|오|육|칠|팔|구|십|백)\s*년\s*(전|후|뒤)|(\d+)\s*년\s*(전|후|뒤)|어제|오늘|내일|그저께|지난달|다음\s*달|며칠\s*(전|후)/g;
+    var timeMatch;
+    while ((timeMatch = timePattern.exec(script)) !== null) {
+        context.timeExpressions.push({
+            text: timeMatch[0],
+            position: timeMatch.index
+        });
+    }
+    
+    // 씬 헤더 추출
+    var scenePattern = /^\s*\[([^\]]+)\]/gm;
+    var sceneMatch;
+    while ((sceneMatch = scenePattern.exec(script)) !== null) {
+        context.scenes.push({
+            header: sceneMatch[1],
+            position: sceneMatch.index
+        });
+    }
+    
+    console.log('📋 대본 맥락 추출 완료:');
+    console.log('   - 인물: ' + context.characters.length + '명');
+    console.log('   - 시간 표현: ' + context.timeExpressions.length + '개');
+    console.log('   - 씬: ' + context.scenes.length + '개');
+    
+    return context;
+}
+
 function buildStage1Prompt(script) {
     var rulesString = getHistoricalRulesString();
     
@@ -2527,26 +2641,80 @@ async function startStage1Analysis() {
     if (!apiKey) { alert('API 키를 먼저 설정해주세요.'); return; }
 
     showProgress('1차 분석 시작...');
-    updateProgress(10, 'AI 분석 요청 중...');
+    updateProgress(5, '대본 분할 중...');
 
     try {
         state.stage1.originalScript = script;
         state.stage1.isFixed = false;
         state.stage1.currentErrorIndex = -1;
-        var prompt = buildStage1Prompt(script);
-        updateProgress(30, 'Gemini API 응답 대기 중...');
-        var response = await callGeminiAPI(prompt);
-        updateProgress(70, '분석 결과 처리 중...');
-        var result = parseApiResponse(response);
         
-        var filteredErrors = filterNarrationErrors(result.errors || [], script);
+        // v4.54: 대본을 5000자 단위로 분할하여 정밀 분석
+        var chunks = splitScriptIntoChunks(script, 5000);
+        var scriptContext = extractScriptContext(script);
+        var allErrors = [];
+        var allAnalysis = [];
         
-        state.stage1.analysis = result;
-        state.stage1.allErrors = filteredErrors.map(function(err, idx) {
+        console.log('🔍 1차 분석: ' + chunks.length + '개 청크 순차 분석 시작');
+        
+        for (var i = 0; i < chunks.length; i++) {
+            var chunk = chunks[i];
+            var progressPercent = 10 + Math.round((i / chunks.length) * 70);
+            updateProgress(progressPercent, '1차 분석 중... (' + (i + 1) + '/' + chunks.length + ' 청크)');
+            
+            console.log('📦 청크 ' + (i + 1) + '/' + chunks.length + ' 분석 시작 (' + chunk.text.length + '자)');
+            
+            // 맥락 정보를 포함한 프롬프트 생성
+            var contextInfo = '\n\n## 📌 대본 전체 맥락 정보 (이 정보를 참고하여 분석하세요)\n';
+            contextInfo += '현재 분석 구간: 전체 ' + script.length + '자 중 ' + chunk.startIndex + '~' + chunk.endIndex + '자 (' + (i + 1) + '/' + chunks.length + ' 구간)\n\n';
+            
+            if (scriptContext.characters.length > 0) {
+                contextInfo += '### 등장인물 목록:\n';
+                for (var c = 0; c < scriptContext.characters.length; c++) {
+                    var ch = scriptContext.characters[c];
+                    contextInfo += '- ' + ch.name + (ch.age ? ' (' + ch.age + ')' : '') + (ch.trait ? ' - ' + ch.trait : '') + '\n';
+                }
+                contextInfo += '\n';
+            }
+            
+            if (scriptContext.timeExpressions.length > 0) {
+                contextInfo += '### 대본 전체에 등장하는 시간 표현:\n';
+                for (var t = 0; t < scriptContext.timeExpressions.length; t++) {
+                    contextInfo += '- "' + scriptContext.timeExpressions[t].text + '" (위치: ' + scriptContext.timeExpressions[t].position + ')\n';
+                }
+                contextInfo += '\n';
+            }
+            
+            var prompt = buildStage1Prompt(chunk.text + contextInfo);
+            
+            try {
+                var response = await callGeminiAPI(prompt);
+                var result = parseApiResponse(response);
+                allAnalysis.push(result);
+                
+                var chunkErrors = filterNarrationErrors(result.errors || [], chunk.text);
+                
+                // 오류에 청크 정보 추가
+                for (var e = 0; e < chunkErrors.length; e++) {
+                    chunkErrors[e]._chunkNum = i + 1;
+                    allErrors.push(chunkErrors[e]);
+                }
+                
+                console.log('   ✅ 청크 ' + (i + 1) + ' 완료: ' + chunkErrors.length + '개 오류 발견');
+                
+            } catch (chunkError) {
+                if (chunkError.name === 'AbortError') throw chunkError;
+                console.error('   ❌ 청크 ' + (i + 1) + ' 분석 실패: ' + chunkError.message);
+            }
+        }
+        
+        console.log('🔍 1차 분석 전체 완료: 총 ' + allErrors.length + '개 오류 발견');
+        
+        state.stage1.analysis = allAnalysis;
+        state.stage1.allErrors = allErrors.map(function(err, idx) {
             return { id: 'stage1-error-' + idx, type: err.type, original: err.original, revised: err.revised, reason: err.reason, severity: err.severity, useRevised: true };
         });
         updateProgress(90, '결과 표시 중...');
-                    displayStage1Results();
+        displayStage1Results();
         
         // 1차 수정본 저장 (2차 분석용) - v4.54: buildStage1FixedScript 사용
         var revisedText = buildStage1FixedScript();
@@ -2570,7 +2738,7 @@ async function startStage1Analysis() {
 // ============================================================
 async function startStage2Analysis() {
     console.log('🔬 ========================================');
-    console.log('🔬 2차 분석 시작 (v4.53 최종 수정)');
+    console.log('🔬 2차 분석 시작 (v4.54 청크 분할 분석)');
     console.log('🔬 ========================================');
     
     // ============================================================
@@ -2588,7 +2756,7 @@ async function startStage2Analysis() {
     console.log('   - 원본 대본 길이: ' + stage1Original.length + '자');
     console.log('   - 1차 오류 수: ' + stage1Errors.length + '개');
     
-        // ============================================================
+    // ============================================================
     // 2단계: 1차 수정이 반영된 대본 생성 (v4.54 핵심 수정!)
     // buildStage1FixedScript()를 사용하여 renderScriptWithMarkers와
     // 동일한 findBestMatch 매칭 로직으로 1차 수정본 생성
@@ -2640,94 +2808,98 @@ async function startStage2Analysis() {
     }
     
     showProgress('2차 정밀 분석 중...');
-    updateProgress(10, '1차 수정본 기반 2차 분석 준비...');
+    updateProgress(5, '1차 수정본 기반 2차 분석 준비...');
     
     try {
         // ============================================================
-        // 3단계: AI API 호출 (1차 수정본 기반으로 2차 분석)
+        // 3단계: v4.54 청크 분할 2차 분석
         // ============================================================
-        console.log('📋 3단계: AI API 호출 (1차 수정본 기반)');
+        console.log('📋 3단계: AI API 호출 (1차 수정본 기반, 청크 분할)');
         console.log('   - 분석 대상: 1차 수정 반영 대본 (' + stage1FixedScript.length + '자)');
         
-        updateProgress(20, 'AI 분석 요청 중...');
-        var prompt = buildStage2Prompt(stage1FixedScript);
+        var chunks = splitScriptIntoChunks(stage1FixedScript, 5000);
+        var scriptContext = extractScriptContext(stage1FixedScript);
+        var allIssues = [];
+        var allAnalysisResults = [];
+        var lastAnalysisResult = null;
         
-        updateProgress(30, 'Gemini API 응답 대기 중...');
-        var response = await callGeminiAPI(prompt);
+        console.log('🔬 2차 분석: ' + chunks.length + '개 청크 순차 분석 시작');
         
-        console.log('📥 2차 분석 API 응답 수신 완료');
-        updateProgress(50, '분석 결과 처리 중...');
-        
-        // ============================================================
-        // 4단계: JSON 파싱
-        // ============================================================
-        console.log('📋 4단계: JSON 파싱');
-        var analysisResult = null;
-        
-        // 방법 1: 코드 블록에서 추출
-        var jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
-        if (jsonMatch) {
-            try {
-                analysisResult = JSON.parse(jsonMatch[1]);
-                console.log('   ✅ JSON 블록 파싱 성공');
-            } catch (e) {
-                console.log('   ⚠️ JSON 블록 파싱 실패: ' + e.message);
-            }
-        }
-        
-        // 방법 2: 전체 응답에서 JSON 추출
-        if (!analysisResult) {
-            var jsonStart = response.indexOf('{');
-            var jsonEnd = response.lastIndexOf('}');
-            if (jsonStart !== -1 && jsonEnd !== -1) {
-                try {
-                    analysisResult = JSON.parse(response.substring(jsonStart, jsonEnd + 1));
-                    console.log('   ✅ 직접 JSON 파싱 성공');
-                } catch (e) {
-                    console.log('   ⚠️ 직접 JSON 파싱 실패: ' + e.message);
+        for (var ci = 0; ci < chunks.length; ci++) {
+            var chunk = chunks[ci];
+            var progressPercent = 10 + Math.round((ci / chunks.length) * 50);
+            updateProgress(progressPercent, '2차 분석 중... (' + (ci + 1) + '/' + chunks.length + ' 청크)');
+            
+            console.log('📦 청크 ' + (ci + 1) + '/' + chunks.length + ' 분석 시작 (' + chunk.text.length + '자)');
+            
+            // 맥락 정보를 포함한 프롬프트 생성
+            var contextInfo = '\n\n## 📌 대본 전체 맥락 정보 (이 정보를 참고하여 분석하세요)\n';
+            contextInfo += '현재 분석 구간: 전체 ' + stage1FixedScript.length + '자 중 ' + chunk.startIndex + '~' + chunk.endIndex + '자 (' + (ci + 1) + '/' + chunks.length + ' 구간)\n\n';
+            
+            if (scriptContext.characters.length > 0) {
+                contextInfo += '### 등장인물 목록:\n';
+                for (var cc = 0; cc < scriptContext.characters.length; cc++) {
+                    var ch = scriptContext.characters[cc];
+                    contextInfo += '- ' + ch.name + (ch.age ? ' (' + ch.age + ')' : '') + (ch.trait ? ' - ' + ch.trait : '') + '\n';
                 }
+                contextInfo += '\n';
+            }
+            
+            if (scriptContext.timeExpressions.length > 0) {
+                contextInfo += '### 대본 전체에 등장하는 시간 표현:\n';
+                for (var tt = 0; tt < scriptContext.timeExpressions.length; tt++) {
+                    contextInfo += '- "' + scriptContext.timeExpressions[tt].text + '" (위치: ' + scriptContext.timeExpressions[tt].position + ')\n';
+                }
+                contextInfo += '\n';
+            }
+            
+            var prompt = buildStage2Prompt(chunk.text + contextInfo);
+            
+            try {
+                var response = await callGeminiAPI(prompt);
+                var chunkResult = parseApiResponse(response);
+                allAnalysisResults.push(chunkResult);
+                lastAnalysisResult = chunkResult;
+                
+                var chunkIssues = chunkResult.issues || chunkResult.errors || [];
+                chunkIssues = filterNarrationErrors(chunkIssues, chunk.text);
+                
+                for (var ei = 0; ei < chunkIssues.length; ei++) {
+                    chunkIssues[ei]._chunkNum = ci + 1;
+                    allIssues.push(chunkIssues[ei]);
+                }
+                
+                console.log('   ✅ 청크 ' + (ci + 1) + ' 완료: ' + chunkIssues.length + '개 이슈 발견');
+                
+            } catch (chunkError) {
+                if (chunkError.name === 'AbortError') throw chunkError;
+                console.error('   ❌ 청크 ' + (ci + 1) + ' 분석 실패: ' + chunkError.message);
             }
         }
         
-        // 방법 3: 기본값 사용
-        if (!analysisResult) {
-            console.log('   ⚠️ JSON 파싱 실패, 기본값 사용');
-            analysisResult = {
-                issues: [],
-                scores: { senior: 75, fun: 75, flow: 75, retention: 75 },
-                scoreDetails: {},
-                improvements: [],
-                perfectScript: ''
-            };
-        }
+        console.log('🔬 2차 분석 전체 완료: 총 ' + allIssues.length + '개 이슈 발견');
         
-        updateProgress(60, '오류 필터링 중...');
+        var filteredIssues = allIssues;
         
-        // ============================================================
-        // 5단계: 나레이션 오류 필터링
-        // ============================================================
-        console.log('📋 5단계: 나레이션 오류 필터링');
-        var rawIssues = analysisResult.issues || [];
-        var filteredIssues = [];
-        
-        try {
-            filteredIssues = filterNarrationErrors(rawIssues, stage1FixedScript);
-        } catch (filterError) {
-            console.error('   ⚠️ 필터링 오류:', filterError);
-            filteredIssues = rawIssues;
-        }
-        
-        console.log('   - 필터링 전: ' + rawIssues.length + '개');
-        console.log('   - 필터링 후: ' + filteredIssues.length + '개');
-        
-        updateProgress(70, '점수 계산 중...');
+        updateProgress(65, '점수 계산 중...');
         
         // ============================================================
         // 6단계: 점수 계산
         // ============================================================
         console.log('📋 6단계: 점수 계산');
-        var aiScores = analysisResult.scores || { senior: 75, fun: 75, flow: 75, retention: 75 };
-        var scoreDetails = analysisResult.scoreDetails || {};
+        
+        // 마지막 청크의 scores 사용, 없으면 기본값
+        var aiScores = { senior: 75, fun: 75, flow: 75, retention: 75 };
+        var scoreDetails = {};
+        
+        for (var si = 0; si < allAnalysisResults.length; si++) {
+            if (allAnalysisResults[si].scores) {
+                aiScores = allAnalysisResults[si].scores;
+            }
+            if (allAnalysisResults[si].scoreDetails) {
+                scoreDetails = allAnalysisResults[si].scoreDetails;
+            }
+        }
         
         var scoreResult = null;
         try {
@@ -2758,7 +2930,7 @@ async function startStage2Analysis() {
         }
         console.log('   - 생성된 개선 방안: ' + improvements.length + '개');
         
-        updateProgress(80, '2차 수정 적용 중...');
+        updateProgress(75, '2차 수정 적용 중...');
         
         // ============================================================
         // 8단계: state.stage2 저장 (2차 분석 기준 = 1차 수정본)
@@ -2767,7 +2939,7 @@ async function startStage2Analysis() {
         
         state.stage2 = {
             originalScript: stage1FixedScript,  // 핵심! 1차 수정본을 2차의 원본으로 사용
-            analysis: analysisResult,
+            analysis: allAnalysisResults,
             allErrors: filteredIssues.map(function(err, idx) {
                 return {
                     id: 'stage2-error-' + idx,
@@ -2826,14 +2998,20 @@ async function startStage2Analysis() {
         state.stage2.fixedScript = finalFixedScript;
         state.finalScript = finalFixedScript;
         
-        updateProgress(90, '100점 대본 생성 중...');
+        updateProgress(85, '100점 대본 생성 중...');
         
         // ============================================================
         // 10단계: 100점 대본 생성
         // ============================================================
         console.log('📋 10단계: 100점 대본 생성');
         
-        var aiPerfectScript = analysisResult.perfectScript || '';
+        // 모든 청크 결과에서 perfectScript 찾기
+        var aiPerfectScript = '';
+        for (var pi = 0; pi < allAnalysisResults.length; pi++) {
+            if (allAnalysisResults[pi].perfectScript && allAnalysisResults[pi].perfectScript.length > aiPerfectScript.length) {
+                aiPerfectScript = allAnalysisResults[pi].perfectScript;
+            }
+        }
         
         // AI가 제공한 100점 대본이 있고, 충분히 길면 사용
         // 단, 1차/2차 수정 내용이 반영되어 있는지 검증
