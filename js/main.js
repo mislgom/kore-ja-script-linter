@@ -911,7 +911,8 @@ function downloadScript(script) {
         alert('다운로드할 내용이 없습니다.');
         return;
     }
-     var cleanScript = script;
+    // v4.54: 다운로드 전 __DELETE__ 잔여 텍스트 및 삭제 관련 괄호 표현 정리
+    var cleanScript = cleanScriptForDownload(script);
     try {
         var blob = new Blob([cleanScript], { type: 'text/plain;charset=utf-8' });
         var url = URL.createObjectURL(blob);
@@ -926,9 +927,11 @@ function downloadScript(script) {
             URL.revokeObjectURL(url);
         }, 200);
     } catch (e) {
-        alert('다운로드 중 오류가 발생했습니다: ' + e.message);
+         alert('다운로드 중 오류가 발생했습니다: ' + e.message);
     }
 }
+
+
 function downloadPerfectScript() {
     var script = state.perfectScript;
     if (!script || script.trim() === '') {
@@ -936,8 +939,10 @@ function downloadPerfectScript() {
         return;
     }
     
+    // v4.54: 다운로드 전 __DELETE__ 잔여 텍스트 및 삭제 관련 괄호 표현 정리
+    var cleanScript = cleanScriptForDownload(script);
     try {
-        var blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
+        var blob = new Blob([cleanScript], { type: 'text/plain;charset=utf-8' });
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a');
         a.href = url;
@@ -952,6 +957,41 @@ function downloadPerfectScript() {
     } catch (e) {
         alert('다운로드 중 오류가 발생했습니다: ' + e.message);
     }
+}
+
+// ============================================================
+// cleanScriptForDownload - 다운로드용 대본 정리 (v4.54 추가)
+// __DELETE__ 마커 및 삭제 관련 괄호 표현을 완전히 제거
+// ============================================================
+function cleanScriptForDownload(script) {
+    if (!script) return '';
+    
+    var cleaned = script;
+    
+    // 1. __DELETE__ 마커 제거
+    cleaned = cleaned.replace(/__DELETE__/g, '');
+    
+    // 2. 삭제 지시 괄호 표현 제거
+    cleaned = cleaned.replace(/\(해당\s*장면은?\s*삭제[^)]*\)/g, '');
+    cleaned = cleaned.replace(/\(이\s*부분\s*삭제[^)]*\)/g, '');
+    cleaned = cleaned.replace(/\(해당\s*대사\s*삭제[^)]*\)/g, '');
+    cleaned = cleaned.replace(/\(삭제\s*필요[^)]*\)/g, '');
+    cleaned = cleaned.replace(/\(삭제되어야[^)]*\)/g, '');
+    cleaned = cleaned.replace(/\(삭제[^)]*\)/g, '');
+    cleaned = cleaned.replace(/\(제거[^)]*\)/g, '');
+    cleaned = cleaned.replace(/\[해당\s*장면은?\s*삭제[^\]]*\]/g, '');
+    cleaned = cleaned.replace(/\[삭제[^\]]*\]/g, '');
+    cleaned = cleaned.replace(/\[제거[^\]]*\]/g, '');
+    
+    // 3. 연속 빈 줄 정리 (3줄 이상 → 2줄로)
+    cleaned = cleaned.replace(/\n\s*\n\s*\n/g, '\n\n');
+    
+    // 4. 앞뒤 공백 정리
+    cleaned = cleaned.trim();
+    
+    console.log('📄 cleanScriptForDownload: ' + script.length + '자 → ' + cleaned.length + '자');
+    
+    return cleaned;
 }
 
 function initRevertButtons() {
@@ -1422,12 +1462,17 @@ function renderScriptWithMarkers(stage) {
             html += escapeHtml(originalText.substring(pos, m.position));
         }
         
-        // 마커 HTML
+        // 마커 HTML (v4.54: __DELETE__ 마커 처리 추가)
         var display = (err.useRevised && err.revised) ? cleanRevisedText(err.revised) : m.matchedText;
         var cls = (err.useRevised && err.revised) ? 'marker-revised' : 'marker-original';
         var title = (err.original + ' → ' + (err.revised || '')).replace(/"/g, '&quot;');
         
-        html += '<span class="correction-marker ' + cls + '" data-marker-id="' + err.id + '" data-stage="' + stage + '" title="' + title + '">' + escapeHtml(display) + '</span>';
+        // 삭제 지시문인 경우: 취소선 스타일로 표시
+        if (display === '__DELETE__' && err.useRevised) {
+            html += '<span class="correction-marker" data-marker-id="' + err.id + '" data-stage="' + stage + '" title="' + title + '" style="text-decoration:line-through;color:#ff5555;background:#ff555530;padding:2px 4px;border-radius:3px;cursor:pointer;">' + escapeHtml(m.matchedText) + ' <span style="font-size:10px;color:#ff9800;font-weight:bold;">[삭제]</span></span>';
+        } else {
+            html += '<span class="correction-marker ' + cls + '" data-marker-id="' + err.id + '" data-stage="' + stage + '" title="' + title + '">' + escapeHtml(display) + '</span>';
+        }
         
         pos = m.position + m.length;
     }
@@ -1465,6 +1510,28 @@ function renderScriptWithMarkers(stage) {
 
 function cleanRevisedText(text) {
     if (!text) return '';
+    
+    // ============================================================
+    // 0. 삭제 지시문 감지 (v4.54 추가)
+    // AI가 "이 장면을 삭제하라"고 판단한 경우 __DELETE__ 마커 반환
+    // ============================================================
+    var deletePatterns = [
+        /^\s*\(.*삭제.*\)\s*$/,
+        /^\s*\[.*삭제.*\]\s*$/,
+        /^\s*삭제\s*$/,
+        /^\s*\(.*제거.*\)\s*$/,
+        /^\s*\[.*제거.*\]\s*$/,
+        /^\s*제거\s*$/,
+        /^\s*\(.*없어야.*\)\s*$/,
+        /^\s*\(.*필요\s*없.*\)\s*$/
+    ];
+    
+    for (var d = 0; d < deletePatterns.length; d++) {
+        if (deletePatterns[d].test(text.trim())) {
+            console.log('🗑️ 삭제 지시문 감지: "' + text.trim() + '" → __DELETE__');
+            return '__DELETE__';
+        }
+    }
     
     var cleaned = text;
     
@@ -3739,8 +3806,13 @@ function buildStage1FixedScript() {
             result += originalText.substring(pos, r.position);
         }
         
-        // 수정안 삽입
-        result += r.revisedText;
+        // 수정안 삽입 (v4.54: __DELETE__이면 해당 구간 제거)
+        if (r.revisedText === '__DELETE__') {
+            // 삭제 지시: 아무것도 삽입하지 않음 (해당 원본 텍스트 제거)
+            console.log('   🗑️ 삭제 적용 [' + r.errorId + ']: "' + r.matchedText.substring(0, 25) + '..." 제거됨');
+        } else {
+            result += r.revisedText;
+        }
         
         pos = r.position + r.length;
     }
@@ -3764,9 +3836,17 @@ function fixScript(stage) {
     var errors = s.allErrors || [];
     errors.forEach(function(err) {
         if (err.useRevised && err.original && err.revised) {
-            text = text.split(err.original).join(err.revised);
+            var fixedRevised = cleanRevisedText(err.revised);
+            if (fixedRevised === '__DELETE__') {
+                // 삭제 지시: 해당 원본 텍스트를 빈 문자열로 치환
+                text = text.split(err.original).join('');
+            } else {
+                text = text.split(err.original).join(fixedRevised);
+            }
         }
     });
+    // 삭제로 인한 연속 빈 줄 정리
+    text = text.replace(/\n\s*\n\s*\n/g, '\n\n');
     s.fixedScript = text;
     s.isFixed = true;
     if (stage === 'stage2') state.finalScript = text;
