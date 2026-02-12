@@ -4272,7 +4272,6 @@ function scrollToPerfectScriptChange(index, changePoints) {
 }
 
 function createScoreCard(label, score, deductions) {
-    var scoreClass = score >= 90 ? 'high' : score >= 70 ? 'medium' : 'low';
     var scoreColor = score >= 90 ? '#69f0ae' : score >= 70 ? '#ffaa00' : '#ff5555';
     
     // 카테고리 키 매핑
@@ -4282,47 +4281,72 @@ function createScoreCard(label, score, deductions) {
     else if (label.indexOf('흐름') > -1) catKey = 'flow';
     else if (label.indexOf('이탈') > -1) catKey = 'retention';
     
-    // 감점 사항 텍스트
-    var deductionHtml = '';
+    // 감점 사항: 항상 5줄 고정 (빈 줄은 &nbsp;)
+    var deductionLines = [];
     if (deductions && deductions.length > 0) {
         deductions.slice(0, 5).forEach(function(d) {
-            deductionHtml += '<div style="font-size:11px;color:#ccc;line-height:1.7;padding:1px 0;">• ' + d + '</div>';
+            deductionLines.push('• ' + d);
         });
     } else {
-        deductionHtml = '<div style="font-size:11px;color:#888;line-height:1.7;">• 감점 사항 없음</div>';
+        deductionLines.push('• 감점 사항 없음');
     }
+    while (deductionLines.length < 5) {
+        deductionLines.push('&nbsp;');
+    }
+    var deductionHtml = '';
+    deductionLines.forEach(function(line) {
+        deductionHtml += '<div style="font-size:11px;color:#ccc;line-height:1.6;min-height:18px;">' + line + '</div>';
+    });
     
-    // 개선방안 텍스트
-    var improvementHtml = '';
+    // 개선방안: 항상 3줄 고정
+    var improvementLines = [];
     if (score >= 100) {
-        improvementHtml = '<span style="color:#69f0ae;font-size:11px;">✅ 만점! 수정 불필요</span>';
+        improvementLines.push('✅ 만점! 수정 불필요');
     } else {
         var tips = getSpecificImprovementTips(catKey, score, deductions);
-        improvementHtml = '<span style="color:#ccc;font-size:11px;line-height:1.7;">' + tips + '</span>';
+        var splitTips = tips.split('<br>');
+        splitTips.forEach(function(t) {
+            if (t.trim()) improvementLines.push(t.trim());
+        });
     }
+    while (improvementLines.length < 3) {
+        improvementLines.push('&nbsp;');
+    }
+    var improvementHtml = '';
+    improvementLines.slice(0, 3).forEach(function(line) {
+        var color = (line.indexOf('✅') > -1) ? '#69f0ae' : '#ccc';
+        improvementHtml += '<div style="font-size:11px;color:' + color + ';line-height:1.6;min-height:18px;">' + line + '</div>';
+    });
+    
+    var borderColor = 'rgba(255,255,255,0.08)';
     
     return '<div class="score-card" style="padding:0;overflow:hidden;">' +
-        '<table style="width:100%;border-collapse:collapse;">' +
+        '<table style="width:100%;border-collapse:collapse;table-layout:fixed;">' +
+        
+        '<!-- 상단 행: 카테고리명 | 문제점 | 점수 -->' +
         '<tr>' +
-            '<td style="width:35%;padding:12px 10px;vertical-align:top;border-right:1px solid rgba(255,255,255,0.1);border-bottom:1px solid rgba(255,255,255,0.1);">' +
-                '<div style="font-size:13px;color:#aaa;font-weight:bold;margin-bottom:4px;">' + label + '</div>' +
+            '<td style="width:28%;padding:12px 10px;vertical-align:top;border-right:1px solid ' + borderColor + ';border-bottom:1px solid ' + borderColor + ';height:120px;">' +
+                '<div style="font-size:13px;color:#aaa;font-weight:bold;">' + label + '</div>' +
             '</td>' +
-            '<td style="width:40%;padding:12px 10px;vertical-align:top;border-right:1px solid rgba(255,255,255,0.1);border-bottom:1px solid rgba(255,255,255,0.1);">' +
-                '<div style="font-size:11px;color:#ffaa00;font-weight:bold;margin-bottom:4px;">📋 문제점</div>' +
+            '<td style="width:47%;padding:12px 10px;vertical-align:top;border-right:1px solid ' + borderColor + ';border-bottom:1px solid ' + borderColor + ';height:120px;">' +
+                '<div style="font-size:11px;color:#ffaa00;font-weight:bold;margin-bottom:6px;">📋 문제점</div>' +
                 deductionHtml +
             '</td>' +
-            '<td style="width:25%;padding:12px 10px;text-align:center;vertical-align:middle;border-bottom:1px solid rgba(255,255,255,0.1);">' +
-                '<div style="font-size:28px;font-weight:bold;color:' + scoreColor + ';">' + score + '점</div>' +
+            '<td style="width:25%;padding:12px 10px;text-align:center;vertical-align:middle;border-bottom:1px solid ' + borderColor + ';height:120px;">' +
+                '<div style="font-size:32px;font-weight:bold;color:' + scoreColor + ';">' + score + '점</div>' +
             '</td>' +
         '</tr>' +
+        
+        '<!-- 하단 행: 개선방안 | 개선 내용 -->' +
         '<tr>' +
-            '<td style="padding:10px;vertical-align:top;border-right:1px solid rgba(255,255,255,0.1);">' +
+            '<td style="padding:10px;vertical-align:top;border-right:1px solid ' + borderColor + ';height:70px;">' +
                 '<div style="font-size:11px;color:#69f0ae;font-weight:bold;">💡 개선방안</div>' +
             '</td>' +
-            '<td colspan="2" style="padding:10px;vertical-align:top;">' +
+            '<td colspan="2" style="padding:10px;vertical-align:top;height:70px;">' +
                 improvementHtml +
             '</td>' +
         '</tr>' +
+        
         '</table>' +
         '</div>';
 }
