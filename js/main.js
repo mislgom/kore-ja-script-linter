@@ -734,19 +734,6 @@ function ensureScoreSection() {
     return scoreDisplay;
 }
     
-    scoreDisplay.innerHTML = '<div class="score-perfect-container">' +
-        '<div class="score-panel">' +
-        '<h3 style="color:#fff;margin-bottom:15px;text-align:center;">📊 품질 평가 점수</h3>' +
-        '<div style="text-align:center;padding:50px 20px;color:#888;">2차 분석 완료 후 점수가 표시됩니다</div>' +
-        '</div>' +
-        '<div class="perfect-panel">' +
-        '<h3 style="color:#69f0ae;margin-bottom:15px;text-align:center;">💯 100점 수정 대본</h3>' +
-        '<div style="text-align:center;padding:50px 20px;color:#888;">2차 분석 완료 후 수정 대본이 표시됩니다</div>' +
-        '</div></div>';
-    
-    return scoreDisplay;
-}
-
 function hideOriginalAnalysisButtons() {
     var btn1 = document.getElementById('btn-analyze-stage1');
     var btn2 = document.getElementById('btn-analyze-stage2');
