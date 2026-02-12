@@ -2889,17 +2889,35 @@ async function startStage2Analysis() {
         console.log('📋 6단계: 점수 계산');
         
         // 마지막 청크의 scores 사용, 없으면 기본값
-        var aiScores = { senior: 75, fun: 75, flow: 75, retention: 75 };
-        var scoreDetails = {};
-        
-        for (var si = 0; si < allAnalysisResults.length; si++) {
-            if (allAnalysisResults[si].scores) {
-                aiScores = allAnalysisResults[si].scores;
-            }
-            if (allAnalysisResults[si].scoreDetails) {
-                scoreDetails = allAnalysisResults[si].scoreDetails;
-            }
-        }
+        var aiScores = { senior: 0, fun: 0, flow: 0, retention: 0 };
+var scoreDetails = {};
+var scoreCount = 0;
+
+for (var si = 0; si < allAnalysisResults.length; si++) {
+    if (allAnalysisResults[si].scores) {
+        var s = allAnalysisResults[si].scores;
+        aiScores.senior += (s.senior || 0);
+        aiScores.fun += (s.fun || 0);
+        aiScores.flow += (s.flow || 0);
+        aiScores.retention += (s.retention || 0);
+        scoreCount++;
+    }
+    if (allAnalysisResults[si].scoreDetails) {
+        scoreDetails = allAnalysisResults[si].scoreDetails;
+    }
+}
+
+if (scoreCount > 0) {
+    aiScores.senior = Math.round(aiScores.senior / scoreCount);
+    aiScores.fun = Math.round(aiScores.fun / scoreCount);
+    aiScores.flow = Math.round(aiScores.flow / scoreCount);
+    aiScores.retention = Math.round(aiScores.retention / scoreCount);
+} else {
+    aiScores = { senior: 75, fun: 75, flow: 75, retention: 75 };
+}
+
+console.log('📊 점수 산출: ' + scoreCount + '개 청크 평균');
+console.log('  - 시니어: ' + aiScores.senior + ', 재미: ' + aiScores.fun + ', 흐름: ' + aiScores.flow + ', 몰입: ' + aiScores.retention);
         
         var scoreResult = null;
         try {
