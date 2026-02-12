@@ -2263,15 +2263,38 @@ function parseApiResponse(responseText) {
             console.warn('⚠️ 2차 파싱 실패, 부분 추출 시도...', e2.message);
             
             try {
-                var result = { errors: [], scores: null, perfectScript: '', changePoints: [] };
+                var result = { errors: [], issues: [], scores: null, perfectScript: '', changePoints: [] };
                 
+                // v4.54 강화: errors 배열 추출 (개별 객체 단위 복구)
                 var errorsMatch = jsonText.match(/"errors"\s*:\s*\[([\s\S]*?)\]/);
                 if (errorsMatch) {
                     try {
                         result.errors = JSON.parse('[' + errorsMatch[1] + ']');
+                        console.log('✅ errors 배열 파싱 성공: ' + result.errors.length + '개');
                     } catch (e) {
-                        result.errors = [];
+                        console.warn('⚠️ errors 배열 일괄 파싱 실패, 개별 객체 복구 시도...');
+                        result.errors = extractIndividualObjects(errorsMatch[1]);
+                        console.log('✅ errors 개별 복구: ' + result.errors.length + '개');
                     }
+                }
+                
+                // v4.54 강화: issues 배열 추출 (개별 객체 단위 복구)
+                var issuesMatch = jsonText.match(/"issues"\s*:\s*\[([\s\S]*?)\]/);
+                if (issuesMatch) {
+                    try {
+                        result.issues = JSON.parse('[' + issuesMatch[1] + ']');
+                        console.log('✅ issues 배열 파싱 성공: ' + result.issues.length + '개');
+                    } catch (e) {
+                        console.warn('⚠️ issues 배열 일괄 파싱 실패, 개별 객체 복구 시도...');
+                        result.issues = extractIndividualObjects(issuesMatch[1]);
+                        console.log('✅ issues 개별 복구: ' + result.issues.length + '개');
+                    }
+                }
+                
+                // issues가 있고 errors가 없으면 issues를 errors로 복사
+                if (result.issues.length > 0 && result.errors.length === 0) {
+                    result.errors = result.issues;
+                    console.log('✅ issues → errors 복사: ' + result.errors.length + '개');
                 }
                 
                 var scoresMatch = jsonText.match(/"scores"\s*:\s*\{([^}]+)\}/);
@@ -2295,6 +2318,16 @@ function parseApiResponse(responseText) {
                     }
                 }
                 
+                // v4.54 강화: scoreDetails 추출
+                var scoreDetailsMatch = jsonText.match(/"scoreDetails"\s*:\s*\{([\s\S]*?)\}\s*[,}]/);
+                if (scoreDetailsMatch) {
+                    try {
+                        result.scoreDetails = JSON.parse('{' + scoreDetailsMatch[1] + '}');
+                    } catch (e) {
+                        // scoreDetails 파싱 실패해도 무시
+                    }
+                }
+                
                 var perfectMatch = jsonText.match(/"perfectScript"\s*:\s*"([\s\S]*?)(?:"\s*[,}]|"$)/);
                 if (perfectMatch) {
                     result.perfectScript = perfectMatch[1]
@@ -2305,13 +2338,31 @@ function parseApiResponse(responseText) {
                 }
                 
                 console.log('✅ 부분 추출 성공:', result);
+                console.log('   - errors: ' + result.errors.length + '개');
+                console.log('   - issues: ' + result.issues.length + '개');
+                console.log('   - scores: ' + (result.scores ? '있음' : '없음'));
+                console.log('   - perfectScript: ' + (result.perfectScript ? result.perfectScript.length + '자' : '없음'));
                 return result;
                 
             } catch (e3) {
                 console.error('❌ 모든 파싱 시도 실패');
                 
+                // v4.54 강화: 최후의 수단 - 정규식으로 개별 오류 객체 직접 추출
+                var lastResortErrors = extractErrorsFromRawText(jsonText);
+                if (lastResortErrors.length > 0) {
+                    console.log('✅ 최후 수단 복구 성공: ' + lastResortErrors.length + '개 오류 추출');
+                    return {
+                        errors: lastResortErrors,
+                        issues: lastResortErrors,
+                        scores: { senior: 70, fun: 70, flow: 70, retention: 70 },
+                        perfectScript: '',
+                        changePoints: []
+                    };
+                }
+                
                 return {
                     errors: [],
+                    issues: [],
                     scores: { senior: 70, fun: 70, flow: 70, retention: 70 },
                     perfectScript: '⚠️ AI 응답 파싱 실패. 다시 분석해주세요.',
                     changePoints: []
@@ -2319,6 +2370,134 @@ function parseApiResponse(responseText) {
             }
         }
     }
+}
+
+// ============================================================
+// extractIndividualObjects - 깨진 JSON 배열에서 개별 객체 복구 (v4.54 추가)
+// ============================================================
+function extractIndividualObjects(arrayContent) {
+    var objects = [];
+    var braceDepth = 0;
+    var currentObj = '';
+    var inString = false;
+    var escapeNext = false;
+    
+    for (var i = 0; i < arrayContent.length; i++) {
+        var ch = arrayContent[i];
+        
+        if (escapeNext) {
+            currentObj += ch;
+            escapeNext = false;
+            continue;
+        }
+        
+        if (ch === '\\') {
+            currentObj += ch;
+            escapeNext = true;
+            continue;
+        }
+        
+        if (ch === '"' && !escapeNext) {
+            inString = !inString;
+            currentObj += ch;
+            continue;
+        }
+        
+        if (!inString) {
+            if (ch === '{') {
+                if (braceDepth === 0) {
+                    currentObj = '';
+                }
+                braceDepth++;
+                currentObj += ch;
+            } else if (ch === '}') {
+                braceDepth--;
+                currentObj += ch;
+                if (braceDepth === 0 && currentObj.trim().length > 2) {
+                    try {
+                        var parsed = JSON.parse(currentObj);
+                        objects.push(parsed);
+                    } catch (e) {
+                        // 개별 객체 파싱 실패 시 정규식으로 필드 추출 시도
+                        var recovered = recoverObjectFromText(currentObj);
+                        if (recovered) {
+                            objects.push(recovered);
+                        }
+                    }
+                    currentObj = '';
+                }
+            } else {
+                if (braceDepth > 0) {
+                    currentObj += ch;
+                }
+            }
+        } else {
+            currentObj += ch;
+        }
+    }
+    
+    return objects;
+}
+
+// ============================================================
+// recoverObjectFromText - 깨진 개별 객체에서 필드값 복구 (v4.54 추가)
+// ============================================================
+function recoverObjectFromText(text) {
+    var typeMatch = text.match(/"type"\s*:\s*"([^"]+)"/);
+    var originalMatch = text.match(/"original"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    var revisedMatch = text.match(/"revised"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    var suggestionMatch = text.match(/"suggestion"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    var reasonMatch = text.match(/"reason"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    var severityMatch = text.match(/"severity"\s*:\s*"([^"]+)"/);
+    
+    if (originalMatch && (revisedMatch || suggestionMatch)) {
+        var obj = {
+            type: typeMatch ? typeMatch[1] : '기타',
+            original: originalMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n'),
+            revised: revisedMatch ? revisedMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n') : '',
+            suggestion: suggestionMatch ? suggestionMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n') : '',
+            reason: reasonMatch ? reasonMatch[1].replace(/\\"/g, '"') : '',
+            severity: severityMatch ? severityMatch[1] : 'medium'
+        };
+        
+        // suggestion이 있고 revised가 없으면 suggestion을 revised로 복사
+        if (!obj.revised && obj.suggestion) {
+            obj.revised = obj.suggestion;
+        }
+        
+        console.log('   🔧 객체 복구: type=' + obj.type + ', original="' + obj.original.substring(0, 20) + '..."');
+        return obj;
+    }
+    
+    return null;
+}
+
+// ============================================================
+// extractErrorsFromRawText - 원시 텍스트에서 오류 객체 직접 추출 (v4.54 추가)
+// 최후의 수단: JSON 구조가 완전히 깨졌을 때 사용
+// ============================================================
+function extractErrorsFromRawText(text) {
+    var errors = [];
+    
+    // "original" : "..." 패턴과 "revised"/"suggestion" : "..." 패턴을 쌍으로 찾기
+    var pattern = /"type"\s*:\s*"([^"]+)"[\s\S]*?"original"\s*:\s*"((?:[^"\\]|\\.)*)"[\s\S]*?(?:"revised"|"suggestion")\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+    var match;
+    
+    while ((match = pattern.exec(text)) !== null) {
+        var reasonMatch = text.substring(match.index, match.index + match[0].length + 200).match(/"reason"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+        var severityMatch = text.substring(match.index, match.index + match[0].length + 200).match(/"severity"\s*:\s*"([^"]+)"/);
+        
+        errors.push({
+            type: match[1],
+            original: match[2].replace(/\\"/g, '"').replace(/\\n/g, '\n'),
+            revised: match[3].replace(/\\"/g, '"').replace(/\\n/g, '\n'),
+            suggestion: match[3].replace(/\\"/g, '"').replace(/\\n/g, '\n'),
+            reason: reasonMatch ? reasonMatch[1].replace(/\\"/g, '"') : '',
+            severity: severityMatch ? severityMatch[1] : 'medium'
+        });
+    }
+    
+    return errors;
 }
 
 function showProgress(message) {
