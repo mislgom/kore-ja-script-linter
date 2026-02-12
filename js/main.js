@@ -2563,10 +2563,10 @@ function calculateScoresFromAnalysis(script, aiScores, scoreDetails) {
         flowDeductions.push('인과관계 표현 부족 (-7점)');
     }
     
-    // 3-3. 시간 순서 혼란 (-10점)
-    var timeConfusionPatterns = ['그제서야|뒤늦게|이미.*전에|나중에 알고 보니';
+        // 3-3. 시간 순서 혼란 (-10점)
     // 시간 역전 표현이 과도하면 감점
     var timeConfusion = (script.match(/그제서야|뒤늦게/g) || []).length;
+
     if (timeConfusion > 3) {
         flowScore -= 10;
         flowDeductions.push('시간 순서 혼란 의심 (-10점)');
