@@ -199,7 +199,8 @@ var state = {
     finalScript: '',
     perfectScript: '',
     changePoints: [],
-    scores: null
+    scores: null,
+    scriptSummary: ''
 };
 
 var currentAbortController = null;
@@ -1977,6 +1978,122 @@ function extractScriptContext(script) {
     
     return context;
 }
+// ============================================================
+// generateScriptSummary - 1패스: 전체 대본 요약 생성 (3패스 구조)
+// 전체 대본을 한 번에 보내 줄거리/인물/복선/장면구조 요약만 요청
+// ============================================================
+async function generateScriptSummary(script) {
+    console.log('📝 1패스: 전체 대본 요약 생성 시작');
+    console.log('  - 대본 길이: ' + script.length + '자');
+
+    var summaryPrompt = '당신은 한국 사극 대본 분석 전문가입니다.\n\n' +
+        '아래 대본을 읽고 다음 정보를 정리해주세요. 오류 분석은 하지 마세요. 구조 파악과 요약만 해주세요.\n\n' +
+        '반드시 아래 형식으로만 응답하세요:\n\n' +
+        '## 1. 전체 줄거리 요약 (시간순, 10~15문장)\n' +
+        '(여기에 작성)\n\n' +
+        '## 2. 등장인물별 행동/감정 변화\n' +
+        '- 인물명: 초반 상태 → 중반 변화 → 후반 상태\n' +
+        '(각 인물별로 작성)\n\n' +
+        '## 3. 주요 복선과 회수 포인트\n' +
+        '- 복선: (내용) → 회수: (내용) 또는 미회수\n' +
+        '(발견된 복선별로 작성)\n\n' +
+        '## 4. 장면 전환 구조\n' +
+        '- 장면1: (장소/시간) → 장면2: (장소/시간) → ...\n' +
+        '(주요 장면 전환 흐름)\n\n' +
+        '## 5. 시간적 배경\n' +
+        '(이 대본의 시대적 배경, 계절, 시간대 등)\n\n' +
+        '---\n대본:\n' + script;
+
+    try {
+        var response = await callGeminiAPI(summaryPrompt);
+        console.log('✅ 1패스: 전체 요약 생성 완료 (' + response.length + '자)');
+        return response;
+    } catch (error) {
+        if (error.name === 'AbortError') throw error;
+        console.error('⚠️ 1패스 요약 생성 실패:', error.message);
+        return '';
+    }
+}
+
+// ============================================================
+// verifyOverallFlow - 3패스: 전체 흐름 검증 (3패스 구조)
+// 전체 대본 + 요약 + 2패스 오류 목록을 보내 전체 흐름 이슈만 분석
+// ============================================================
+async function verifyOverallFlow(script, summary, existingErrors) {
+    console.log('🔍 3패스: 전체 흐름 검증 시작');
+    console.log('  - 대본 길이: ' + script.length + '자');
+    console.log('  - 기존 발견 오류: ' + existingErrors.length + '건');
+
+    var existingErrorsSummary = '';
+    for (var i = 0; i < Math.min(existingErrors.length, 30); i++) {
+        var err = existingErrors[i];
+        existingErrorsSummary += '- [' + (err.type || '기타') + '] ' + (err.original || '').substring(0, 50) + ' → ' + (err.revised || '').substring(0, 50) + '\n';
+    }
+
+    var flowPrompt = '당신은 한국 사극 대본의 전체 흐름과 구조를 검증하는 전문가입니다.\n\n' +
+        '아래에 대본 전문, 대본 요약, 그리고 이미 발견된 개별 오류 목록이 있습니다.\n' +
+        '개별 오류(맞춤법, 시대착오 등)는 이미 검출되었으므로, 당신은 **대본 전체를 관통하는 흐름 관점의 문제만** 찾아주세요.\n\n' +
+        '다음 관점에서만 분석하세요:\n' +
+        '1. **복선-회수 미완**: 앞에서 제시된 복선이 뒤에서 회수되지 않은 부분\n' +
+        '2. **캐릭터 일관성**: 인물의 성격/말투/행동이 앞뒤 장면에서 모순되는 부분\n' +
+        '3. **장면 연결성**: 장면 간 시간/공간/상황의 논리적 연결이 끊기는 부분\n' +
+        '4. **감정선 연결**: 인물의 감정 흐름이 급변하거나 비논리적인 부분\n' +
+        '5. **이야기 구조**: 전체 서사 구조에서 허점이나 빈 곳\n\n' +
+        '반드시 아래 JSON 형식으로만 응답하세요:\n' +
+        '```json\n' +
+        '{\n' +
+        '  "flowIssues": [\n' +
+        '    {\n' +
+        '      "type": "복선회수|캐릭터일관성|장면연결성|감정선연결|이야기흐름",\n' +
+        '      "original": "문제가 되는 원문 부분 (가능한 정확히 인용)",\n' +
+        '      "revised": "수정 제안",\n' +
+        '      "reason": "왜 문제인지 구체적 설명",\n' +
+        '      "severity": "high|medium|low"\n' +
+        '    }\n' +
+        '  ]\n' +
+        '}\n' +
+        '```\n\n' +
+        '## 대본 요약:\n' + summary + '\n\n' +
+        '## 이미 발견된 개별 오류 (' + existingErrors.length + '건):\n' + existingErrorsSummary + '\n\n' +
+        '## 대본 전문:\n' + script;
+
+    try {
+        var response = await callGeminiAPI(flowPrompt);
+        console.log('✅ 3패스: 전체 흐름 검증 완료');
+
+        // JSON 파싱
+        var flowResult = null;
+        var jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
+        if (jsonMatch) {
+            try {
+                flowResult = JSON.parse(jsonMatch[1]);
+            } catch (e) {
+                console.log('  ⚠️ 3패스 JSON 파싱 실패 (코드블록):', e.message);
+            }
+        }
+
+        if (!flowResult) {
+            var jsonStart = response.indexOf('{');
+            var jsonEnd = response.lastIndexOf('}');
+            if (jsonStart !== -1 && jsonEnd !== -1) {
+                try {
+                    flowResult = JSON.parse(response.substring(jsonStart, jsonEnd + 1));
+                } catch (e) {
+                    console.log('  ⚠️ 3패스 JSON 파싱 실패 (직접):', e.message);
+                }
+            }
+        }
+
+        var flowIssues = (flowResult && flowResult.flowIssues) ? flowResult.flowIssues : [];
+        console.log('  - 3패스 발견 흐름 이슈: ' + flowIssues.length + '건');
+        return flowIssues;
+
+    } catch (error) {
+        if (error.name === 'AbortError') throw error;
+        console.error('⚠️ 3패스 전체 흐름 검증 실패:', error.message);
+        return [];
+    }
+}
 
 function buildStage1Prompt(script) {
     var rulesString = getHistoricalRulesString();
@@ -2643,18 +2760,28 @@ async function startStage1Analysis() {
     showProgress('1차 분석 시작...');
     updateProgress(5, '대본 분할 중...');
 
-    try {
+        try {
         state.stage1.originalScript = script;
         state.stage1.isFixed = false;
         state.stage1.currentErrorIndex = -1;
-        
+
+        // ============================================================
+        // 1패스: 전체 대본 요약 생성 (3패스 구조)
+        // ============================================================
+        updateProgress(3, '📝 1패스: 전체 대본 구조 파악 중...');
+        var scriptSummary = await generateScriptSummary(script);
+        state.scriptSummary = scriptSummary;
+        console.log('📝 1패스 요약 저장 완료 (state.scriptSummary: ' + scriptSummary.length + '자)');
+
+        updateProgress(5, '📋 2패스: 청크별 오류 분석 준비 중...');
+
         // v4.54: 대본을 5000자 단위로 분할하여 정밀 분석
         var chunks = splitScriptIntoChunks(script, 5000);
         var scriptContext = extractScriptContext(script);
         var allErrors = [];
         var allAnalysis = [];
         
-        console.log('🔍 1차 분석: ' + chunks.length + '개 청크 순차 분석 시작');
+        console.log('🔍 1차 분석(2패스): ' + chunks.length + '개 청크 순차 분석 시작');
         
         for (var i = 0; i < chunks.length; i++) {
             var chunk = chunks[i];
@@ -2832,9 +2959,13 @@ async function startStage2Analysis() {
             
             console.log('📦 청크 ' + (ci + 1) + '/' + chunks.length + ' 분석 시작 (' + chunk.text.length + '자)');
             
-            // 맥락 정보를 포함한 프롬프트 생성
+            // 맥락 정보를 포함한 프롬프트 생성 (1패스 요약 포함)
             var contextInfo = '\n\n## 📌 대본 전체 맥락 정보 (이 정보를 참고하여 분석하세요)\n';
             contextInfo += '현재 분석 구간: 전체 ' + stage1FixedScript.length + '자 중 ' + chunk.startIndex + '~' + chunk.endIndex + '자 (' + (ci + 1) + '/' + chunks.length + ' 구간)\n\n';
+
+            if (state.scriptSummary) {
+                contextInfo += '### 📖 전체 대본 요약 (참고용):\n' + state.scriptSummary + '\n\n';
+            }
             
             if (scriptContext.characters.length > 0) {
                 contextInfo += '### 등장인물 목록:\n';
@@ -2877,11 +3008,27 @@ async function startStage2Analysis() {
             }
         }
         
-        console.log('🔬 2차 분석 전체 완료: 총 ' + allIssues.length + '개 이슈 발견');
-        
+         console.log('📊 2패스(2차 분석) 완료 총 이슈: ' + allIssues.length + '건');
+
+        // ============================================================
+        // 3패스: 전체 흐름 검증
+        // ============================================================
+        updateProgress(62, '🔍 3패스: 전체 흐름 검증 중...');
+        var flowIssues = await verifyOverallFlow(stage1FixedScript, state.scriptSummary || '', allIssues);
+
+        // 3패스 결과를 2패스 이슈에 병합
+        if (flowIssues.length > 0) {
+            console.log('🔍 3패스 흐름 이슈 ' + flowIssues.length + '건 병합');
+            for (var fi = 0; fi < flowIssues.length; fi++) {
+                flowIssues[fi]._from3rdPass = true;
+                allIssues.push(flowIssues[fi]);
+            }
+            console.log('📊 최종 총 이슈 (2패스+3패스): ' + allIssues.length + '건');
+        }
+
         var filteredIssues = allIssues;
-        
-        updateProgress(65, '점수 계산 중...');
+
+        updateProgress(68, '점수 계산 중...');
         
         // ============================================================
         // 6단계: 점수 계산
