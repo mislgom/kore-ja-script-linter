@@ -731,10 +731,8 @@ function addFullViewButtonsToHeaders() {
 function ensureScoreSection() {
     var scoreDisplay = document.getElementById('score-display');
     if (!scoreDisplay) return null;
-    
-    if (scoreDisplay.querySelector('.score-perfect-container')) {
-        return scoreDisplay;
-    }
+    return scoreDisplay;
+}
     
     scoreDisplay.innerHTML = '<div class="score-perfect-container">' +
         '<div class="score-panel">' +
