@@ -235,6 +235,7 @@ function initApp() {
     createFullViewModal();
     createCompareModal();
     initEscKeyHandler();
+    initResetCacheButton();
     console.log('📊 총 ' + getTotalRulesCount() + '개 시대고증 규칙 로드됨');
     console.log('⏱️ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('🤖 모델: ' + API_CONFIG.MODEL);
@@ -5406,4 +5407,25 @@ function showCacheExtendedSuccess() {
         '<span style="font-size:18px;">✅</span>' +
         '<span>캐시가 15분 연장되었습니다! (남은 시간: ' + Math.floor(cacheTimer.remainingSeconds / 60) + '분)</span>';
     setTimeout(function() { hideCacheWarning(); }, 3000);
+}
+// ============================================================
+// 캐시 초기화 버튼 (v4.57 추가)
+// ============================================================
+function initResetCacheButton() {
+    var btn = document.getElementById('btn-reset-cache');
+    if (!btn) return;
+    btn.addEventListener('click', function() {
+        var cacheName = state._cacheName;
+        if (!cacheName) {
+            alert('현재 활성화된 캐시가 없습니다.');
+            return;
+        }
+        if (!confirm('캐시를 삭제하시겠습니까?\n\n진행 중인 분석이 있으면 실패할 수 있습니다.')) {
+            return;
+        }
+        deleteScriptCache(cacheName);
+        state._cacheName = null;
+        alert('캐시가 삭제되었습니다.');
+        console.log('🗑️ 수동 캐시 초기화 완료');
+    });
 }
