@@ -409,41 +409,206 @@ function openCompareModal() {
     var rightBody = document.getElementById('compare-right-body');
     var diffList = document.getElementById('compare-diff-list');
     
-    var differences = findDifferences(finalScript, perfectScript);
+    // ============================================================
+    // 왼쪽: 최종 수정 반영 대본 (일반 텍스트)
+    // ============================================================
+    leftBody.innerHTML = escapeHtml(finalScript);
     
-    var leftHtml = escapeHtml(finalScript);
-    differences.forEach(function(diff, idx) {
-        if (diff.original) {
-            var marker = '<span class="diff-highlight" data-diff-id="diff-left-' + idx + '">' + escapeHtml(diff.original) + '</span>';
-            leftHtml = leftHtml.replace(escapeHtml(diff.original), marker);
-        }
-    });
-    leftBody.innerHTML = leftHtml;
-    
+    // ============================================================
+    // 오른쪽: 100점 대본 (태그별 색상 표시 - 메인 페이지와 동일)
+    // ============================================================
     var rightHtml = escapeHtml(perfectScript);
-    differences.forEach(function(diff, idx) {
-        if (diff.modified) {
-            var marker = '<span class="diff-highlight" data-diff-id="diff-right-' + idx + '">' + escapeHtml(diff.modified) + '</span>';
-            rightHtml = rightHtml.replace(escapeHtml(diff.modified), marker);
-        }
-    });
+    
+    // [SENIOR+]...[/SENIOR+] → 녹색 + 밑줄 (시니어 적합도 추가)
+    rightHtml = rightHtml.replace(/\[SENIOR\+\]([\s\S]*?)\[\/SENIOR\+\]/g, '<span class="compare-tag compare-tag-senior-add" style="background:#4CAF5040;color:#69f0ae;border-left:3px solid #4CAF50;padding:1px 4px;border-radius:2px;text-decoration:underline;text-decoration-color:#4CAF50;text-underline-offset:3px;cursor:pointer;" title="➕ 시니어 적합도 추가" data-compare-type="senior-add">$1</span>');
+    
+    // [FUN+]...[/FUN+] → 주황색 + 밑줄 (재미 요소 추가)
+    rightHtml = rightHtml.replace(/\[FUN\+\]([\s\S]*?)\[\/FUN\+\]/g, '<span class="compare-tag compare-tag-fun-add" style="background:#FF980040;color:#FFB74D;border-left:3px solid #FF9800;padding:1px 4px;border-radius:2px;text-decoration:underline;text-decoration-color:#FF9800;text-underline-offset:3px;cursor:pointer;" title="➕ 재미 요소 추가" data-compare-type="fun-add">$1</span>');
+    
+    // [FLOW+]...[/FLOW+] → 파란색 + 밑줄 (이야기 흐름 추가)
+    rightHtml = rightHtml.replace(/\[FLOW\+\]([\s\S]*?)\[\/FLOW\+\]/g, '<span class="compare-tag compare-tag-flow-add" style="background:#2196F340;color:#64B5F6;border-left:3px solid #2196F3;padding:1px 4px;border-radius:2px;text-decoration:underline;text-decoration-color:#2196F3;text-underline-offset:3px;cursor:pointer;" title="➕ 이야기 흐름 추가" data-compare-type="flow-add">$1</span>');
+    
+    // [RETAIN+]...[/RETAIN+] → 보라색 + 밑줄 (시청자 이탈 방지 추가)
+    rightHtml = rightHtml.replace(/\[RETAIN\+\]([\s\S]*?)\[\/RETAIN\+\]/g, '<span class="compare-tag compare-tag-retain-add" style="background:#9C27B040;color:#CE93D8;border-left:3px solid #9C27B0;padding:1px 4px;border-radius:2px;text-decoration:underline;text-decoration-color:#9C27B0;text-underline-offset:3px;cursor:pointer;" title="➕ 시청자 이탈 방지 추가" data-compare-type="retain-add">$1</span>');
+    
+    // [SENIOR]...[/SENIOR] → 녹색 (시니어 적합도 수정)
+    rightHtml = rightHtml.replace(/\[SENIOR\]([\s\S]*?)\[\/SENIOR\]/g, '<span class="compare-tag compare-tag-senior" style="background:#4CAF5040;color:#69f0ae;border-left:3px solid #4CAF50;padding:1px 4px;border-radius:2px;cursor:pointer;" title="✏️ 시니어 적합도 수정" data-compare-type="senior">$1</span>');
+    
+    // [FUN]...[/FUN] → 주황색 (재미 요소 수정)
+    rightHtml = rightHtml.replace(/\[FUN\]([\s\S]*?)\[\/FUN\]/g, '<span class="compare-tag compare-tag-fun" style="background:#FF980040;color:#FFB74D;border-left:3px solid #FF9800;padding:1px 4px;border-radius:2px;cursor:pointer;" title="✏️ 재미 요소 수정" data-compare-type="fun">$1</span>');
+    
+    // [FLOW]...[/FLOW] → 파란색 (이야기 흐름 수정)
+    rightHtml = rightHtml.replace(/\[FLOW\]([\s\S]*?)\[\/FLOW\]/g, '<span class="compare-tag compare-tag-flow" style="background:#2196F340;color:#64B5F6;border-left:3px solid #2196F3;padding:1px 4px;border-radius:2px;cursor:pointer;" title="✏️ 이야기 흐름 수정" data-compare-type="flow">$1</span>');
+    
+    // [RETAIN]...[/RETAIN] → 보라색 (시청자 이탈 방지 수정)
+    rightHtml = rightHtml.replace(/\[RETAIN\]([\s\S]*?)\[\/RETAIN\]/g, '<span class="compare-tag compare-tag-retain" style="background:#9C27B040;color:#CE93D8;border-left:3px solid #9C27B0;padding:1px 4px;border-radius:2px;cursor:pointer;" title="✏️ 시청자 이탈 방지 수정" data-compare-type="retain">$1</span>');
+    
+    // [DEL]...[/DEL] → 빨간색 취소선 (삭제)
+    rightHtml = rightHtml.replace(/\[DEL\]([\s\S]*?)\[\/DEL\]/g, '<span class="compare-tag compare-tag-del" style="text-decoration:line-through;color:#ff5555;background:#ff555520;padding:1px 4px;border-radius:2px;cursor:pointer;" title="🗑️ 삭제된 부분" data-compare-type="del">$1</span>');
+    
+    // ★...★ 호환 (이전 버전)
+    rightHtml = rightHtml.replace(/★([^★]+)★/g, '<span class="compare-tag" style="background:#FFD70040;color:#FFD700;padding:1px 4px;border-radius:2px;cursor:pointer;">$1</span>');
+    
     rightBody.innerHTML = rightHtml;
     
+    // ============================================================
+    // 수정/추가/삭제 카운트
+    // ============================================================
+    var seniorEditCount = (perfectScript.match(/\[SENIOR\][^\+\[]/g) || []).length;
+    var seniorAddCount = (perfectScript.match(/\[SENIOR\+\]/g) || []).length;
+    var funEditCount = (perfectScript.match(/\[FUN\][^\+\[]/g) || []).length;
+    var funAddCount = (perfectScript.match(/\[FUN\+\]/g) || []).length;
+    var flowEditCount = (perfectScript.match(/\[FLOW\][^\+\[]/g) || []).length;
+    var flowAddCount = (perfectScript.match(/\[FLOW\+\]/g) || []).length;
+    var retainEditCount = (perfectScript.match(/\[RETAIN\][^\+\[]/g) || []).length;
+    var retainAddCount = (perfectScript.match(/\[RETAIN\+\]/g) || []).length;
+    var delCount = (perfectScript.match(/\[DEL\]/g) || []).length;
+    
+    // ============================================================
+    // 하단 영역: 범례 + 카운트 + 수정 목록
+    // ============================================================
     diffList.innerHTML = '';
-    if (differences.length === 0) {
-        diffList.innerHTML = '<div style="color:#888;padding:10px;">차이점이 없습니다.</div>';
-    } else {
-        differences.forEach(function(diff, idx) {
-            var item = document.createElement('span');
-            item.className = 'compare-diff-item';
-            item.setAttribute('data-diff-index', idx);
-            item.textContent = (idx + 1) + '. ' + (diff.original ? diff.original.substring(0, 20) : '추가됨') + (diff.original && diff.original.length > 20 ? '...' : '');
-            item.addEventListener('click', function() {
-                scrollToDiff(idx);
-            });
-            diffList.appendChild(item);
+    
+    // 범례 + 카운트 영역
+    var legendHtml = '<div style="margin-bottom:15px;padding:12px;background:#1e1e1e;border-radius:8px;">' +
+        '<div style="display:flex;justify-content:center;gap:20px;flex-wrap:wrap;margin-bottom:8px;">' +
+        '<span style="font-size:12px;font-weight:bold;color:#aaa;">✏️ 수정 = 배경색</span>' +
+        '<span style="font-size:12px;font-weight:bold;color:#aaa;">➕ 추가 = 배경색 + <u>밑줄</u></span>' +
+        '<span style="font-size:12px;font-weight:bold;color:#aaa;">🗑️ 삭제 = <span style="text-decoration:line-through;color:#ff5555;">취소선</span></span>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;">' +
+        '<span style="font-size:11px;color:#69f0ae;">● 시니어 적합도: ✏️' + seniorEditCount + ' / ➕' + seniorAddCount + '</span>' +
+        '<span style="font-size:11px;color:#FFB74D;">● 재미 요소: ✏️' + funEditCount + ' / ➕' + funAddCount + '</span>' +
+        '<span style="font-size:11px;color:#64B5F6;">● 이야기 흐름: ✏️' + flowEditCount + ' / ➕' + flowAddCount + '</span>' +
+        '<span style="font-size:11px;color:#CE93D8;">● 시청자 이탈 방지: ✏️' + retainEditCount + ' / ➕' + retainAddCount + '</span>' +
+        '<span style="font-size:11px;color:#ff5555;">● 삭제: 🗑️' + delCount + '</span>' +
+        '</div>' +
+        '</div>';
+    
+    var legendDiv = document.createElement('div');
+    legendDiv.innerHTML = legendHtml;
+    diffList.appendChild(legendDiv);
+    
+    // ============================================================
+    // 100점 대본 태그 클릭 → 최종 수정 반영 대본 해당 위치 이동
+    // ============================================================
+    rightBody.querySelectorAll('.compare-tag').forEach(function(tag) {
+        tag.addEventListener('click', function() {
+            var tagText = this.textContent || '';
+            if (!tagText || tagText.trim().length < 3) return;
+            
+            // 클릭된 태그 깜빡임 효과
+            var originalBg = this.style.background;
+            this.style.background = '#ffffff40';
+            var self = this;
+            setTimeout(function() { self.style.background = originalBg; }, 300);
+            setTimeout(function() { self.style.background = '#ffffff40'; }, 600);
+            setTimeout(function() { self.style.background = originalBg; }, 900);
+            
+            // 최종 수정 반영 대본에서 해당 텍스트 위치 찾기
+            var searchText = tagText.trim();
+            var leftText = leftBody.textContent || leftBody.innerText || '';
+            
+            // 검색 후보 생성
+            var searchCandidates = [searchText];
+            
+            // 첫 줄만
+            var firstLine = searchText.split('\n')[0].trim();
+            if (firstLine.length >= 5 && firstLine !== searchText) {
+                searchCandidates.push(firstLine);
+            }
+            
+            // 앞 20자
+            if (searchText.length > 20) {
+                searchCandidates.push(searchText.substring(0, 20));
+            }
+            
+            // 앞 10자
+            if (searchText.length > 10) {
+                searchCandidates.push(searchText.substring(0, 10));
+            }
+            
+            // 핵심 단어 (3자 이상)
+            var words = searchText.split(/\s+/).filter(function(w) { return w.length >= 3; });
+            if (words.length > 0) {
+                searchCandidates.push(words[0]);
+            }
+            
+            var foundIndex = -1;
+            var foundCandidate = '';
+            
+            for (var s = 0; s < searchCandidates.length; s++) {
+                var candidate = searchCandidates[s];
+                if (!candidate || candidate.length < 3) continue;
+                foundIndex = leftText.indexOf(candidate);
+                if (foundIndex !== -1) {
+                    foundCandidate = candidate;
+                    break;
+                }
+            }
+            
+            if (foundIndex !== -1 && leftText.length > 0) {
+                // 비율 기반 스크롤
+                var scrollRatio = foundIndex / leftText.length;
+                var scrollTarget = leftBody.scrollHeight * scrollRatio;
+                
+                leftBody.scrollTo({
+                    top: Math.max(0, scrollTarget - 80),
+                    behavior: 'smooth'
+                });
+                
+                // 텍스트 노드에서 하이라이트 시도
+                var textNodes = [];
+                var walker = document.createTreeWalker(leftBody, NodeFilter.SHOW_TEXT, null, false);
+                var node;
+                while (node = walker.nextNode()) {
+                    textNodes.push(node);
+                }
+                
+                var highlighted = false;
+                for (var t = 0; t < textNodes.length && !highlighted; t++) {
+                    var textNode = textNodes[t];
+                    var nodeText = textNode.nodeValue || '';
+                    var idx = nodeText.indexOf(foundCandidate);
+                    
+                    if (idx !== -1) {
+                        try {
+                            var range = document.createRange();
+                            var matchEnd = Math.min(idx + foundCandidate.length, nodeText.length);
+                            range.setStart(textNode, idx);
+                            range.setEnd(textNode, matchEnd);
+                            
+                            var highlight = document.createElement('span');
+                            highlight.style.cssText = 'background:#ffeb3b;color:#000;padding:2px 4px;border-radius:3px;transition:background 0.5s;';
+                            range.surroundContents(highlight);
+                            
+                            highlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            
+                            highlighted = true;
+                            
+                            setTimeout(function() {
+                                if (highlight) highlight.style.background = '#ffeb3b80';
+                            }, 1500);
+                            
+                            setTimeout(function() {
+                                if (highlight && highlight.parentNode) {
+                                    var parent = highlight.parentNode;
+                                    parent.replaceChild(document.createTextNode(highlight.textContent), highlight);
+                                    parent.normalize();
+                                }
+                            }, 4000);
+                        } catch (e) {
+                            console.log('⚠️ 하이라이트 생성 실패:', e.message);
+                        }
+                    }
+                }
+                
+                console.log('✅ 비교 모달: "' + foundCandidate.substring(0, 20) + '..." → 최종 수정본 이동');
+            } else {
+                console.log('⚠️ 비교 모달: 최종 수정본에서 해당 텍스트를 찾지 못함');
+            }
         });
-    }
+    });
     
     modal.style.display = 'block';
     document.body.style.overflow = 'hidden';
