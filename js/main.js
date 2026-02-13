@@ -871,6 +871,7 @@ function initDragAndDrop() {
 function handleFile(file) {
     var reader = new FileReader();
     reader.onload = function(e) {
+        resetAllAnalysis();
         document.getElementById('original-script').value = e.target.result;
         document.getElementById('char-count').textContent = e.target.result.length;
     };
@@ -5428,4 +5429,85 @@ function initResetCacheButton() {
         alert('캐시가 삭제되었습니다.');
         console.log('🗑️ 수동 캐시 초기화 완료');
     });
+}
+// ============================================================
+// 전체 초기화 함수 (v4.57 추가)
+// 새 대본 삽입 시 이전 분석 결과/캐시/점수 모두 초기화
+// ============================================================
+function resetAllAnalysis() {
+    console.log('🔄 전체 초기화 시작...');
+
+    // 1. 캐시 삭제
+    if (state._cacheName) {
+        deleteScriptCache(state._cacheName);
+        state._cacheName = null;
+    }
+
+    // 2. state 초기화
+    state.stage1 = {
+        originalScript: '',
+        analysis: null,
+        revisedScript: '',
+        allErrors: [],
+        fixedScript: '',
+        currentErrorIndex: -1,
+        isFixed: false
+    };
+    state.stage2 = {
+        originalScript: '',
+        analysis: null,
+        revisedScript: '',
+        allErrors: [],
+        fixedScript: '',
+        currentErrorIndex: -1,
+        isFixed: false
+    };
+    state.finalScript = '';
+    state.perfectScript = '';
+    state.changePoints = [];
+    state.scores = null;
+    state.scriptSummary = '';
+
+    // 3. 4칸 결과 영역 초기화
+    var stage1Analysis = document.getElementById('analysis-stage1');
+    if (stage1Analysis) stage1Analysis.innerHTML = '<p class="placeholder">1차 분석을 시작하면 결과가 표시됩니다.</p>';
+
+    var revisedStage1 = document.getElementById('revised-stage1');
+    if (revisedStage1) revisedStage1.innerHTML = '<p class="placeholder">1차 분석 후 수정본이 표시됩니다.</p>';
+
+    var stage2Analysis = document.getElementById('analysis-stage2');
+    if (stage2Analysis) stage2Analysis.innerHTML = '<p class="placeholder">2차 분석을 시작하면 결과가 표시됩니다.</p>';
+
+    var revisedStage2 = document.getElementById('revised-stage2');
+    if (revisedStage2) revisedStage2.innerHTML = '<p class="placeholder">2차 분석 후 최종본이 표시됩니다.</p>';
+
+    // 4. 수정 건수 표시 초기화
+    var revCount1 = document.getElementById('revision-count-stage1');
+    if (revCount1) revCount1.textContent = '';
+
+    var revCount2 = document.getElementById('revision-count-stage2');
+    if (revCount2) revCount2.textContent = '';
+
+    // 5. 점수 영역 초기화
+    var scoreDisplay = document.getElementById('score-display');
+    if (scoreDisplay) scoreDisplay.innerHTML = '<p class="placeholder">분석 완료 후 점수가 표시됩니다.</p>';
+
+    // 6. 다운로드 버튼 비활성화
+    var downloadBtn = document.getElementById('btn-download');
+    if (downloadBtn) downloadBtn.disabled = true;
+
+    // 7. 수정 전/후/픽스 버튼 비활성화
+    var btnNames = [
+        'btn-revert-before-stage1', 'btn-revert-after-stage1', 'btn-fix-script-stage1',
+        'btn-revert-before-stage2', 'btn-revert-after-stage2', 'btn-fix-script-stage2'
+    ];
+    btnNames.forEach(function(id) {
+        var btn = document.getElementById(id);
+        if (btn) btn.disabled = true;
+    });
+
+    // 8. 진행률 바 숨기기
+    hideProgress();
+
+    console.log('✅ 전체 초기화 완료');
 }
