@@ -5741,8 +5741,9 @@ async function generatePerfectScriptFromScores() {
         // 공통 태그 규칙
         var tagRule = '## 수정 표시 규칙 (반드시 준수!)\n' +
             '수정/추가/삭제한 부분에 아래 태그를 사용하세요:\n' +
-            '- 수정한 부분: [SENIOR]수정내용[/SENIOR] 또는 [FUN]수정내용[/FUN] 또는 [FLOW]수정내용[/FLOW] 또는 [RETAIN]수정내용[/RETAIN]\n' +
-            '- 삭제한 부분: [DEL]삭제된 원문[/DEL]\n' +
+            '- 기존 텍스트를 수정한 부분: [SENIOR]수정내용[/SENIOR] 또는 [FUN]수정내용[/FUN] 또는 [FLOW]수정내용[/FLOW] 또는 [RETAIN]수정내용[/RETAIN]\n' +
+            '- 새로 추가한 나레이션/대사/지문: [SENIOR+]추가내용[/SENIOR+] 또는 [FUN+]추가내용[/FUN+] 또는 [FLOW+]추가내용[/FLOW+] 또는 [RETAIN+]추가내용[/RETAIN+]\n' +
+            '- 삭제해야 할 부분: [DEL]삭제할원문[/DEL]\n' +
             '- 당신의 담당 카테고리 태그만 사용하세요!\n' +
             '- 수정하지 않은 부분은 원본 그대로 태그 없이 출력!\n\n';
         
@@ -5769,7 +5770,7 @@ async function generatePerfectScriptFromScores() {
                 '## 현재 시니어 적합도: ' + scores.senior + '점 (목표: 100점)\n\n' +
                 '## 감점 사항:\n' + seniorDeductions + '\n\n' +
                 freeEditRule +
-                '## 당신의 담당 태그: [SENIOR]...[/SENIOR]\n\n' +
+                '## 당신의 담당 태그: [SENIOR]...[/SENIOR] (수정), [SENIOR+]...[/SENIOR+] (추가)\n\n' +
                 tagRule +
                 '## 주요 개선 방향:\n' +
                 '- 50자 초과 대사 → 2~3문장으로 분리\n' +
@@ -5813,8 +5814,8 @@ async function generatePerfectScriptFromScores() {
                 '## 현재 재미 요소: ' + scores.fun + '점 (목표: 100점)\n\n' +
                 '## 감점 사항:\n' + funDeductions + '\n\n' +
                 freeEditRule +
-                '## 당신의 담당 태그: [FUN]...[/FUN]\n\n' +
-                '## 주의: 이전 전문가가 [SENIOR]...[/SENIOR] 태그를 이미 사용했습니다. 이 태그는 그대로 유지하세요!\n\n' +
+                '## 당신의 담당 태그: [FUN]...[/FUN] (수정), [FUN+]...[/FUN+] (추가)\n\n' +
+                '## 주의: 이전 전문가가 [SENIOR]...[/SENIOR], [SENIOR+]...[/SENIOR+] 태그를 이미 사용했습니다. 이 태그는 그대로 유지하세요!\n\n' +
                 tagRule +
                 '## 주요 개선 방향:\n' +
                 '- 갈등/대립 부족 → 인물 간 긴장감 있는 대사 추가\n' +
@@ -5857,8 +5858,8 @@ async function generatePerfectScriptFromScores() {
                 '## 현재 이야기 흐름: ' + scores.flow + '점 (목표: 100점)\n\n' +
                 '## 감점 사항:\n' + flowDeductions + '\n\n' +
                 freeEditRule +
-                '## 당신의 담당 태그: [FLOW]...[/FLOW]\n\n' +
-                '## 주의: 이전 전문가가 [SENIOR]...[/SENIOR], [FUN]...[/FUN] 태그를 이미 사용했습니다. 이 태그들은 그대로 유지하세요!\n\n' +
+                '## 당신의 담당 태그: [FLOW]...[/FLOW] (수정), [FLOW+]...[/FLOW+] (추가)\n\n' +
+                '## 주의: 이전 전문가가 [SENIOR]...[/SENIOR], [SENIOR+]...[/SENIOR+], [FUN]...[/FUN], [FUN+]...[/FUN+] 태그를 이미 사용했습니다. 이 태그들은 그대로 유지하세요!\n\n' +
                 tagRule +
                 '## 주요 개선 방향:\n' +
                 '- 장면 전환 설명 부족 → 연결어/전환 문장 추가\n' +
@@ -5900,8 +5901,8 @@ async function generatePerfectScriptFromScores() {
                 '## 현재 시청자 이탈 방지: ' + scores.retention + '점 (목표: 100점)\n\n' +
                 '## 감점 사항:\n' + retentionDeductions + '\n\n' +
                 freeEditRule +
-                '## 당신의 담당 태그: [RETAIN]...[/RETAIN]\n\n' +
-                '## 주의: 이전 전문가가 [SENIOR]...[/SENIOR], [FUN]...[/FUN], [FLOW]...[/FLOW] 태그를 이미 사용했습니다. 이 태그들은 그대로 유지하세요!\n\n' +
+                '## 당신의 담당 태그: [RETAIN]...[/RETAIN] (수정), [RETAIN+]...[/RETAIN+] (추가)\n\n' +
+                '## 주의: 이전 전문가가 [SENIOR]...[/SENIOR], [SENIOR+]...[/SENIOR+], [FUN]...[/FUN], [FUN+]...[/FUN+], [FLOW]...[/FLOW], [FLOW+]...[/FLOW+] 태그를 이미 사용했습니다. 이 태그들은 그대로 유지하세요!\n\n' +
                 tagRule +
                 '## 주요 개선 방향:\n' +
                 '- 초반 훅 부재 → 첫 장면에 호기심/긴장감 강화\n' +
@@ -5929,9 +5930,6 @@ async function generatePerfectScriptFromScores() {
         // ============================================================
         // 최종 결과 저장 및 표시
         // ============================================================
-                // ============================================================
-        // 최종 결과 저장 및 표시
-        // ============================================================
         updateProgress(88, '결과 처리 중...');
         
         if (!currentScript || currentScript.length < 100) {
@@ -5940,12 +5938,10 @@ async function generatePerfectScriptFromScores() {
         
         // ============================================================
         // 잘림 감지 및 이어쓰기 (v4.58)
-        // 마지막 페르소나 출력이 토큰 한도로 잘렸으면 이어쓰기 요청
         // ============================================================
         var originalLength = finalScript.length;
         var currentLength = currentScript.length;
         
-        // 잘림 판단: 원본의 90% 미만이거나, 마지막이 문장 종결이 아닌 경우
         var lastChar = currentScript.trim().slice(-1);
         var isIncomplete = (currentLength < originalLength * 0.95) || 
                            (lastChar !== '.' && lastChar !== '!' && lastChar !== '?' && lastChar !== '"' && lastChar !== ')');
@@ -5956,16 +5952,13 @@ async function generatePerfectScriptFromScores() {
             
             updateProgress(90, '💯 잘린 부분 이어쓰기 중...');
             
-            // 마지막 500자를 컨텍스트로 전달
             var lastContext = currentScript.substring(currentScript.length - 500);
             
-            // 원본에서 잘린 이후 부분 추출
             var cutPosition = finalScript.indexOf(lastContext.substring(0, 50));
             var remainingOriginal = '';
             if (cutPosition !== -1) {
                 remainingOriginal = finalScript.substring(cutPosition + 500);
             } else {
-                // 위치 못 찾으면 비율로 추정
                 var estimatedCutPos = Math.floor(finalScript.length * (currentLength / originalLength));
                 remainingOriginal = finalScript.substring(Math.max(0, estimatedCutPos - 200));
             }
@@ -5974,7 +5967,7 @@ async function generatePerfectScriptFromScores() {
                 '아래에 지금까지 수정된 대본의 마지막 부분과, 아직 수정하지 못한 원본 부분이 있습니다.\n' +
                 '끊긴 곳부터 이어서 수정을 완료해주세요.\n\n' +
                 '## 규칙\n' +
-                '1. 지금까지의 수정 내용(기존 태그 [SENIOR], [FUN], [FLOW], [RETAIN], [DEL])은 건드리지 마세요.\n' +
+                '1. 지금까지의 수정 내용(기존 태그 [SENIOR], [SENIOR+], [FUN], [FUN+], [FLOW], [FLOW+], [RETAIN], [RETAIN+], [DEL])은 건드리지 마세요.\n' +
                 '2. 끊긴 부분부터 자연스럽게 이어쓰세요.\n' +
                 '3. 남은 원본 부분에 대해서도 필요한 개선을 적용하세요.\n' +
                 '4. 수정한 부분에는 동일한 태그를 사용하세요.\n' +
@@ -5989,7 +5982,6 @@ async function generatePerfectScriptFromScores() {
                 continueResult = continueResult.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
                 
                 if (continueResult && continueResult.length > 50) {
-                    // 중복 방지: 마지막 컨텍스트와 겹치는 부분 제거
                     var overlapCheck = lastContext.substring(lastContext.length - 100);
                     var overlapIdx = continueResult.indexOf(overlapCheck);
                     
@@ -6001,14 +5993,12 @@ async function generatePerfectScriptFromScores() {
                     console.log('✅ 이어쓰기 완료: +' + continueResult.length + '자 → 총 ' + currentScript.length + '자');
                 } else {
                     console.log('⚠️ 이어쓰기 결과가 너무 짧아 원본으로 보완');
-                    // 원본의 나머지 부분을 그대로 붙임
                     if (remainingOriginal && remainingOriginal.length > 50) {
                         currentScript = currentScript.trimEnd() + '\n' + remainingOriginal.trimStart();
                     }
                 }
             } catch (continueError) {
                 console.error('⚠️ 이어쓰기 실패:', continueError.message);
-                // 원본의 나머지 부분을 그대로 붙임
                 if (remainingOriginal && remainingOriginal.length > 50) {
                     currentScript = currentScript.trimEnd() + '\n' + remainingOriginal.trimStart();
                     console.log('⚠️ 원본으로 보완: +' + remainingOriginal.length + '자');
