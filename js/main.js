@@ -5790,15 +5790,65 @@ async function generatePerfectScriptFromScores() {
         generateBtn.textContent = '⏳ 100점 대본 생성 중...';
     }
     
+    // 중지 버튼 표시
+    var stopBtn = document.getElementById('btn-stop-perfect');
+    if (!stopBtn) {
+        stopBtn = document.createElement('button');
+        stopBtn.id = 'btn-stop-perfect';
+        stopBtn.innerHTML = '⏹️ 생성 중지';
+        stopBtn.style.cssText = 'background:#f44336;color:white;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:14px;margin-left:10px;';
+        stopBtn.addEventListener('click', function() {
+            if (currentAbortController) {
+                currentAbortController.abort();
+                currentAbortController = null;
+            }
+            state._perfectAborted = true;
+            stopBtn.disabled = true;
+            stopBtn.textContent = '중지됨';
+            console.log('⏹️ 100점 대본 생성 중지됨');
+        });
+        if (generateBtn && generateBtn.parentNode) {
+            generateBtn.parentNode.insertBefore(stopBtn, generateBtn.nextSibling);
+        }
+    }
+    stopBtn.style.display = 'inline-block';
+    stopBtn.disabled = false;
+    stopBtn.textContent = '⏹️ 생성 중지';
+    state._perfectAborted = false;
+    
     var display = document.getElementById('perfect-script-display');
     if (display) {
-        display.innerHTML = '<div style="text-align:center;padding:30px;color:#ffaa00;font-size:16px;">⏳ 4명의 전문가가 순차적으로 대본을 개선하고 있습니다...<br><span style="font-size:12px;color:#aaa;">약 2~4분 소요됩니다.</span></div>';
+        display.innerHTML = '<div style="text-align:center;padding:30px;color:#ffaa00;font-size:16px;">⏳ 4명의 전문가가 순차적으로 대본을 개선하고 있습니다...<br><span style="font-size:12px;color:#aaa;">약 2~4분 소요됩니다. 중지하려면 "생성 중지" 버튼을 누르세요.</span></div>';
     }
     
     showProgress('💯 100점 대본 생성 중...');
     
     try {
-        var cacheName = state._cacheName || null;
+        // ============================================================
+        // STEP 0: 100점 대본용 캐시 생성 (최종 수정 반영 대본)
+        // ============================================================
+        updateProgress(2, '📦 100점 대본용 캐시 생성 중...');
+        
+        if (state._cacheName) {
+            deleteScriptCache(state._cacheName);
+            state._cacheName = null;
+        }
+        
+        var perfectSystemPrompt = '당신은 대한민국 최고의 사극 시나리오 작가입니다.\n' +
+            '사용자가 제공한 전체 대본을 완전히 이해한 상태에서,\n' +
+            '요청받은 카테고리의 품질을 100점으로 끌어올리는 작업을 합니다.\n' +
+            '핵심 줄거리와 등장인물은 유지하면서 자유롭게 개선하세요.';
+        
+        var perfectCacheName = await createScriptCache(finalScript, perfectSystemPrompt, 1800);
+        state._cacheName = perfectCacheName;
+        
+        if (perfectCacheName) {
+            console.log('✅ 100점 대본용 캐시 생성 성공: ' + perfectCacheName);
+            startCacheTimer(perfectCacheName, 1800);
+        } else {
+            console.log('⚠️ 캐시 생성 실패, 프롬프트에 대본 직접 포함 방식으로 진행');
+        }
+        
         var currentScript = finalScript;
         
         // 공통 자유 수정 규칙
@@ -5820,6 +5870,16 @@ async function generatePerfectScriptFromScores() {
             '- 당신의 담당 카테고리 태그만 사용하세요!\n' +
             '- 수정하지 않은 부분은 원본 그대로 태그 없이 출력!\n\n';
         
+        // 캐시가 있을 때는 대본을 프롬프트에 넣지 않음
+        var scriptSection;
+        if (perfectCacheName) {
+            scriptSection = '\n\n## 수정 대상 대본\n' +
+                '캐시에 제공된 전체 대본을 수정 대상으로 사용하세요.\n' +
+                '대본 전문을 처음부터 끝까지 모두 출력하세요.\n';
+        } else {
+            scriptSection = '\n\n## 수정 대상 대본:\n\n' + currentScript;
+        }
+        
         var outputRule = '## 출력 규칙\n' +
             '1. 대본 전문을 처음부터 끝까지 모두 출력하세요.\n' +
             '2. 앞뒤 설명, 주석, 코드블록 없이 대본만 출력하세요.\n' +
@@ -5828,6 +5888,8 @@ async function generatePerfectScriptFromScores() {
         // ============================================================
         // 페르소나 ① 시니어 대사 전문가
         // ============================================================
+        if (state._perfectAborted) throw { name: 'AbortError', message: '사용자 중지' };
+        
         updateProgress(5, '💯 ① 시니어 대사 전문가 작업 중...');
         console.log('💯 페르소나 ① 시니어 대사 전문가 시작');
         
@@ -5837,7 +5899,8 @@ async function generatePerfectScriptFromScores() {
         }
         
         if (scores.senior < 100 && seniorDeductions) {
-            var prompt1 = '당신은 시니어 타깃 사극 드라마 대사 전문가입니다.\n' +
+            var prompt1 = '당신은 이미 캐시에 제공된 전체 대본을 완전히 읽고 이해한 상태입니다.\n\n' +
+                '당신은 시니어 타깃 사극 드라마 대사 전문가입니다.\n' +
                 '50대 이상 시청자가 한 번에 알아듣는 대사를 만드는 것이 당신의 전문 분야입니다.\n' +
                 '최고의 시나리오 작가로서 자유롭게 대본을 개선하세요.\n\n' +
                 '## 현재 시니어 적합도: ' + scores.senior + '점 (목표: 100점)\n\n' +
@@ -5853,10 +5916,9 @@ async function generatePerfectScriptFromScores() {
                 '- 문어체 대사 → 자연스러운 구어체\n' +
                 '- 같은 단어 과도 반복 → 유의어로 교체\n' +
                 '- 시니어 시청자가 이해하기 어려운 부분은 자유롭게 보강\n\n' +
-                outputRule + '\n\n' +
-                '## 수정 대상 대본:\n\n' + currentScript;
+                outputRule + scriptSection;
             
-            var result1 = await callGeminiAPI(prompt1, cacheName);
+            var result1 = await callGeminiAPI(prompt1, perfectCacheName);
             result1 = result1.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
             
             if (result1.length > currentScript.length * 0.3) {
@@ -5872,6 +5934,8 @@ async function generatePerfectScriptFromScores() {
         // ============================================================
         // 페르소나 ② 극작 연출가
         // ============================================================
+        if (state._perfectAborted) throw { name: 'AbortError', message: '사용자 중지' };
+        
         updateProgress(30, '💯 ② 극작 연출가 작업 중...');
         console.log('💯 페르소나 ② 극작 연출가 시작');
         
@@ -5881,7 +5945,18 @@ async function generatePerfectScriptFromScores() {
         }
         
         if (scores.fun < 100 && funDeductions) {
-            var prompt2 = '당신은 사극 드라마 극작 연출가입니다.\n' +
+            // 페르소나 ②부터는 이전 페르소나 결과를 입력으로 사용
+            // 캐시에는 원본이 있으므로, 수정된 대본은 프롬프트에 직접 포함
+            var prompt2Input;
+            if (currentScript !== finalScript) {
+                // 이전 페르소나가 수정한 대본이 있으면 그것을 사용
+                prompt2Input = '\n\n## 수정 대상 대본 (이전 전문가가 수정한 버전):\n\n' + currentScript;
+            } else {
+                prompt2Input = scriptSection;
+            }
+            
+            var prompt2 = '당신은 이미 캐시에 제공된 원본 대본을 완전히 읽고 이해한 상태입니다.\n\n' +
+                '당신은 사극 드라마 극작 연출가입니다.\n' +
                 '시청자의 심장을 뛰게 하는 갈등, 반전, 감정을 만드는 것이 당신의 전문 분야입니다.\n' +
                 '최고의 시나리오 작가로서 자유롭게 대본을 개선하세요.\n\n' +
                 '## 현재 재미 요소: ' + scores.fun + '점 (목표: 100점)\n\n' +
@@ -5897,10 +5972,9 @@ async function generatePerfectScriptFromScores() {
                 '- 긴장/이완 리듬 부재 → 대사 강약 조절\n' +
                 '- 인물 간 관계 변화 부재 → 미묘한 변화 표현 추가\n' +
                 '- 재미를 위해 대사/지문/나레이션 자유롭게 추가/수정 가능\n\n' +
-                outputRule + '\n\n' +
-                '## 수정 대상 대본:\n\n' + currentScript;
+                outputRule + prompt2Input;
             
-            var result2 = await callGeminiAPI(prompt2, cacheName);
+            var result2 = await callGeminiAPI(prompt2, perfectCacheName);
             result2 = result2.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
             
             if (result2.length > currentScript.length * 0.3) {
@@ -5916,6 +5990,8 @@ async function generatePerfectScriptFromScores() {
         // ============================================================
         // 페르소나 ③ 서사 편집자
         // ============================================================
+        if (state._perfectAborted) throw { name: 'AbortError', message: '사용자 중지' };
+        
         updateProgress(55, '💯 ③ 서사 편집자 작업 중...');
         console.log('💯 페르소나 ③ 서사 편집자 시작');
         
@@ -5925,7 +6001,15 @@ async function generatePerfectScriptFromScores() {
         }
         
         if (scores.flow < 100 && flowDeductions) {
-            var prompt3 = '당신은 사극 드라마 서사 구조 편집자입니다.\n' +
+            var prompt3Input;
+            if (currentScript !== finalScript) {
+                prompt3Input = '\n\n## 수정 대상 대본 (이전 전문가들이 수정한 버전):\n\n' + currentScript;
+            } else {
+                prompt3Input = scriptSection;
+            }
+            
+            var prompt3 = '당신은 이미 캐시에 제공된 원본 대본을 완전히 읽고 이해한 상태입니다.\n\n' +
+                '당신은 사극 드라마 서사 구조 편집자입니다.\n' +
                 '이야기의 흐름을 매끄럽게 다듬는 것이 당신의 전문 분야입니다.\n' +
                 '최고의 시나리오 작가로서 자유롭게 대본을 개선하세요.\n\n' +
                 '## 현재 이야기 흐름: ' + scores.flow + '점 (목표: 100점)\n\n' +
@@ -5940,10 +6024,9 @@ async function generatePerfectScriptFromScores() {
                 '- 시간 순서 혼란 → 시간 표현 명확화\n' +
                 '- 복선 미회수 → 기존 복선에 대한 언급 추가\n' +
                 '- 흐름 개선을 위해 나레이션/지문 자유롭게 추가/수정 가능\n\n' +
-                outputRule + '\n\n' +
-                '## 수정 대상 대본:\n\n' + currentScript;
+                outputRule + prompt3Input;
             
-            var result3 = await callGeminiAPI(prompt3, cacheName);
+            var result3 = await callGeminiAPI(prompt3, perfectCacheName);
             result3 = result3.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
             
             if (result3.length > currentScript.length * 0.3) {
@@ -5959,6 +6042,8 @@ async function generatePerfectScriptFromScores() {
         // ============================================================
         // 페르소나 ④ 시청률 PD
         // ============================================================
+        if (state._perfectAborted) throw { name: 'AbortError', message: '사용자 중지' };
+        
         updateProgress(80, '💯 ④ 시청률 PD 작업 중...');
         console.log('💯 페르소나 ④ 시청률 PD 시작');
         
@@ -5968,7 +6053,15 @@ async function generatePerfectScriptFromScores() {
         }
         
         if (scores.retention < 100 && retentionDeductions) {
-            var prompt4 = '당신은 사극 드라마 시청률 전문 PD입니다.\n' +
+            var prompt4Input;
+            if (currentScript !== finalScript) {
+                prompt4Input = '\n\n## 수정 대상 대본 (이전 전문가들이 수정한 버전):\n\n' + currentScript;
+            } else {
+                prompt4Input = scriptSection;
+            }
+            
+            var prompt4 = '당신은 이미 캐시에 제공된 원본 대본을 완전히 읽고 이해한 상태입니다.\n\n' +
+                '당신은 사극 드라마 시청률 전문 PD입니다.\n' +
                 '시청자가 채널을 고정하고 끝까지 시청하게 만드는 것이 당신의 전문 분야입니다.\n' +
                 '최고의 시나리오 작가로서 자유롭게 대본을 개선하세요.\n\n' +
                 '## 현재 시청자 이탈 방지: ' + scores.retention + '점 (목표: 100점)\n\n' +
@@ -5984,10 +6077,9 @@ async function generatePerfectScriptFromScores() {
                 '- 지문/무대지시 부족 → 행동/표정 묘사 추가\n' +
                 '- 감각적 묘사 부족 → 빛, 소리, 냄새 등 감각 표현 추가\n' +
                 '- 시청자 몰입을 위해 대사/지문/나레이션 자유롭게 추가/수정 가능\n\n' +
-                outputRule + '\n\n' +
-                '## 수정 대상 대본:\n\n' + currentScript;
+                outputRule + prompt4Input;
             
-            var result4 = await callGeminiAPI(prompt4, cacheName);
+            var result4 = await callGeminiAPI(prompt4, perfectCacheName);
             result4 = result4.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
             
             if (result4.length > currentScript.length * 0.3) {
@@ -6003,6 +6095,8 @@ async function generatePerfectScriptFromScores() {
         // ============================================================
         // 최종 결과 저장 및 표시
         // ============================================================
+        if (state._perfectAborted) throw { name: 'AbortError', message: '사용자 중지' };
+        
         updateProgress(88, '결과 처리 중...');
         
         if (!currentScript || currentScript.length < 100) {
@@ -6010,7 +6104,7 @@ async function generatePerfectScriptFromScores() {
         }
         
         // ============================================================
-        // 잘림 감지 및 이어쓰기 (v4.58)
+        // 잘림 감지 및 이어쓰기
         // ============================================================
         var originalLength = finalScript.length;
         var currentLength = currentScript.length;
@@ -6019,7 +6113,7 @@ async function generatePerfectScriptFromScores() {
         var isIncomplete = (currentLength < originalLength * 0.95) || 
                            (lastChar !== '.' && lastChar !== '!' && lastChar !== '?' && lastChar !== '"' && lastChar !== ')');
         
-        if (isIncomplete) {
+        if (isIncomplete && !state._perfectAborted) {
             console.log('⚠️ 대본 잘림 감지: ' + currentLength + '자 / 원본 ' + originalLength + '자 (' + Math.round(currentLength / originalLength * 100) + '%)');
             console.log('   마지막 문자: "' + lastChar + '" → 이어쓰기 시작');
             
@@ -6051,7 +6145,7 @@ async function generatePerfectScriptFromScores() {
                 remainingOriginal;
             
             try {
-                var continueResult = await callGeminiAPI(continuePrompt, cacheName);
+                var continueResult = await callGeminiAPI(continuePrompt, perfectCacheName);
                 continueResult = continueResult.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
                 
                 if (continueResult && continueResult.length > 50) {
@@ -6096,6 +6190,14 @@ async function generatePerfectScriptFromScores() {
         // 100점 대본 표시
         displayPerfectScriptResult(currentScript, finalScript);
         
+        // 캐시 정리
+        if (perfectCacheName) {
+            deleteScriptCache(perfectCacheName);
+            if (state._cacheName === perfectCacheName) {
+                state._cacheName = null;
+            }
+        }
+        
         var avgScore = Math.round((scores.senior + scores.fun + scores.flow + scores.retention) / 4);
         console.log('💯 ========================================');
         console.log('💯 100점 대본 생성 완료!');
@@ -6108,11 +6210,23 @@ async function generatePerfectScriptFromScores() {
         
     } catch (error) {
         console.error('❌ 100점 대본 생성 실패:', error);
-        if (display) {
-            display.innerHTML = '<div style="text-align:center;padding:30px;color:#ff5555;font-size:16px;">❌ 생성 실패: ' + error.message + '<br><span style="font-size:12px;color:#aaa;">다시 시도해주세요.</span></div>';
+        
+        // 캐시 정리
+        if (state._cacheName) {
+            deleteScriptCache(state._cacheName);
+            state._cacheName = null;
         }
-        hideProgress();
-        if (error.name !== 'AbortError') {
+        
+        if (error.name === 'AbortError') {
+            if (display) {
+                display.innerHTML = '<div style="text-align:center;padding:30px;color:#ffaa00;font-size:16px;">⏹️ 100점 대본 생성이 중지되었습니다.<br><span style="font-size:12px;color:#aaa;">다시 시도하려면 "100점 대본 생성" 버튼을 누르세요.</span></div>';
+            }
+            hideProgress();
+        } else {
+            if (display) {
+                display.innerHTML = '<div style="text-align:center;padding:30px;color:#ff5555;font-size:16px;">❌ 생성 실패: ' + error.message + '<br><span style="font-size:12px;color:#aaa;">다시 시도해주세요.</span></div>';
+            }
+            hideProgress();
             alert('100점 대본 생성 중 오류: ' + error.message);
         }
     } finally {
@@ -6120,93 +6234,11 @@ async function generatePerfectScriptFromScores() {
             generateBtn.disabled = false;
             generateBtn.textContent = '💯 100점 대본 생성';
         }
+        if (stopBtn) {
+            stopBtn.style.display = 'none';
+        }
+        state._perfectAborted = false;
     }
-}
-
-function displayPerfectScriptResult(perfectText, originalText) {
-    var display = document.getElementById('perfect-script-display');
-    if (!display) return;
-    
-    // 태그별 색상 변환
-    var htmlContent = escapeHtml(perfectText);
-    
-    // [SENIOR+]...[/SENIOR+] → 녹색 + 밑줄 (시니어 적합도 추가)
-    htmlContent = htmlContent.replace(/\[SENIOR\+\]([\s\S]*?)\[\/SENIOR\+\]/g, '<span style="background:#4CAF5040;color:#69f0ae;border-left:3px solid #4CAF50;padding:1px 4px;border-radius:2px;text-decoration:underline;text-decoration-color:#4CAF50;text-underline-offset:3px;" title="➕ 시니어 적합도 추가">$1</span>');
-    
-    // [FUN+]...[/FUN+] → 주황색 + 밑줄 (재미 요소 추가)
-    htmlContent = htmlContent.replace(/\[FUN\+\]([\s\S]*?)\[\/FUN\+\]/g, '<span style="background:#FF980040;color:#FFB74D;border-left:3px solid #FF9800;padding:1px 4px;border-radius:2px;text-decoration:underline;text-decoration-color:#FF9800;text-underline-offset:3px;" title="➕ 재미 요소 추가">$1</span>');
-    
-    // [FLOW+]...[/FLOW+] → 파란색 + 밑줄 (이야기 흐름 추가)
-    htmlContent = htmlContent.replace(/\[FLOW\+\]([\s\S]*?)\[\/FLOW\+\]/g, '<span style="background:#2196F340;color:#64B5F6;border-left:3px solid #2196F3;padding:1px 4px;border-radius:2px;text-decoration:underline;text-decoration-color:#2196F3;text-underline-offset:3px;" title="➕ 이야기 흐름 추가">$1</span>');
-    
-    // [RETAIN+]...[/RETAIN+] → 보라색 + 밑줄 (시청자 이탈 방지 추가)
-    htmlContent = htmlContent.replace(/\[RETAIN\+\]([\s\S]*?)\[\/RETAIN\+\]/g, '<span style="background:#9C27B040;color:#CE93D8;border-left:3px solid #9C27B0;padding:1px 4px;border-radius:2px;text-decoration:underline;text-decoration-color:#9C27B0;text-underline-offset:3px;" title="➕ 시청자 이탈 방지 추가">$1</span>');
-    
-    // [SENIOR]...[/SENIOR] → 녹색 (시니어 적합도 수정)
-    htmlContent = htmlContent.replace(/\[SENIOR\]([\s\S]*?)\[\/SENIOR\]/g, '<span style="background:#4CAF5040;color:#69f0ae;border-left:3px solid #4CAF50;padding:1px 4px;border-radius:2px;" title="✏️ 시니어 적합도 수정">$1</span>');
-    
-    // [FUN]...[/FUN] → 주황색 (재미 요소 수정)
-    htmlContent = htmlContent.replace(/\[FUN\]([\s\S]*?)\[\/FUN\]/g, '<span style="background:#FF980040;color:#FFB74D;border-left:3px solid #FF9800;padding:1px 4px;border-radius:2px;" title="✏️ 재미 요소 수정">$1</span>');
-    
-    // [FLOW]...[/FLOW] → 파란색 (이야기 흐름 수정)
-    htmlContent = htmlContent.replace(/\[FLOW\]([\s\S]*?)\[\/FLOW\]/g, '<span style="background:#2196F340;color:#64B5F6;border-left:3px solid #2196F3;padding:1px 4px;border-radius:2px;" title="✏️ 이야기 흐름 수정">$1</span>');
-    
-    // [RETAIN]...[/RETAIN] → 보라색 (시청자 이탈 방지 수정)
-    htmlContent = htmlContent.replace(/\[RETAIN\]([\s\S]*?)\[\/RETAIN\]/g, '<span style="background:#9C27B040;color:#CE93D8;border-left:3px solid #9C27B0;padding:1px 4px;border-radius:2px;" title="✏️ 시청자 이탈 방지 수정">$1</span>');
-    
-    // [DEL]...[/DEL] → 빨간색 취소선 (삭제)
-    htmlContent = htmlContent.replace(/\[DEL\]([\s\S]*?)\[\/DEL\]/g, '<span style="text-decoration:line-through;color:#ff5555;background:#ff555520;padding:1px 4px;border-radius:2px;" title="🗑️ 삭제된 부분">$1</span>');
-    
-    // ★...★ 호환 (이전 버전 호환)
-    htmlContent = htmlContent.replace(/★([^★]+)★/g, '<span style="background:#FFD70040;color:#FFD700;padding:1px 4px;border-radius:2px;" title="수정된 부분">$1</span>');
-    
-    // 수정/추가 카운트
-    var seniorEditCount = (perfectText.match(/\[SENIOR\][^\[]/g) || []).length;
-    var seniorAddCount = (perfectText.match(/\[SENIOR\+\]/g) || []).length;
-    var funEditCount = (perfectText.match(/\[FUN\][^\+\[]/g) || []).length;
-    var funAddCount = (perfectText.match(/\[FUN\+\]/g) || []).length;
-    var flowEditCount = (perfectText.match(/\[FLOW\][^\+\[]/g) || []).length;
-    var flowAddCount = (perfectText.match(/\[FLOW\+\]/g) || []).length;
-    var retainEditCount = (perfectText.match(/\[RETAIN\][^\+\[]/g) || []).length;
-    var retainAddCount = (perfectText.match(/\[RETAIN\+\]/g) || []).length;
-    var delCount = (perfectText.match(/\[DEL\]/g) || []).length;
-    var totalCount = seniorEditCount + seniorAddCount + funEditCount + funAddCount + flowEditCount + flowAddCount + retainEditCount + retainAddCount + delCount;
-    
-    var html = '<div style="padding:15px;">' +
-        '<div style="text-align:center;margin-bottom:15px;">' +
-        '<span style="font-size:16px;font-weight:bold;color:#FFD700;">💯 100점 대본 생성 완료</span>' +
-        '<span style="margin-left:15px;font-size:13px;color:#aaa;">총 수정 ' + totalCount + '개소</span>' +
-        '</div>' +
-        
-        '<!-- 색상 범례 -->' +
-        '<div style="margin-bottom:15px;padding:12px;background:#1e1e1e;border-radius:8px;">' +
-        '<div style="display:flex;justify-content:center;gap:20px;flex-wrap:wrap;margin-bottom:8px;">' +
-        '<span style="font-size:12px;font-weight:bold;color:#aaa;">✏️ 수정 = 배경색</span>' +
-        '<span style="font-size:12px;font-weight:bold;color:#aaa;">➕ 추가 = 배경색 + <u>밑줄</u></span>' +
-        '<span style="font-size:12px;font-weight:bold;color:#aaa;">🗑️ 삭제 = <span style="text-decoration:line-through;color:#ff5555;">취소선</span></span>' +
-        '</div>' +
-        '<div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;">' +
-        '<span style="font-size:11px;color:#69f0ae;">● 시니어 적합도: ✏️' + seniorEditCount + ' / ➕' + seniorAddCount + '</span>' +
-        '<span style="font-size:11px;color:#FFB74D;">● 재미 요소: ✏️' + funEditCount + ' / ➕' + funAddCount + '</span>' +
-        '<span style="font-size:11px;color:#64B5F6;">● 이야기 흐름: ✏️' + flowEditCount + ' / ➕' + flowAddCount + '</span>' +
-        '<span style="font-size:11px;color:#CE93D8;">● 시청자 이탈 방지: ✏️' + retainEditCount + ' / ➕' + retainAddCount + '</span>' +
-        '<span style="font-size:11px;color:#ff5555;">● 삭제: 🗑️' + delCount + '</span>' +
-        '</div>' +
-        '</div>' +
-        
-        '<div id="perfect-script-content" class="perfect-script-content">' + htmlContent + '</div>' +
-        '</div>';
-    
-    display.innerHTML = html;
-    
-    // 버튼 표시
-    var buttons = document.getElementById('perfect-script-buttons');
-    if (buttons) {
-        buttons.style.display = 'flex';
-    }
-    
-    console.log('💯 100점 대본 표시 완료: ' + perfectText.length + '자');
-    console.log('   시니어: ✏️' + seniorEditCount + ' ➕' + seniorAddCount + ', 재미: ✏️' + funEditCount + ' ➕' + funAddCount + ', 흐름: ✏️' + flowEditCount + ' ➕' + flowAddCount + ', 이탈방지: ✏️' + retainEditCount + ' ➕' + retainAddCount + ', 삭제: ' + delCount);
 }
 
 function initResetCacheButton() {
