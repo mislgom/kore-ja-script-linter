@@ -114,7 +114,20 @@
                 <p class="placeholder">분석 완료 후 점수가 표시됩니다.</p>
             </div>
         </section>
-
+                <!-- 100점 대본 생성 -->
+        <section id="perfect-script-section" class="score-section" style="display: none;">
+            <h2>💯 100점 대본</h2>
+            <div style="text-align:center;padding:15px;">
+                <button id="btn-generate-perfect" class="btn-primary btn-large" style="background:linear-gradient(135deg,#FFD700 0%,#FFA500 100%);">💯 100점 대본 생성</button>
+            </div>
+            <div id="perfect-script-display" class="score-display">
+                <p class="placeholder">2차 분석 완료 후 버튼을 누르면 100점 대본이 생성됩니다.</p>
+            </div>
+            <div id="perfect-script-buttons" style="display:none;text-align:center;padding:15px;gap:10px;justify-content:center;flex-wrap:wrap;">
+                <button id="btn-download-perfect" class="btn-secondary">📥 100점 대본 다운로드</button>
+                <button id="btn-compare-scripts" class="btn-secondary">🔍 대본 비교하기</button>
+            </div>
+        </section>
         <!-- 다운로드 버튼 -->
         <section class="download-section">
             <button id="btn-download" class="btn-secondary" disabled>📥 최종 수정본 다운로드</button>
