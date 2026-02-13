@@ -6405,6 +6405,91 @@ async function generatePerfectScriptFromScores() {
         state._perfectAborted = false;
     }
 }
+function displayPerfectScriptResult(perfectText, originalText) {
+    var display = document.getElementById('perfect-script-display');
+    if (!display) return;
+    
+    // 태그별 색상 변환
+    var htmlContent = escapeHtml(perfectText);
+    
+    // [SENIOR+]...[/SENIOR+] → 녹색 + 밑줄 (시니어 적합도 추가)
+    htmlContent = htmlContent.replace(/\[SENIOR\+\]([\s\S]*?)\[\/SENIOR\+\]/g, '<span style="background:#4CAF5040;color:#69f0ae;border-left:3px solid #4CAF50;padding:1px 4px;border-radius:2px;text-decoration:underline;text-decoration-color:#4CAF50;text-underline-offset:3px;" title="➕ 시니어 적합도 추가">$1</span>');
+    
+    // [FUN+]...[/FUN+] → 주황색 + 밑줄 (재미 요소 추가)
+    htmlContent = htmlContent.replace(/\[FUN\+\]([\s\S]*?)\[\/FUN\+\]/g, '<span style="background:#FF980040;color:#FFB74D;border-left:3px solid #FF9800;padding:1px 4px;border-radius:2px;text-decoration:underline;text-decoration-color:#FF9800;text-underline-offset:3px;" title="➕ 재미 요소 추가">$1</span>');
+    
+    // [FLOW+]...[/FLOW+] → 파란색 + 밑줄 (이야기 흐름 추가)
+    htmlContent = htmlContent.replace(/\[FLOW\+\]([\s\S]*?)\[\/FLOW\+\]/g, '<span style="background:#2196F340;color:#64B5F6;border-left:3px solid #2196F3;padding:1px 4px;border-radius:2px;text-decoration:underline;text-decoration-color:#2196F3;text-underline-offset:3px;" title="➕ 이야기 흐름 추가">$1</span>');
+    
+    // [RETAIN+]...[/RETAIN+] → 보라색 + 밑줄 (시청자 이탈 방지 추가)
+    htmlContent = htmlContent.replace(/\[RETAIN\+\]([\s\S]*?)\[\/RETAIN\+\]/g, '<span style="background:#9C27B040;color:#CE93D8;border-left:3px solid #9C27B0;padding:1px 4px;border-radius:2px;text-decoration:underline;text-decoration-color:#9C27B0;text-underline-offset:3px;" title="➕ 시청자 이탈 방지 추가">$1</span>');
+    
+    // [SENIOR]...[/SENIOR] → 녹색 (시니어 적합도 수정)
+    htmlContent = htmlContent.replace(/\[SENIOR\]([\s\S]*?)\[\/SENIOR\]/g, '<span style="background:#4CAF5040;color:#69f0ae;border-left:3px solid #4CAF50;padding:1px 4px;border-radius:2px;" title="✏️ 시니어 적합도 수정">$1</span>');
+    
+    // [FUN]...[/FUN] → 주황색 (재미 요소 수정)
+    htmlContent = htmlContent.replace(/\[FUN\]([\s\S]*?)\[\/FUN\]/g, '<span style="background:#FF980040;color:#FFB74D;border-left:3px solid #FF9800;padding:1px 4px;border-radius:2px;" title="✏️ 재미 요소 수정">$1</span>');
+    
+    // [FLOW]...[/FLOW] → 파란색 (이야기 흐름 수정)
+    htmlContent = htmlContent.replace(/\[FLOW\]([\s\S]*?)\[\/FLOW\]/g, '<span style="background:#2196F340;color:#64B5F6;border-left:3px solid #2196F3;padding:1px 4px;border-radius:2px;" title="✏️ 이야기 흐름 수정">$1</span>');
+    
+    // [RETAIN]...[/RETAIN] → 보라색 (시청자 이탈 방지 수정)
+    htmlContent = htmlContent.replace(/\[RETAIN\]([\s\S]*?)\[\/RETAIN\]/g, '<span style="background:#9C27B040;color:#CE93D8;border-left:3px solid #9C27B0;padding:1px 4px;border-radius:2px;" title="✏️ 시청자 이탈 방지 수정">$1</span>');
+    
+    // [DEL]...[/DEL] → 빨간색 취소선 (삭제)
+    htmlContent = htmlContent.replace(/\[DEL\]([\s\S]*?)\[\/DEL\]/g, '<span style="text-decoration:line-through;color:#ff5555;background:#ff555520;padding:1px 4px;border-radius:2px;" title="🗑️ 삭제된 부분">$1</span>');
+    
+    // ★...★ 호환 (이전 버전 호환)
+    htmlContent = htmlContent.replace(/★([^★]+)★/g, '<span style="background:#FFD70040;color:#FFD700;padding:1px 4px;border-radius:2px;" title="수정된 부분">$1</span>');
+    
+    // 수정/추가 카운트
+    var seniorEditCount = (perfectText.match(/\[SENIOR\][^\+\[]/g) || []).length;
+    var seniorAddCount = (perfectText.match(/\[SENIOR\+\]/g) || []).length;
+    var funEditCount = (perfectText.match(/\[FUN\][^\+\[]/g) || []).length;
+    var funAddCount = (perfectText.match(/\[FUN\+\]/g) || []).length;
+    var flowEditCount = (perfectText.match(/\[FLOW\][^\+\[]/g) || []).length;
+    var flowAddCount = (perfectText.match(/\[FLOW\+\]/g) || []).length;
+    var retainEditCount = (perfectText.match(/\[RETAIN\][^\+\[]/g) || []).length;
+    var retainAddCount = (perfectText.match(/\[RETAIN\+\]/g) || []).length;
+    var delCount = (perfectText.match(/\[DEL\]/g) || []).length;
+    var totalCount = seniorEditCount + seniorAddCount + funEditCount + funAddCount + flowEditCount + flowAddCount + retainEditCount + retainAddCount + delCount;
+    
+    var html = '<div style="padding:15px;">' +
+        '<div style="text-align:center;margin-bottom:15px;">' +
+        '<span style="font-size:16px;font-weight:bold;color:#FFD700;">💯 100점 대본 생성 완료</span>' +
+        '<span style="margin-left:15px;font-size:13px;color:#aaa;">총 수정 ' + totalCount + '개소</span>' +
+        '</div>' +
+        
+        '<!-- 색상 범례 -->' +
+        '<div style="margin-bottom:15px;padding:12px;background:#1e1e1e;border-radius:8px;">' +
+        '<div style="display:flex;justify-content:center;gap:20px;flex-wrap:wrap;margin-bottom:8px;">' +
+        '<span style="font-size:12px;font-weight:bold;color:#aaa;">✏️ 수정 = 배경색</span>' +
+        '<span style="font-size:12px;font-weight:bold;color:#aaa;">➕ 추가 = 배경색 + <u>밑줄</u></span>' +
+        '<span style="font-size:12px;font-weight:bold;color:#aaa;">🗑️ 삭제 = <span style="text-decoration:line-through;color:#ff5555;">취소선</span></span>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;">' +
+        '<span style="font-size:11px;color:#69f0ae;">● 시니어 적합도: ✏️' + seniorEditCount + ' / ➕' + seniorAddCount + '</span>' +
+        '<span style="font-size:11px;color:#FFB74D;">● 재미 요소: ✏️' + funEditCount + ' / ➕' + funAddCount + '</span>' +
+        '<span style="font-size:11px;color:#64B5F6;">● 이야기 흐름: ✏️' + flowEditCount + ' / ➕' + flowAddCount + '</span>' +
+        '<span style="font-size:11px;color:#CE93D8;">● 시청자 이탈 방지: ✏️' + retainEditCount + ' / ➕' + retainAddCount + '</span>' +
+        '<span style="font-size:11px;color:#ff5555;">● 삭제: 🗑️' + delCount + '</span>' +
+        '</div>' +
+        '</div>' +
+        
+        '<div id="perfect-script-content" class="perfect-script-content">' + htmlContent + '</div>' +
+        '</div>';
+    
+    display.innerHTML = html;
+    
+    // 버튼 표시
+    var buttons = document.getElementById('perfect-script-buttons');
+    if (buttons) {
+        buttons.style.display = 'flex';
+    }
+    
+    console.log('💯 100점 대본 표시 완료: ' + perfectText.length + '자');
+    console.log('   시니어: ✏️' + seniorEditCount + ' ➕' + seniorAddCount + ', 재미: ✏️' + funEditCount + ' ➕' + funAddCount + ', 흐름: ✏️' + flowEditCount + ' ➕' + flowAddCount + ', 이탈방지: ✏️' + retainEditCount + ' ➕' + retainAddCount + ', 삭제: ' + delCount);
+}
 
 function initResetCacheButton() {
     var btn = document.getElementById('btn-reset-cache');
