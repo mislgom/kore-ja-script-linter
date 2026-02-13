@@ -1125,7 +1125,7 @@ function cleanScriptForDownload(script) {
     // 1. [DEL]...[/DEL] 삭제 부분 완전 제거
     cleaned = cleaned.replace(/\[DEL\][\s\S]*?\[\/DEL\]/g, '');
     
-    // 2. 추가 태그 제거 (내용은 유지)
+    // 2. 모든 태그 제거 (내용은 유지)
     cleaned = cleaned.replace(/\[SENIOR\+\]/g, '');
     cleaned = cleaned.replace(/\[\/SENIOR\+\]/g, '');
     cleaned = cleaned.replace(/\[FUN\+\]/g, '');
@@ -1134,8 +1134,6 @@ function cleanScriptForDownload(script) {
     cleaned = cleaned.replace(/\[\/FLOW\+\]/g, '');
     cleaned = cleaned.replace(/\[RETAIN\+\]/g, '');
     cleaned = cleaned.replace(/\[\/RETAIN\+\]/g, '');
-    
-    // 3. 수정 태그 제거 (내용은 유지)
     cleaned = cleaned.replace(/\[SENIOR\]/g, '');
     cleaned = cleaned.replace(/\[\/SENIOR\]/g, '');
     cleaned = cleaned.replace(/\[FUN\]/g, '');
@@ -1145,13 +1143,13 @@ function cleanScriptForDownload(script) {
     cleaned = cleaned.replace(/\[RETAIN\]/g, '');
     cleaned = cleaned.replace(/\[\/RETAIN\]/g, '');
     
-    // 4. ★ 태그 제거 (이전 버전 호환)
+    // 3. ★ 태그 제거 (이전 버전 호환)
     cleaned = cleaned.replace(/★/g, '');
     
-    // 5. __DELETE__ 마커 제거
+    // 4. __DELETE__ 마커 제거
     cleaned = cleaned.replace(/__DELETE__/g, '');
     
-    // 6. 삭제 지시 괄호 표현 제거
+    // 5. 삭제 지시 괄호 표현 제거
     cleaned = cleaned.replace(/\(해당\s*장면은?\s*삭제[^)]*\)/g, '');
     cleaned = cleaned.replace(/\(이\s*부분\s*삭제[^)]*\)/g, '');
     cleaned = cleaned.replace(/\(해당\s*대사\s*삭제[^)]*\)/g, '');
@@ -1163,10 +1161,35 @@ function cleanScriptForDownload(script) {
     cleaned = cleaned.replace(/\[삭제[^\]]*\]/g, '');
     cleaned = cleaned.replace(/\[제거[^\]]*\]/g, '');
     
-    // 7. 연속 빈 줄 정리 (3줄 이상 → 2줄로)
+    // 6. 대괄호 [] 와 내용 모두 제거 (씬 헤더 등은 유지하지 않음)
+    cleaned = cleaned.replace(/\[[^\]]*\]/g, '');
+    
+    // 7. 소괄호 () 와 내용 모두 제거 (지문 괄호 포함)
+    cleaned = cleaned.replace(/\([^)]*\)/g, '');
+    
+    // 8. 중괄호 {} 와 내용 모두 제거
+    cleaned = cleaned.replace(/\{[^}]*\}/g, '');
+    
+    // 9. 홑화살괄호 <> 와 내용 제거
+    cleaned = cleaned.replace(/<[^>]*>/g, '');
+    
+    // 10. 자막에 불필요한 특수문자 제거 (! ? . , ; 는 유지)
+    // 유지할 문자: 한글, 영문, 숫자, 공백, 줄바꿈, ! ? . , ; 
+    // 그 외 특수문자 모두 제거
+    cleaned = cleaned.replace(/[^\uAC00-\uD7AF\u3131-\u3163\u1100-\u11FF가-힣a-zA-Z0-9\s!?.,;~\-]/g, '');
+    
+    // 11. 연속 공백 정리 (줄바꿈은 유지)
+    cleaned = cleaned.replace(/[^\S\n]+/g, ' ');
+    
+    // 12. 연속 빈 줄 정리 (3줄 이상 → 2줄로)
     cleaned = cleaned.replace(/\n\s*\n\s*\n/g, '\n\n');
     
-    // 8. 앞뒤 공백 정리
+    // 13. 각 줄 앞뒤 공백 정리
+    cleaned = cleaned.split('\n').map(function(line) {
+        return line.trim();
+    }).join('\n');
+    
+    // 14. 앞뒤 공백 정리
     cleaned = cleaned.trim();
     
     console.log('📄 cleanScriptForDownload: ' + script.length + '자 → ' + cleaned.length + '자');
