@@ -1221,18 +1221,50 @@ function findBestMatch(text, searchText) {
         return { found: true, matchedText: noLineBreakSearch, position: noLineBreakPos };
     }
     
-    // 4. 부분 문자열 매칭 (앞 30자, 뒤 30자)
+    // 4. 인물명: 대사 형식에서 대사 부분만 추출하여 매칭
+    var dialogueMatch = searchText.match(/^([가-힣a-zA-Z]{2,10})\s*[:：]\s*([\s\S]+)/);
+    if (dialogueMatch) {
+        var dialogueOnly = dialogueMatch[2].replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+        // 대사 전체 매칭
+        var dialoguePos = text.indexOf(dialogueOnly);
+        if (dialoguePos !== -1) {
+            return { found: true, matchedText: dialogueOnly, position: dialoguePos };
+        }
+        // 대사 첫 문장만 매칭
+        var firstSentence = dialogueOnly.split(/[.!?。]/)[0].trim();
+        if (firstSentence.length >= 8) {
+            var firstSentencePos = text.indexOf(firstSentence);
+            if (firstSentencePos !== -1) {
+                var endPos = Math.min(firstSentencePos + dialogueOnly.length, text.length);
+                return { found: true, matchedText: text.substring(firstSentencePos, endPos), position: firstSentencePos };
+            }
+        }
+    }
+    
+    // 5. 여러 줄 대사 처리 (인물명:\n인물명: 패턴)
+    var multiDialogue = searchText.match(/^([가-힣]{2,4})\s*[:：]\s*/gm);
+    if (multiDialogue && multiDialogue.length >= 2) {
+        var firstLine = searchText.split(/[\r\n]+/)[0].trim();
+        var firstLineClean = firstLine.replace(/^[가-힣]{2,4}\s*[:：]\s*/, '').trim();
+        if (firstLineClean.length >= 8) {
+            var firstLinePos = text.indexOf(firstLineClean);
+            if (firstLinePos !== -1) {
+                return { found: true, matchedText: firstLineClean, position: firstLinePos };
+            }
+        }
+    }
+    
+    // 6. 부분 문자열 매칭 (앞 30자, 뒤 30자)
     if (searchText.length > 30) {
-        var frontPart = searchText.substring(0, 30).trim();
+        var frontPart = searchText.substring(0, 30).replace(/[\r\n]+/g, ' ').trim();
         var frontPos = text.indexOf(frontPart);
         if (frontPos !== -1) {
-            // 앞부분 발견, 그 위치부터 원본 길이만큼을 매칭으로 사용
             var endPos = Math.min(frontPos + searchText.length, text.length);
             var matchedText = text.substring(frontPos, endPos);
             return { found: true, matchedText: matchedText, position: frontPos };
         }
         
-        var backPart = searchText.substring(searchText.length - 30).trim();
+        var backPart = searchText.substring(searchText.length - 30).replace(/[\r\n]+/g, ' ').trim();
         var backPos = text.indexOf(backPart);
         if (backPos !== -1) {
             var startPos = Math.max(0, backPos - searchText.length + 30);
@@ -1241,8 +1273,10 @@ function findBestMatch(text, searchText) {
         }
     }
     
-    // 5. 핵심 단어 기반 매칭 (3자 이상 단어들)
-    var words = searchText.split(/\s+/).filter(function(w) { return w.length >= 3; });
+    // 7. 핵심 단어 기반 매칭 (3자 이상 단어들)
+    var words = searchText.replace(/[\r\n]+/g, ' ').split(/\s+/).filter(function(w) { 
+        return w.length >= 3 && !w.match(/^[가-힣]{2,4}[:：]$/); 
+    });
     if (words.length >= 2) {
         var firstWord = words[0];
         var lastWord = words[words.length - 1];
@@ -1251,13 +1285,35 @@ function findBestMatch(text, searchText) {
         
         if (firstPos !== -1 && lastPos !== -1 && lastPos > firstPos) {
             var matchedText = text.substring(firstPos, lastPos + lastWord.length);
-            if (matchedText.length <= searchText.length * 1.5) {
+            if (matchedText.length <= searchText.length * 2) {
                 return { found: true, matchedText: matchedText, position: firstPos };
             }
         }
     }
     
-    // 6. 첫 단어만으로 위치 추정
+    // 8. 첫 번째 의미있는 구절로 위치 추정 (최소 8자)
+    var phrases = searchText.replace(/[\r\n]+/g, ' ').replace(/^[가-힣]{2,4}\s*[:：]\s*/g, '').split(/[,，.。!?;；]/).filter(function(p) { 
+        return p.trim().length >= 8; 
+    });
+    if (phrases.length > 0) {
+        var phrase = phrases[0].trim();
+        var phrasePos = text.indexOf(phrase);
+        if (phrasePos !== -1) {
+            var endPos = Math.min(phrasePos + searchText.length, text.length);
+            return { found: true, matchedText: text.substring(phrasePos, endPos), position: phrasePos };
+        }
+        // 구절의 앞 15자만으로 시도
+        if (phrase.length > 15) {
+            var shortPhrase = phrase.substring(0, 15);
+            var shortPos = text.indexOf(shortPhrase);
+            if (shortPos !== -1) {
+                var endPos = Math.min(shortPos + searchText.length, text.length);
+                return { found: true, matchedText: text.substring(shortPos, endPos), position: shortPos };
+            }
+        }
+    }
+    
+    // 9. 최후 수단: 첫 단어만으로 위치 추정
     if (words.length > 0) {
         var firstWordPos = text.indexOf(words[0]);
         if (firstWordPos !== -1) {
@@ -1621,109 +1677,113 @@ function scrollToMarker(stage, markerId) {
         return;
     }
     
-    // 방법 1: data-marker-id로 찾기
+    // 오류 객체 찾기
+    var errors = state[stage].allErrors || [];
+    var targetError = null;
+    for (var i = 0; i < errors.length; i++) {
+        if (errors[i].id === markerId) {
+            targetError = errors[i];
+            break;
+        }
+    }
+    
+    // 방법 1: data-marker-id로 마커 찾기
     var marker = container.querySelector('.correction-marker[data-marker-id="' + markerId + '"]');
     
-    // 방법 2: 마커를 못 찾으면 에러 객체에서 원문으로 직접 찾기
-    if (!marker) {
-        console.log('⚠️ 마커 ID로 찾기 실패, 원문 텍스트로 검색 시도: ' + markerId);
+    // 방법 2: 마커를 못 찾으면 원문/수정안 텍스트로 검색
+    if (!marker && targetError) {
+        var allMarkers = container.querySelectorAll('.correction-marker');
+        var searchTexts = [];
         
-        var errors = state[stage].allErrors || [];
-        var targetError = null;
-        
-        for (var i = 0; i < errors.length; i++) {
-            if (errors[i].id === markerId) {
-                targetError = errors[i];
-                break;
-            }
+        if (targetError.original) {
+            searchTexts.push(targetError.original);
+            // 인물명:대사 형식이면 대사 부분만도 검색
+            var dMatch = targetError.original.match(/^[가-힣]{2,4}\s*[:：]\s*([\s\S]+)/);
+            if (dMatch) searchTexts.push(dMatch[1].split(/[\r\n]/)[0].trim());
+            // 첫 줄만
+            searchTexts.push(targetError.original.split(/[\r\n]/)[0].trim());
+        }
+        if (targetError.revised) {
+            searchTexts.push(cleanRevisedText(targetError.revised));
+        }
+        if (targetError.matchedOriginal) {
+            searchTexts.push(targetError.matchedOriginal);
         }
         
-        if (targetError && targetError.original) {
-            // 컨테이너 내에서 원문 텍스트 포함하는 마커 찾기
-            var allMarkers = container.querySelectorAll('.correction-marker');
-            for (var j = 0; j < allMarkers.length; j++) {
-                var markerText = allMarkers[j].textContent || '';
-                var originalText = targetError.original;
-                var revisedText = targetError.revised ? cleanRevisedText(targetError.revised) : '';
-                
-                if (markerText === originalText || markerText === revisedText || 
-                    markerText.indexOf(originalText) !== -1 || 
-                    (revisedText && markerText.indexOf(revisedText) !== -1)) {
+        for (var j = 0; j < allMarkers.length && !marker; j++) {
+            var markerText = allMarkers[j].textContent || '';
+            for (var k = 0; k < searchTexts.length; k++) {
+                var st = searchTexts[k];
+                if (!st || st.length < 3) continue;
+                if (markerText === st || markerText.indexOf(st) !== -1 || st.indexOf(markerText) !== -1) {
                     marker = allMarkers[j];
-                    console.log('✅ 텍스트 매칭으로 마커 찾음: ' + markerText);
+                    break;
+                }
+                // 앞 15자만 비교
+                if (st.length > 15 && markerText.indexOf(st.substring(0, 15)) !== -1) {
+                    marker = allMarkers[j];
                     break;
                 }
             }
         }
     }
     
-    // 방법 3: 그래도 못 찾으면 대략적 위치로 스크롤
-    if (!marker) {
-        var errors = state[stage].allErrors || [];
-        var targetError = null;
+    // 방법 3: 마커를 못 찾으면 텍스트 내용으로 직접 위치 계산 후 스크롤
+    if (!marker && targetError) {
+        var containerText = container.innerText || container.textContent || '';
+        var searchCandidates = [];
         
-        for (var i = 0; i < errors.length; i++) {
-            if (errors[i].id === markerId) {
-                targetError = errors[i];
-                break;
+        if (targetError.original) {
+            searchCandidates.push(targetError.original);
+            searchCandidates.push(targetError.original.replace(/[\r\n]+/g, ' ').trim());
+            var dMatch = targetError.original.match(/^[가-힣]{2,4}\s*[:：]\s*([\s\S]+)/);
+            if (dMatch) {
+                searchCandidates.push(dMatch[1].replace(/[\r\n]+/g, ' ').trim());
+                searchCandidates.push(dMatch[1].split(/[\r\n]/)[0].trim());
+            }
+            searchCandidates.push(targetError.original.split(/[\r\n]/)[0].trim());
+            // 핵심 구절 추출 (8자 이상)
+            var phrases = targetError.original.replace(/[\r\n]+/g, ' ').replace(/^[가-힣]{2,4}\s*[:：]\s*/g, '').split(/[,，.。!?;；]/).filter(function(p) { return p.trim().length >= 8; });
+            phrases.forEach(function(p) { searchCandidates.push(p.trim()); });
+        }
+        if (targetError.revised) {
+            searchCandidates.push(cleanRevisedText(targetError.revised));
+        }
+        
+        var foundIndex = -1;
+        var foundText = '';
+        for (var s = 0; s < searchCandidates.length && foundIndex === -1; s++) {
+            var candidate = searchCandidates[s];
+            if (!candidate || candidate.length < 5) continue;
+            foundIndex = containerText.indexOf(candidate);
+            if (foundIndex !== -1) {
+                foundText = candidate;
+            } else if (candidate.length > 15) {
+                foundIndex = containerText.indexOf(candidate.substring(0, 15));
+                if (foundIndex !== -1) foundText = candidate.substring(0, 15);
             }
         }
         
-        // approximatePosition 사용
-        if (targetError && typeof targetError.approximatePosition === 'number' && targetError.approximatePosition >= 0) {
-            var innerDiv = container.querySelector('div');
-            if (innerDiv) {
-                var scrollTarget = innerDiv.scrollHeight * targetError.approximatePosition;
-                container.scrollTop = Math.max(0, scrollTarget - 100);
-                
-                console.log('📍 대략적 위치로 스크롤: ' + Math.round(targetError.approximatePosition * 100) + '%');
-                
-                // 대략적 위치 근처 하이라이트 표시
-                var highlightDiv = document.createElement('div');
-                highlightDiv.style.cssText = 'position: absolute; left: 0; right: 0; height: 40px; background: rgba(255, 235, 59, 0.3); pointer-events: none; transition: opacity 0.5s;';
-                highlightDiv.style.top = scrollTarget + 'px';
-                
-                if (innerDiv.style.position !== 'relative') {
-                    innerDiv.style.position = 'relative';
-                }
-                innerDiv.appendChild(highlightDiv);
-                
-                setTimeout(function() {
-                    highlightDiv.style.opacity = '0';
-                    setTimeout(function() {
-                        if (highlightDiv.parentNode) {
-                            highlightDiv.parentNode.removeChild(highlightDiv);
-                        }
-                    }, 500);
-                }, 1500);
-                
-                return;
-            }
-        }
-        
-        // 원문 텍스트로 위치 계산
-        if (targetError && targetError.original) {
-            var containerText = container.innerText || container.textContent || '';
-            var searchText = targetError.useRevised ? cleanRevisedText(targetError.revised) : targetError.original;
-            var textIndex = containerText.indexOf(searchText);
+        if (foundIndex !== -1) {
+            var totalLength = containerText.length;
+            var scrollRatio = foundIndex / totalLength;
+            var scrollTarget = container.scrollHeight * scrollRatio;
             
-            if (textIndex !== -1) {
-                console.log('✅ 텍스트 위치 찾음, 스크롤 이동: ' + searchText.substring(0, 20) + '...');
-                
-                var totalLength = containerText.length;
-                var scrollRatio = textIndex / totalLength;
-                var scrollTarget = container.scrollHeight * scrollRatio;
-                
-                container.scrollTo({
-                    top: Math.max(0, scrollTarget - 100),
-                    behavior: 'smooth'
-                });
-                
-                highlightTextInContainer(container, searchText, stage);
-                return;
-            }
+            container.scrollTo({
+                top: Math.max(0, scrollTarget - 100),
+                behavior: 'smooth'
+            });
+            
+            highlightTextInContainer(container, foundText, stage);
+            console.log('✅ 텍스트 검색으로 스크롤 이동: "' + foundText.substring(0, 25) + '..."');
+            return;
         }
         
+        console.log('⚠️ scrollToMarker: 모든 방법 실패 - ' + markerId);
+        return;
+    }
+    
+    if (!marker) {
         console.log('⚠️ scrollToMarker: 마커를 찾을 수 없음 - ' + markerId);
         return;
     }
@@ -1739,45 +1799,6 @@ function scrollToMarker(stage, markerId) {
     }, 1600);
     
     console.log('✅ 마커로 스크롤 이동 완료: ' + markerId);
-}
-
-// 텍스트 하이라이트 헬퍼 함수
-function highlightTextInContainer(container, searchText, stage) {
-    if (!searchText || searchText.length < 2) return;
-    
-    var innerDiv = container.querySelector('div');
-    if (!innerDiv) innerDiv = container;
-    
-    var originalHtml = innerDiv.innerHTML;
-    var escapedSearch = escapeHtml(searchText);
-    
-    // 검색 텍스트가 HTML에 있는지 확인
-    if (originalHtml.indexOf(escapedSearch) === -1) {
-        // 짧은 버전으로 재시도
-        var shortSearch = searchText.substring(0, Math.min(15, searchText.length));
-        escapedSearch = escapeHtml(shortSearch);
-        if (originalHtml.indexOf(escapedSearch) === -1) {
-            console.log('⚠️ 하이라이트할 텍스트를 찾을 수 없음');
-            return;
-        }
-    }
-    
-    var highlightId = 'temp-highlight-' + Date.now();
-    var highlightHtml = '<span id="' + highlightId + '" style="background:#ffeb3b;color:#000;padding:2px 4px;border-radius:3px;transition:background 0.3s;">' + escapedSearch + '</span>';
-    
-    innerDiv.innerHTML = originalHtml.replace(escapedSearch, highlightHtml);
-    
-    var highlightEl = document.getElementById(highlightId);
-    if (highlightEl) {
-        highlightEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
-        // 1.6초 후 하이라이트 제거
-        setTimeout(function() {
-            if (highlightEl && highlightEl.parentNode) {
-                highlightEl.outerHTML = escapedSearch;
-            }
-        }, 1600);
-    }
 }
 
 function escapeHtml(str) {
