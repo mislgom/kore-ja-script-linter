@@ -2754,7 +2754,7 @@ async function createScriptCache(script, systemInstruction, ttlSeconds) {
         console.error('❌ createScriptCache: API 키 오류 -', validation.message);
         return null;
     }
-    if (!ttlSeconds) ttlSeconds = 900;
+    if (!ttlSeconds) ttlSeconds = 1800;
     if (!script || script.length < 1500) {
         console.log('⚠️ createScriptCache: 대본이 짧아 캐시 생성 생략 (' + (script ? script.length : 0) + '자)');
         return null;
@@ -2810,6 +2810,7 @@ async function createScriptCache(script, systemInstruction, ttlSeconds) {
 }
 
 async function deleteScriptCache(cacheName) {
+    stopCacheTimer();
     if (!cacheName) return;
     var apiKey = localStorage.getItem('GEMINI_API_KEY');
     if (!apiKey) return;
@@ -3542,7 +3543,7 @@ async function startStage1Analysis() {
             '요청받은 구간과 역할에 따라 집중 분석합니다. ' +
             '전체 대본의 인물, 시간, 장소, 복선, 감정선을 모두 파악하고 있어야 합니다.';
 
-        var cacheName = await createScriptCache(script, systemPrompt, 900);
+        var cacheName = await createScriptCache(script, systemPrompt, 1800);
         state._cacheName = cacheName;
 
         if (!cacheName) {
@@ -3552,6 +3553,7 @@ async function startStage1Analysis() {
         }
 
         console.log('✅ 캐시 생성 성공: ' + cacheName);
+        startCacheTimer(cacheName, 1800);
 
         // ============================================================
         // STEP 1: 역할 ①② 실행 (팩트 검증 계열)
@@ -3787,7 +3789,7 @@ async function startStage2Analysis() {
             '사용자가 제공한 전체 대본을 완전히 이해한 상태에서, 요청받은 구간과 역할에 따라 집중 분석합니다.\n' +
             '냉정하지만 정확한 피드백으로 이 대본을 명작 수준으로 끌어올려야 합니다.';
 
-        var cacheName2 = await createScriptCache(stage1FixedScript, systemPrompt2, 900);
+        var cacheName2 = await createScriptCache(stage1FixedScript, systemPrompt2, 1800);
         state._cacheName = cacheName2;
 
         if (!cacheName2) {
@@ -3797,6 +3799,8 @@ async function startStage2Analysis() {
         }
 
         console.log('✅ 2차 캐시 생성 성공: ' + cacheName2);
+        startCacheTimer(cacheName2, 1800);
+
 
         var chunks = splitScriptIntoChunks(stage1FixedScript, 5000);
         var allRoleErrors = [];
@@ -5216,4 +5220,190 @@ function fixScript(stage) {
     if (stage === 'stage2') state.finalScript = text;
     renderScriptWithMarkers(stage);
     alert((stage === 'stage1' ? '1차' : '최종') + ' 수정본이 적용되었습니다.');
+}
+
+// ============================================================
+// 캐시 TTL 모니터링 + 연장 시스템 (v4.57 추가)
+// - 캐시 생성 시 카운트다운 타이머 시작
+// - 만료 2분 전 경고 바 표시 + 알림음
+// - [15분 연장] 버튼 클릭 시 PATCH API로 TTL 갱신
+// - 분석 완료 시 타이머 + 경고 바 자동 제거
+// ============================================================
+
+var cacheTimer = {
+    intervalId: null,
+    remainingSeconds: 0,
+    cacheName: null,
+    warningShown: false,
+    WARNING_THRESHOLD: 120
+};
+
+function startCacheTimer(cacheName, ttlSeconds) {
+    stopCacheTimer();
+    cacheTimer.cacheName = cacheName;
+    cacheTimer.remainingSeconds = ttlSeconds;
+    cacheTimer.warningShown = false;
+    console.log('⏱️ 캐시 타이머 시작: ' + ttlSeconds + '초 (' + cacheName + ')');
+    cacheTimer.intervalId = setInterval(function() {
+        cacheTimer.remainingSeconds--;
+        if (cacheTimer.warningShown) {
+            updateCacheWarningCountdown();
+        }
+        if (cacheTimer.remainingSeconds <= cacheTimer.WARNING_THRESHOLD && !cacheTimer.warningShown) {
+            cacheTimer.warningShown = true;
+            showCacheWarning();
+            playCacheWarningSound();
+            console.log('⚠️ 캐시 만료 경고: ' + cacheTimer.remainingSeconds + '초 남음');
+        }
+        if (cacheTimer.remainingSeconds <= 0) {
+            console.log('❌ 캐시 만료됨');
+            stopCacheTimer();
+            updateCacheWarningExpired();
+        }
+    }, 1000);
+}
+
+function stopCacheTimer() {
+    if (cacheTimer.intervalId) {
+        clearInterval(cacheTimer.intervalId);
+        cacheTimer.intervalId = null;
+    }
+    cacheTimer.cacheName = null;
+    cacheTimer.remainingSeconds = 0;
+    cacheTimer.warningShown = false;
+    hideCacheWarning();
+}
+
+function showCacheWarning() {
+    var existing = document.getElementById('cache-warning-bar');
+    if (existing) existing.remove();
+    var bar = document.createElement('div');
+    bar.id = 'cache-warning-bar';
+    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#d32f2f,#f44336);color:white;padding:12px 20px;display:flex;align-items:center;justify-content:center;gap:15px;font-size:14px;font-weight:bold;box-shadow:0 4px 15px rgba(244,67,54,0.5);';
+    var minutes = Math.floor(cacheTimer.remainingSeconds / 60);
+    var seconds = cacheTimer.remainingSeconds % 60;
+    var timeStr = minutes + '분 ' + (seconds < 10 ? '0' : '') + seconds + '초';
+    bar.innerHTML =
+        '<span style="font-size:18px;">⚠️</span>' +
+        '<span id="cache-warning-text">캐시 만료까지 <span id="cache-warning-countdown" style="color:#ffeb3b;font-size:16px;">' + timeStr + '</span> 남았습니다</span>' +
+        '<button id="btn-extend-cache" onclick="extendCacheTTL()" style="background:#fff;color:#d32f2f;border:none;padding:8px 20px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;transition:transform 0.2s;">15분 연장</button>' +
+        '<button id="btn-dismiss-cache-warning" onclick="hideCacheWarning()" style="background:transparent;color:white;border:1px solid rgba(255,255,255,0.5);padding:6px 12px;border-radius:5px;cursor:pointer;font-size:12px;">무시</button>';
+    document.body.appendChild(bar);
+    document.body.style.paddingTop = (bar.offsetHeight) + 'px';
+}
+
+function hideCacheWarning() {
+    var bar = document.getElementById('cache-warning-bar');
+    if (bar) {
+        bar.remove();
+        document.body.style.paddingTop = '';
+    }
+}
+
+function updateCacheWarningCountdown() {
+    var countdown = document.getElementById('cache-warning-countdown');
+    if (!countdown) return;
+    var minutes = Math.floor(cacheTimer.remainingSeconds / 60);
+    var seconds = cacheTimer.remainingSeconds % 60;
+    countdown.textContent = minutes + '분 ' + (seconds < 10 ? '0' : '') + seconds + '초';
+    if (cacheTimer.remainingSeconds <= 60) {
+        countdown.style.color = '#ff0000';
+        countdown.style.fontSize = '18px';
+    }
+}
+
+function updateCacheWarningExpired() {
+    var bar = document.getElementById('cache-warning-bar');
+    if (!bar) return;
+    bar.style.background = 'linear-gradient(135deg,#333,#555)';
+    bar.innerHTML =
+        '<span style="font-size:18px;">❌</span>' +
+        '<span>캐시가 만료되었습니다. 분석이 실패할 수 있습니다.</span>' +
+        '<button onclick="hideCacheWarning()" style="background:transparent;color:white;border:1px solid rgba(255,255,255,0.5);padding:6px 12px;border-radius:5px;cursor:pointer;font-size:12px;">닫기</button>';
+    setTimeout(function() { hideCacheWarning(); }, 10000);
+}
+
+function playCacheWarningSound() {
+    try {
+        var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        var oscillator = audioCtx.createOscillator();
+        var gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.frequency.value = 800;
+        oscillator.type = 'sine';
+        gainNode.gain.value = 0.3;
+        oscillator.start();
+        setTimeout(function() {
+            oscillator.stop();
+            audioCtx.close();
+        }, 300);
+        setTimeout(function() {
+            var audioCtx2 = new (window.AudioContext || window.webkitAudioContext)();
+            var osc2 = audioCtx2.createOscillator();
+            var gain2 = audioCtx2.createGain();
+            osc2.connect(gain2);
+            gain2.connect(audioCtx2.destination);
+            osc2.frequency.value = 1000;
+            osc2.type = 'sine';
+            gain2.gain.value = 0.3;
+            osc2.start();
+            setTimeout(function() {
+                osc2.stop();
+                audioCtx2.close();
+            }, 300);
+        }, 400);
+    } catch (e) {
+        console.log('⚠️ 알림음 재생 실패 (브라우저 제한)');
+    }
+}
+
+async function extendCacheTTL() {
+    var btn = document.getElementById('btn-extend-cache');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '연장 중...';
+    }
+    var cacheName = cacheTimer.cacheName || state._cacheName;
+    if (!cacheName) {
+        alert('연장할 캐시가 없습니다.');
+        if (btn) { btn.disabled = false; btn.textContent = '15분 연장'; }
+        return;
+    }
+    var apiKey = localStorage.getItem('GEMINI_API_KEY');
+    if (!apiKey) {
+        alert('API 키가 설정되지 않았습니다.');
+        if (btn) { btn.disabled = false; btn.textContent = '15분 연장'; }
+        return;
+    }
+    var url = 'https://generativelanguage.googleapis.com/v1beta/' + cacheName + '?updateMask=ttl&key=' + apiKey;
+    try {
+        var response = await fetch(url, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ttl: '900s' })
+        });
+        if (!response.ok) {
+            var errorData = await response.json().catch(function() { return {}; });
+            throw new Error(errorData.error ? errorData.error.message : response.statusText);
+        }
+        console.log('✅ 캐시 TTL 연장 성공: +15분');
+        cacheTimer.remainingSeconds += 900;
+        cacheTimer.warningShown = false;
+        showCacheExtendedSuccess();
+    } catch (error) {
+        console.error('❌ 캐시 TTL 연장 실패:', error.message);
+        alert('캐시 연장에 실패했습니다: ' + error.message);
+        if (btn) { btn.disabled = false; btn.textContent = '15분 연장'; }
+    }
+}
+
+function showCacheExtendedSuccess() {
+    var bar = document.getElementById('cache-warning-bar');
+    if (!bar) return;
+    bar.style.background = 'linear-gradient(135deg,#2e7d32,#4CAF50)';
+    bar.innerHTML =
+        '<span style="font-size:18px;">✅</span>' +
+        '<span>캐시가 15분 연장되었습니다! (남은 시간: ' + Math.floor(cacheTimer.remainingSeconds / 60) + '분)</span>';
+    setTimeout(function() { hideCacheWarning(); }, 3000);
 }
