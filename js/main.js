@@ -1047,17 +1047,7 @@ function handleFile(file) {
 function initDownloadButton() {
     var btn = document.getElementById('btn-download');
     if (!btn) return;
-    btn.addEventListener('click', function() {
-        var scriptToDownload = state.perfectScript || state.finalScript;
-        if (!scriptToDownload || scriptToDownload.trim() === '') {
-            scriptToDownload = state.stage2.fixedScript || state.stage1.fixedScript;
-        }
-        if (!scriptToDownload || scriptToDownload.trim() === '') {
-            alert('다운로드할 수정본이 없습니다.\n\n분석 후 "대본 픽스" 버튼을 먼저 눌러주세요.');
-            return;
-        }
-        downloadScript(scriptToDownload);
-    });
+    btn.style.display = 'none';
 }
 
 function downloadScript(script) {
