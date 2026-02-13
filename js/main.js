@@ -209,7 +209,7 @@ var API_CONFIG = {
     TIMEOUT: 300000,
     MODEL: 'gemini-2.5-flash',
     ENDPOINT: 'https://generativelanguage.googleapis.com/v1beta/models',
-    MAX_OUTPUT_TOKENS: 16384
+    MAX_OUTPUT_TOKENS: 65536
 };
 
 document.addEventListener('DOMContentLoaded', function() {
