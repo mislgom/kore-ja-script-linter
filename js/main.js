@@ -5972,7 +5972,615 @@ function initPerfectScriptSection() {
             openCompareModal();
         });
     }
+    
+    // 재분석 영역은 100점 대본 생성 완료 후 동적으로 생성됨
 }
+
+// ============================================================
+// createReanalysisSection - 100점 대본 재분석 영역 동적 생성 (v4.55)
+// ============================================================
+function createReanalysisSection() {
+    if (document.getElementById('reanalysis-section')) return;
+    
+    var perfectSection = document.getElementById('perfect-script-section');
+    if (!perfectSection) return;
+    
+    var section = document.createElement('section');
+    section.id = 'reanalysis-section';
+    section.style.cssText = 'margin-top:30px;display:none;';
+    
+    section.innerHTML = 
+        '<h2 style="color:#FFD700;font-size:20px;margin-bottom:20px;text-align:center;">🔄 100점 대본 재분석</h2>' +
+        
+        '<!-- 재분석 시작 버튼 -->' +
+        '<div style="text-align:center;margin-bottom:20px;">' +
+            '<button id="btn-start-reanalysis" style="background:linear-gradient(135deg,#FFD700 0%,#FFA000 100%);color:#000;border:none;padding:15px 40px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:16px;box-shadow:0 4px 15px rgba(255,215,0,0.4);">🔄 100점 대본 재분석 시작</button>' +
+        '</div>' +
+        
+        '<!-- 4개 박스 -->' +
+        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-bottom:20px;">' +
+            
+            '<!-- 재분석 1차 결과 -->' +
+            '<div style="background:#1e1e1e;border-radius:10px;overflow:hidden;">' +
+                '<div style="background:#333;padding:10px 15px;font-weight:bold;color:#fff;border-bottom:1px solid #444;">📊 1차 재분석 결과</div>' +
+                '<div id="analysis-re-stage1" style="padding:10px;max-height:400px;overflow-y:auto;font-size:12px;">' +
+                    '<p style="color:#888;text-align:center;">재분석을 시작하면 결과가 표시됩니다.</p>' +
+                '</div>' +
+            '</div>' +
+            
+            '<!-- 재분석 1차 수정 반영 -->' +
+            '<div style="background:#1e1e1e;border-radius:10px;overflow:hidden;">' +
+                '<div style="background:#333;padding:10px 15px;font-weight:bold;color:#fff;border-bottom:1px solid #444;display:flex;justify-content:space-between;align-items:center;">' +
+                    '<span>✏️ 1차 재수정 반영</span>' +
+                '</div>' +
+                '<div id="revised-re-stage1" style="padding:10px;max-height:400px;overflow-y:auto;font-size:12px;">' +
+                    '<p style="color:#888;text-align:center;">재분석 후 수정본이 표시됩니다.</p>' +
+                '</div>' +
+                '<div class="revert-btn-wrapper" style="text-align:center;padding:10px;border-top:1px solid #444;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">' +
+                    '<button id="btn-revert-before-re-stage1" disabled style="background:#ff9800;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;">🔄 수정 전</button>' +
+                    '<button id="btn-revert-after-re-stage1" disabled style="background:#4CAF50;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;">✅ 수정 후</button>' +
+                    '<button id="btn-fix-script-re-stage1" disabled style="background:#2196F3;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;">📌 대본 픽스</button>' +
+                '</div>' +
+            '</div>' +
+            
+            '<!-- 재분석 2차 결과 -->' +
+            '<div style="background:#1e1e1e;border-radius:10px;overflow:hidden;">' +
+                '<div style="background:#333;padding:10px 15px;font-weight:bold;color:#fff;border-bottom:1px solid #444;">📋 2차 재분석 결과</div>' +
+                '<div id="analysis-re-stage2" style="padding:10px;max-height:400px;overflow-y:auto;font-size:12px;">' +
+                    '<p style="color:#888;text-align:center;">2차 재분석을 시작하면 결과가 표시됩니다.</p>' +
+                '</div>' +
+                '<div style="text-align:center;padding:15px;">' +
+                    '<button id="btn-start-re-stage2" style="background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);color:white;border:none;padding:12px 30px;border-radius:8px;cursor:pointer;font-weight:bold;font-size:14px;">🔬 2차 재분석 시작</button>' +
+                '</div>' +
+            '</div>' +
+            
+            '<!-- 재분석 최종 수정 반영 -->' +
+            '<div style="background:#1e1e1e;border-radius:10px;overflow:hidden;">' +
+                '<div style="background:#333;padding:10px 15px;font-weight:bold;color:#fff;border-bottom:1px solid #444;display:flex;justify-content:space-between;align-items:center;">' +
+                    '<span>✅ 최종 재수정 반영</span>' +
+                '</div>' +
+                '<div id="revised-re-stage2" style="padding:10px;max-height:400px;overflow-y:auto;font-size:12px;">' +
+                    '<p style="color:#888;text-align:center;">2차 재분석 후 최종본이 표시됩니다.</p>' +
+                '</div>' +
+                '<div class="revert-btn-wrapper" style="text-align:center;padding:10px;border-top:1px solid #444;display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">' +
+                    '<button id="btn-revert-before-re-stage2" disabled style="background:#ff9800;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;">🔄 수정 전</button>' +
+                    '<button id="btn-revert-after-re-stage2" disabled style="background:#4CAF50;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;">✅ 수정 후</button>' +
+                    '<button id="btn-fix-script-re-stage2" disabled style="background:#2196F3;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;">📌 대본 픽스</button>' +
+                    '<button id="btn-download-re-final" style="background:#9C27B0;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;">💾 최종본 다운로드</button>' +
+                '</div>' +
+            '</div>' +
+            
+        '</div>' +
+        
+        '<!-- 재분석 점수 -->' +
+        '<div id="re-score-display" style="background:#1e1e1e;border-radius:10px;padding:20px;margin-top:20px;">' +
+            '<h3 style="color:#FFD700;margin-bottom:15px;text-align:center;">🔄 재분석 점수</h3>' +
+            '<p style="color:#888;text-align:center;">재분석 완료 후 점수가 표시됩니다.</p>' +
+        '</div>';
+    
+    perfectSection.parentElement.insertBefore(section, perfectSection.nextElementSibling);
+    
+    // 버튼 이벤트 연결
+    document.getElementById('btn-start-reanalysis').addEventListener('click', startReanalysisStage1);
+    document.getElementById('btn-start-re-stage2').addEventListener('click', startReanalysisStage2);
+    
+    document.getElementById('btn-revert-before-re-stage1').addEventListener('click', function() { toggleCurrentErrorOnly('re_stage1', false); });
+    document.getElementById('btn-revert-after-re-stage1').addEventListener('click', function() { toggleCurrentErrorOnly('re_stage1', true); });
+    document.getElementById('btn-fix-script-re-stage1').addEventListener('click', function() { fixScript('re_stage1'); });
+    
+    document.getElementById('btn-revert-before-re-stage2').addEventListener('click', function() { toggleCurrentErrorOnly('re_stage2', false); });
+    document.getElementById('btn-revert-after-re-stage2').addEventListener('click', function() { toggleCurrentErrorOnly('re_stage2', true); });
+    document.getElementById('btn-fix-script-re-stage2').addEventListener('click', function() { fixScript('re_stage2'); });
+    
+    document.getElementById('btn-download-re-final').addEventListener('click', function() {
+        var script = state.re_stage2.fixedScript || state.re_stage1.fixedScript || '';
+        if (!script || script.trim() === '') {
+            alert('다운로드할 수정본이 없습니다.\n"대본 픽스" 버튼을 먼저 눌러주세요.');
+            return;
+        }
+        downloadScript(script);
+    });
+    
+    console.log('✅ 재분석 섹션 생성 완료');
+}
+// ============================================================
+// state에 재분석용 데이터 추가
+// ============================================================
+state.re_stage1 = {
+    originalScript: '',
+    analysis: null,
+    revisedScript: '',
+    allErrors: [],
+    fixedScript: '',
+    currentErrorIndex: -1,
+    isFixed: false
+};
+state.re_stage2 = {
+    originalScript: '',
+    analysis: null,
+    revisedScript: '',
+    allErrors: [],
+    fixedScript: '',
+    currentErrorIndex: -1,
+    isFixed: false
+};
+state.reScores = null;
+
+// ============================================================
+// buildReStage1FixedScript - 재분석 1차 수정본 생성
+// buildStage1FixedScript와 동일한 로직, re_stage1 데이터 사용
+// ============================================================
+function buildReStage1FixedScript() {
+    var originalText = state.re_stage1.originalScript || '';
+    var errors = state.re_stage1.allErrors || [];
+    
+    if (!originalText || originalText.length === 0) return originalText;
+    if (!errors || errors.length === 0) return originalText;
+    
+    var replacements = [];
+    
+    for (var i = 0; i < errors.length; i++) {
+        var err = errors[i];
+        if (!err.useRevised || !err.original || !err.revised) continue;
+        
+        var searchText = err.original.trim();
+        if (searchText.length === 0) continue;
+        
+        var revisedText = cleanRevisedText(err.revised);
+        if (!revisedText || revisedText.length === 0) continue;
+        
+        var match = findBestMatch(originalText, searchText);
+        
+        if (match.found && match.position !== -1 && match.matchedText.length > 0) {
+            replacements.push({
+                position: match.position,
+                length: match.matchedText.length,
+                matchedText: match.matchedText,
+                revisedText: revisedText,
+                errorId: err.id
+            });
+        }
+    }
+    
+    replacements.sort(function(a, b) { return a.position - b.position; });
+    
+    var finalReplacements = [];
+    var lastEnd = 0;
+    for (var i = 0; i < replacements.length; i++) {
+        if (replacements[i].position >= lastEnd) {
+            finalReplacements.push(replacements[i]);
+            lastEnd = replacements[i].position + replacements[i].length;
+        }
+    }
+    
+    var result = '';
+    var pos = 0;
+    
+    for (var i = 0; i < finalReplacements.length; i++) {
+        var r = finalReplacements[i];
+        if (r.position > pos) {
+            result += originalText.substring(pos, r.position);
+        }
+        if (r.revisedText === '__DELETE__') {
+            // 삭제
+        } else {
+            result += r.revisedText;
+        }
+        pos = r.position + r.length;
+    }
+    
+    if (pos < originalText.length) {
+        result += originalText.substring(pos);
+    }
+    
+    return result;
+}
+
+// ============================================================
+// startReanalysisStage1 - 100점 대본 1차 재분석
+// ============================================================
+async function startReanalysisStage1() {
+    var perfectScript = state.perfectScript || '';
+    
+    if (!perfectScript || perfectScript.trim().length < 50) {
+        alert('100점 대본이 없습니다.\n100점 대본을 먼저 생성해주세요.');
+        return;
+    }
+    
+    var apiKey = localStorage.getItem('GEMINI_API_KEY');
+    if (!apiKey) { alert('API 키를 먼저 설정해주세요.'); return; }
+    
+    // 태그 제거한 순수 텍스트로 변환
+    var cleanPerfect = cleanScriptForDownload(perfectScript);
+    
+    showProgress('🔄 100점 대본 1차 재분석 시작...');
+    updateProgress(2, '준비 중...');
+    
+    try {
+        state.re_stage1.originalScript = cleanPerfect;
+        state.re_stage1.isFixed = false;
+        state.re_stage1.currentErrorIndex = -1;
+        state.re_stage1.allErrors = [];
+        
+        // 캐시 생성
+        updateProgress(3, '📦 재분석용 캐시 생성 중...');
+        
+        if (state._cacheName) {
+            deleteScriptCache(state._cacheName);
+            state._cacheName = null;
+        }
+        
+        var systemPrompt = '당신은 조선시대 사극 대본 전문 검수자입니다. ' +
+            '사용자가 제공한 전체 대본을 완전히 이해한 상태에서, ' +
+            '요청받은 역할에 따라 집중 분석합니다. ' +
+            '전체 대본의 인물, 시간, 장소, 복선, 감정선을 모두 파악하고 있어야 합니다.';
+        
+        var cacheName = await createScriptCache(cleanPerfect, systemPrompt, 1800);
+        state._cacheName = cacheName;
+        
+        if (!cacheName) {
+            alert('캐시 생성에 실패했습니다. 다시 시도해주세요.');
+            hideProgress();
+            return;
+        }
+        
+        console.log('✅ 재분석 캐시 생성 성공: ' + cacheName);
+        startCacheTimer(cacheName, 1800);
+        
+        // 매트릭스 병렬 분석
+        updateProgress(8, '🔍 1차 재분석 매트릭스 병렬 분석 중...');
+        
+        var roles = [
+            { id: 'role1_historical', name: '시대고증' },
+            { id: 'role2_person_time', name: '인물·시간' },
+            { id: 'role3_structure', name: '서사구조' },
+            { id: 'role4_character', name: '캐릭터·감정' }
+        ];
+        
+        var matrixResult = await runMatrixAnalysis(cleanPerfect, roles, cacheName, 6500, 10, 80, '1차 재분석');
+        var mergedErrors = matrixResult.errors;
+        
+        console.log('🔍 1차 재분석 완료: 총 ' + mergedErrors.length + '개 오류');
+        
+        // 결과 저장
+        updateProgress(82, '결과 저장 중...');
+        
+        state.re_stage1.allErrors = mergedErrors.map(function(err, idx) {
+            return {
+                id: 're-stage1-error-' + idx,
+                type: err.type || '기타',
+                original: err.original || '',
+                revised: err.revised || err.suggestion || '',
+                reason: err.reason || '',
+                severity: err.severity || 'medium',
+                useRevised: true
+            };
+        });
+        
+        // 결과 표시
+        updateProgress(85, '결과 표시 중...');
+        displayReStage1Results();
+        
+        var revisedText = buildReStage1FixedScript();
+        state.re_stage1.revisedScript = revisedText;
+        state.re_stage1.fixedScript = revisedText;
+        
+        updateProgress(100, '1차 재분석 완료!');
+        setTimeout(hideProgress, 1000);
+        
+    } catch (error) {
+        if (error.name !== 'AbortError') { alert('재분석 중 오류가 발생했습니다: ' + error.message); }
+        hideProgress();
+    }
+}
+
+// ============================================================
+// startReanalysisStage2 - 100점 대본 2차 재분석
+// ============================================================
+async function startReanalysisStage2() {
+    var reStage1Original = state.re_stage1.originalScript || '';
+    
+    if (!reStage1Original || reStage1Original.trim().length === 0) {
+        alert('1차 재분석을 먼저 완료해주세요.');
+        return;
+    }
+    
+    var reStage1Fixed = buildReStage1FixedScript();
+    state.re_stage1.fixedScript = reStage1Fixed;
+    state.re_stage1.revisedScript = reStage1Fixed;
+    
+    if (reStage1Fixed.trim().length < 10) {
+        alert('대본 내용이 너무 짧습니다.');
+        return;
+    }
+    
+    showProgress('🔄 2차 재분석 중...');
+    updateProgress(2, '준비 중...');
+    
+    try {
+        // 캐시 재생성 (1차 재수정본 기반)
+        updateProgress(3, '📦 2차 재분석용 캐시 생성 중...');
+        
+        if (state._cacheName) {
+            deleteScriptCache(state._cacheName);
+            state._cacheName = null;
+        }
+        
+        var systemPrompt2 = '당신은 대한민국 방송 역사상 가장 뛰어난 사극 드라마 감독입니다.\n' +
+            '사용자가 제공한 전체 대본을 완전히 이해한 상태에서, 요청받은 역할에 따라 집중 분석합니다.\n' +
+            '냉정하지만 정확한 피드백으로 이 대본을 명작 수준으로 끌어올려야 합니다.';
+        
+        var cacheName2 = await createScriptCache(reStage1Fixed, systemPrompt2, 1800);
+        state._cacheName = cacheName2;
+        
+        if (!cacheName2) {
+            alert('캐시 생성에 실패했습니다. 다시 시도해주세요.');
+            hideProgress();
+            return;
+        }
+        
+        console.log('✅ 2차 재분석 캐시 생성 성공: ' + cacheName2);
+        startCacheTimer(cacheName2, 1800);
+        
+        // 매트릭스 병렬 분석 + role6
+        updateProgress(8, '🔍 2차 재분석 매트릭스 병렬 분석 중...');
+        
+        var chunkRoles = [
+            { id: 'role2_person_time', name: '인물·시간' },
+            { id: 'role3_structure', name: '서사구조' },
+            { id: 'role4_character', name: '캐릭터·감정' },
+            { id: 'role5_dialogue', name: '대사품질' }
+        ];
+        
+        var role6Promise = retryWithDelay(function() {
+            var role6Prompt = buildRolePrompt('role6_audience', '', '', reStage1Fixed.length);
+            return callGeminiAPI(role6Prompt, cacheName2);
+        }, 3, 3000);
+        
+        var matrixPromise = runMatrixAnalysis(reStage1Fixed, chunkRoles, cacheName2, 6500, 10, 65, '2차 재분석');
+        
+        var allResults = await Promise.allSettled([matrixPromise, role6Promise]);
+        
+        updateProgress(70, '🔀 결과 통합 중...');
+        
+        // 매트릭스 결과
+        var matrixResult = { errors: [], role6Data: { scores: null, scoreDetails: null } };
+        if (allResults[0].status === 'fulfilled') {
+            matrixResult = allResults[0].value;
+        }
+        
+        // role6 결과
+        var role6Scores = null;
+        var role6ScoreDetails = null;
+        var role6Errors = [];
+        if (allResults[1].status === 'fulfilled') {
+            try {
+                var role6Parsed = parseApiResponse(allResults[1].value);
+                role6Errors = role6Parsed.errors || role6Parsed.issues || [];
+                role6Errors = filterNarrationErrors(role6Errors, reStage1Fixed);
+                for (var re = 0; re < role6Errors.length; re++) {
+                    role6Errors[re]._role = 'role6_audience';
+                }
+                role6Scores = role6Parsed.scores || null;
+                role6ScoreDetails = role6Parsed.scoreDetails || null;
+            } catch (r6Error) {
+                console.error('⚠️ role6 파싱 실패:', r6Error.message);
+            }
+        }
+        
+        var allRoleErrors = matrixResult.errors.concat(role6Errors);
+        var mergedErrors = mergeRoleResults(allRoleErrors);
+        
+        updateProgress(75, '결과 저장 중...');
+        
+        // state.re_stage2 저장
+        state.re_stage2 = {
+            originalScript: reStage1Fixed,
+            analysis: [],
+            allErrors: mergedErrors.map(function(err, idx) {
+                return {
+                    id: 're-stage2-error-' + idx,
+                    type: err.type || '기타',
+                    original: err.original || '',
+                    revised: err.revised || err.suggestion || '',
+                    reason: err.reason || '',
+                    severity: err.severity || 'medium',
+                    useRevised: true,
+                    _role: err._role || ''
+                };
+            }),
+            fixedScript: '',
+            currentErrorIndex: -1,
+            isFixed: false
+        };
+        
+        // 최종 재수정 반영 대본 생성
+        var finalFixedScript = reStage1Fixed;
+        state.re_stage2.allErrors.forEach(function(err) {
+            if (err.useRevised && err.original && err.revised) {
+                var fixedRevised = cleanRevisedText(err.revised);
+                if (fixedRevised === '__DELETE__') {
+                    finalFixedScript = finalFixedScript.split(err.original).join('');
+                } else {
+                    finalFixedScript = finalFixedScript.split(err.original).join(fixedRevised);
+                }
+            }
+        });
+        finalFixedScript = finalFixedScript.replace(/\n\s*\n\s*\n/g, '\n\n');
+        state.re_stage2.fixedScript = finalFixedScript;
+        
+        updateProgress(80, '점수 계산 중...');
+        
+        // 점수 계산
+        var aiScores = role6Scores || { senior: 75, fun: 75, flow: 75, retention: 75 };
+        var scoreDetails = role6ScoreDetails || {};
+        
+        var scoreResult = null;
+        try {
+            scoreResult = calculateScoresFromAnalysis(finalFixedScript, aiScores, scoreDetails);
+            state.reScores = scoreResult;
+        } catch (scoreError) {
+            scoreResult = {
+                finalScores: aiScores,
+                deductions: { senior: [], fun: [], flow: [], retention: [] }
+            };
+            state.reScores = scoreResult;
+        }
+        
+        updateProgress(90, '결과 표시 중...');
+        
+        // 결과 표시
+        displayReStage2Results();
+        displayReScores(scoreResult.finalScores, scoreResult.deductions);
+        
+        // 캐시 정리
+        if (state._cacheName) {
+            deleteScriptCache(state._cacheName);
+            state._cacheName = null;
+        }
+        
+        updateProgress(100, '2차 재분석 완료!');
+        
+        var avgScore = Math.round((scoreResult.finalScores.senior + scoreResult.finalScores.fun + scoreResult.finalScores.flow + scoreResult.finalScores.retention) / 4);
+        console.log('🔄 재분석 완료! 평균: ' + avgScore + '점');
+        
+        setTimeout(hideProgress, 1000);
+        
+    } catch (error) {
+        console.error('❌ 2차 재분석 오류:', error);
+        if (state._cacheName) {
+            deleteScriptCache(state._cacheName);
+            state._cacheName = null;
+        }
+        hideProgress();
+        if (error.name !== 'AbortError') {
+            alert('2차 재분석 중 오류가 발생했습니다: ' + error.message);
+        }
+    }
+}
+
+// ============================================================
+// displayReStage1Results - 재분석 1차 결과 표시
+// ============================================================
+function displayReStage1Results() {
+    var container = document.getElementById('analysis-re-stage1');
+    if (!container) return;
+    var errors = state.re_stage1.allErrors;
+    if (!errors || errors.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:30px;color:#69f0ae;font-size:18px;">✅ 오류가 발견되지 않았습니다.</div>';
+    } else {
+        var html = '<table class="analysis-table"><thead><tr><th>유형</th><th>원문</th><th>수정</th><th>사유</th></tr></thead><tbody>';
+        errors.forEach(function(err) {
+            var severityColor = err.severity === 'high' ? '#ff5555' : (err.severity === 'medium' ? '#ffaa00' : '#69f0ae');
+            html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;">' +
+                '<td class="type-cell" style="color:' + severityColor + ';font-weight:bold;">' + formatTypeText(err.type) + '</td>' +
+                '<td style="color:#ff9800;font-size:11px;">' + escapeHtml(err.original) + '</td>' +
+                '<td style="color:#69f0ae;font-size:11px;">' + escapeHtml(err.revised) + '</td>' +
+                '<td style="color:#aaa;font-size:11px;">' + escapeHtml(err.reason) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+        
+        container.querySelectorAll('tr[data-marker-id]').forEach(function(row) {
+            row.addEventListener('click', function() {
+                var markerId = this.getAttribute('data-marker-id');
+                var errorIndex = findErrorIndexById('re_stage1', markerId);
+                if (errorIndex >= 0) { 
+                    setCurrentError('re_stage1', errorIndex); 
+                }
+            });
+        });
+    }
+    renderScriptWithMarkers('re_stage1');
+    
+    // 버튼 활성화
+    var btnBefore = document.getElementById('btn-revert-before-re-stage1');
+    var btnAfter = document.getElementById('btn-revert-after-re-stage1');
+    var btnFix = document.getElementById('btn-fix-script-re-stage1');
+    if (btnBefore) btnBefore.disabled = !(errors && errors.length > 0);
+    if (btnAfter) btnAfter.disabled = !(errors && errors.length > 0);
+    if (btnFix) btnFix.disabled = false;
+}
+
+// ============================================================
+// displayReStage2Results - 재분석 2차 결과 표시
+// ============================================================
+function displayReStage2Results() {
+    var container = document.getElementById('analysis-re-stage2');
+    if (!container) return;
+    var errors = state.re_stage2.allErrors;
+    if (!errors || errors.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:30px;color:#69f0ae;font-size:18px;">✅ 추가 오류가 발견되지 않았습니다.</div>';
+    } else {
+        var html = '<table class="analysis-table"><thead><tr><th>유형</th><th>원문</th><th>수정</th><th>사유</th></tr></thead><tbody>';
+        errors.forEach(function(err) {
+            var severityColor = err.severity === 'high' ? '#ff5555' : (err.severity === 'medium' ? '#ffaa00' : '#69f0ae');
+            html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;">' +
+                '<td class="type-cell" style="color:' + severityColor + ';font-weight:bold;">' + formatTypeText(err.type) + '</td>' +
+                '<td style="color:#ff9800;font-size:11px;">' + escapeHtml(err.original) + '</td>' +
+                '<td style="color:#69f0ae;font-size:11px;">' + escapeHtml(err.revised) + '</td>' +
+                '<td style="color:#aaa;font-size:11px;">' + escapeHtml(err.reason) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        container.innerHTML = html;
+        
+        container.querySelectorAll('tr[data-marker-id]').forEach(function(row) {
+            row.addEventListener('click', function() {
+                var markerId = this.getAttribute('data-marker-id');
+                var errorIndex = findErrorIndexById('re_stage2', markerId);
+                if (errorIndex >= 0) { 
+                    setCurrentError('re_stage2', errorIndex); 
+                }
+            });
+        });
+    }
+    renderScriptWithMarkers('re_stage2');
+    
+    // 버튼 활성화
+    var btnBefore = document.getElementById('btn-revert-before-re-stage2');
+    var btnAfter = document.getElementById('btn-revert-after-re-stage2');
+    var btnFix = document.getElementById('btn-fix-script-re-stage2');
+    if (btnBefore) btnBefore.disabled = !(errors && errors.length > 0);
+    if (btnAfter) btnAfter.disabled = !(errors && errors.length > 0);
+    if (btnFix) btnFix.disabled = false;
+}
+
+// ============================================================
+// displayReScores - 재분석 점수 표시
+// ============================================================
+function displayReScores(scores, deductions) {
+    var scoreSection = document.getElementById('re-score-display');
+    if (!scoreSection) return;
+    
+    var avgScore = Math.round((scores.senior + scores.fun + scores.flow + scores.retention) / 4);
+    var passText = avgScore >= 80 ? '합격' : '재검토 필요';
+    
+    var html = '<h3 style="color:#FFD700;margin-bottom:15px;text-align:center;">🔄 재분석 점수</h3>' +
+        '<div style="text-align:center;margin-bottom:20px;">' +
+        '<span style="font-size:24px;font-weight:bold;color:' + (avgScore >= 80 ? '#69f0ae' : '#ff5555') + ';">' +
+        '평균: ' + avgScore + '점 (' + passText + ')' +
+        '</span></div>' +
+        '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:15px;">' +
+        createScoreCard('시니어 적합도', scores.senior, deductions.senior) +
+        createScoreCard('재미 요소', scores.fun, deductions.fun) +
+        createScoreCard('이야기 흐름', scores.flow, deductions.flow) +
+        createScoreCard('시청자 이탈 방지', scores.retention, deductions.retention) +
+        '</div>';
+    
+    scoreSection.innerHTML = html;
+    console.log('📊 재분석 점수 표시 완료 - 평균:', avgScore);
+}
+
+// ============================================================
+// showPerfectScriptSection 수정 - 재분석 섹션도 함께 생성
+// ============================================================
+var _originalShowPerfectScriptSection = showPerfectScriptSection;
+showPerfectScriptSection = function() {
+    _originalShowPerfectScriptSection();
+    createReanalysisSection();
+    var reSection = document.getElementById('reanalysis-section');
+    if (reSection) reSection.style.display = 'block';
+};
 
 function showPerfectScriptSection() {
     var section = document.getElementById('perfect-script-section');
