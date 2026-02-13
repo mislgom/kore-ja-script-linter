@@ -1477,7 +1477,63 @@ function renderScriptWithMarkers(stage) {
         console.log('🔧 유효한 마커 없음, 원본 대본 그대로 표시');
         return;
     }
-    
+        // 2.5단계: 수정안이 원문보다 넓은 범위를 포함하는 경우, 마커 범위 확장
+    for (var mi = 0; mi < markers.length; mi++) {
+        var m = markers[mi];
+        var err = m.error;
+        
+        if (!err.useRevised || !err.revised) continue;
+        
+        var revisedClean = cleanRevisedText(err.revised);
+        if (!revisedClean || revisedClean === '__DELETE__') continue;
+        
+        // 수정안의 뒷부분이 원본에서 마커 바로 뒤에 중복으로 존재하는지 확인
+        var markerEnd = m.position + m.length;
+        var afterMarkerText = originalText.substring(markerEnd, Math.min(markerEnd + 200, originalText.length));
+        
+        // 수정안과 원문의 겹치는 꼬리 부분 찾기
+        var originalWords = m.matchedText.split(/\s+/).filter(function(w) { return w.length >= 2; });
+        var revisedWords = revisedClean.split(/\s+/).filter(function(w) { return w.length >= 2; });
+        
+        // 수정안 뒷부분의 단어들이 마커 직후 원본에 중복 존재하는지 확인
+        if (revisedWords.length >= 3) {
+            var lastRevisedWords = revisedWords.slice(-3).join(' ');
+            var tailCheckLength = Math.min(lastRevisedWords.length + 30, afterMarkerText.length);
+            var afterCheck = afterMarkerText.substring(0, tailCheckLength);
+            
+            // 수정안 마지막 부분과 원본 마커 뒤가 겹치면 마커 범위 확장
+            for (var tailLen = Math.min(revisedClean.length, 80); tailLen >= 8; tailLen -= 4) {
+                var revisedTail = revisedClean.substring(revisedClean.length - tailLen).trim();
+                var tailPos = afterMarkerText.indexOf(revisedTail);
+                
+                if (tailPos !== -1 && tailPos <= 5) {
+                    // 마커 범위를 확장하여 중복 부분까지 포함
+                    var extendLength = tailPos + revisedTail.length;
+                    m.length += extendLength;
+                    m.matchedText = originalText.substring(m.position, m.position + m.length);
+                    console.log('   🔧 마커 범위 확장 #' + err.id + ': 중복 꼬리 ' + extendLength + '자 흡수');
+                    break;
+                }
+            }
+            
+            // 문장 단위로 중복 확인 (마침표/물음표/느낌표 기준)
+            if (m.length === markers[mi].length) {
+                var revisedSentences = revisedClean.split(/(?<=[.?!。])\s*/).filter(function(s) { return s.trim().length >= 5; });
+                if (revisedSentences.length >= 2) {
+                    var lastSentence = revisedSentences[revisedSentences.length - 1].trim();
+                    var dupPos = afterMarkerText.indexOf(lastSentence);
+                    
+                    if (dupPos !== -1 && dupPos <= 10) {
+                        var extendLength = dupPos + lastSentence.length;
+                        m.length += extendLength;
+                        m.matchedText = originalText.substring(m.position, m.position + m.length);
+                        console.log('   🔧 마커 범위 확장 #' + err.id + ': 중복 문장 "' + lastSentence.substring(0, 20) + '..." ' + extendLength + '자 흡수');
+                    }
+                }
+            }
+        }
+    }
+
     // 3단계: 위치순 정렬
     markers.sort(function(a, b) { return a.position - b.position; });
     
@@ -5171,7 +5227,49 @@ function buildStage1FixedScript() {
             console.log('   ❌ 매칭 실패 [' + err.id + ']: "' + searchText.substring(0, 25) + '..."');
         }
     }
-    
+        // 1.5단계: 수정안이 원문보다 넓은 범위를 포함하는 경우, 치환 범위 확장
+    for (var ri = 0; ri < replacements.length; ri++) {
+        var r = replacements[ri];
+        var revisedText = r.revisedText;
+        
+        if (!revisedText || revisedText === '__DELETE__') continue;
+        
+        var replEnd = r.position + r.length;
+        var afterReplText = originalText.substring(replEnd, Math.min(replEnd + 200, originalText.length));
+        
+        var revisedWords = revisedText.split(/\s+/).filter(function(w) { return w.length >= 2; });
+        
+        if (revisedWords.length >= 3) {
+            for (var tailLen = Math.min(revisedText.length, 80); tailLen >= 8; tailLen -= 4) {
+                var revisedTail = revisedText.substring(revisedText.length - tailLen).trim();
+                var tailPos = afterReplText.indexOf(revisedTail);
+                
+                if (tailPos !== -1 && tailPos <= 5) {
+                    var extendLength = tailPos + revisedTail.length;
+                    r.length += extendLength;
+                    r.matchedText = originalText.substring(r.position, r.position + r.length);
+                    console.log('   🔧 치환 범위 확장 [' + r.errorId + ']: 중복 꼬리 ' + extendLength + '자 흡수');
+                    break;
+                }
+            }
+            
+            if (r.length === replacements[ri].length) {
+                var revisedSentences = revisedText.split(/(?<=[.?!。])\s*/).filter(function(s) { return s.trim().length >= 5; });
+                if (revisedSentences.length >= 2) {
+                    var lastSentence = revisedSentences[revisedSentences.length - 1].trim();
+                    var dupPos = afterReplText.indexOf(lastSentence);
+                    
+                    if (dupPos !== -1 && dupPos <= 10) {
+                        var extendLength = dupPos + lastSentence.length;
+                        r.length += extendLength;
+                        r.matchedText = originalText.substring(r.position, r.position + r.length);
+                        console.log('   🔧 치환 범위 확장 [' + r.errorId + ']: 중복 문장 ' + extendLength + '자 흡수');
+                    }
+                }
+            }
+        }
+    }
+
     // 2단계: 위치순 정렬
     replacements.sort(function(a, b) { return a.position - b.position; });
     
