@@ -4449,7 +4449,11 @@ async function startStage2Analysis() {
             deleteScriptCache(state._cacheName);
             state._cacheName = null;
         }
-
+                // 캐시 정리
+        if (state._cacheName) {
+            deleteScriptCache(state._cacheName);
+            state._cacheName = null;
+        }
         updateProgress(100, '2차 분석 완료!');
 
         var avgScore = Math.round((scoreResult.finalScores.senior + scoreResult.finalScores.fun + scoreResult.finalScores.flow + scoreResult.finalScores.retention) / 4);
