@@ -1725,6 +1725,78 @@ function scrollToTableRow(stage, markerId) {
         }
     });
 }
+// ============================================================
+// highlightTextInContainer - 컨테이너 내 텍스트 하이라이트 (v4.58 추가)
+// 마커가 겹침으로 DOM에 없는 경우 텍스트 검색 후 시각적 강조
+// ============================================================
+function highlightTextInContainer(container, searchText, stage) {
+    if (!container || !searchText) return;
+    
+    var textNodes = [];
+    var walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
+    var node;
+    while (node = walker.nextNode()) {
+        textNodes.push(node);
+    }
+    
+    var found = false;
+    for (var i = 0; i < textNodes.length; i++) {
+        var textNode = textNodes[i];
+        var nodeText = textNode.nodeValue || '';
+        var idx = nodeText.indexOf(searchText);
+        
+        if (idx === -1 && searchText.length > 15) {
+            idx = nodeText.indexOf(searchText.substring(0, 15));
+        }
+        
+        if (idx !== -1) {
+            try {
+                var range = document.createRange();
+                var matchEnd = Math.min(idx + searchText.length, nodeText.length);
+                range.setStart(textNode, idx);
+                range.setEnd(textNode, matchEnd);
+                
+                var highlight = document.createElement('span');
+                highlight.style.cssText = 'background:#ffeb3b;color:#000;padding:2px 4px;border-radius:3px;transition:background 0.5s;';
+                range.surroundContents(highlight);
+                
+                highlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                setTimeout(function() {
+                    highlight.style.background = '#ffeb3b80';
+                }, 1500);
+                
+                setTimeout(function() {
+                    if (highlight.parentNode) {
+                        var parent = highlight.parentNode;
+                        parent.replaceChild(document.createTextNode(highlight.textContent), highlight);
+                        parent.normalize();
+                    }
+                }, 4000);
+                
+                found = true;
+            } catch (e) {
+                console.log('⚠️ highlightTextInContainer: range 생성 실패 -', e.message);
+            }
+            break;
+        }
+    }
+    
+    if (!found) {
+        var containerText = container.textContent || '';
+        var approxPos = containerText.indexOf(searchText);
+        if (approxPos === -1 && searchText.length > 10) {
+            approxPos = containerText.indexOf(searchText.substring(0, 10));
+        }
+        if (approxPos !== -1 && containerText.length > 0) {
+            var ratio = approxPos / containerText.length;
+            container.scrollTo({
+                top: Math.max(0, container.scrollHeight * ratio - 100),
+                behavior: 'smooth'
+            });
+        }
+    }
+}
 
 function scrollToMarker(stage, markerId) {
     var container = document.getElementById('revised-' + stage);
