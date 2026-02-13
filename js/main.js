@@ -1924,6 +1924,16 @@ function scrollToTableRow(stage, markerId) {
 function highlightTextInContainer(container, searchText, stage) {
     if (!container || !searchText) return;
     
+    // 기존 하이라이트가 남아있으면 먼저 제거
+    var existingHighlights = container.querySelectorAll('.temp-text-highlight');
+    existingHighlights.forEach(function(el) {
+        if (el.parentNode) {
+            var textNode = document.createTextNode(el.textContent);
+            el.parentNode.replaceChild(textNode, el);
+        }
+    });
+    container.normalize();
+    
     var textNodes = [];
     var walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
     var node;
@@ -1949,22 +1959,24 @@ function highlightTextInContainer(container, searchText, stage) {
                 range.setEnd(textNode, matchEnd);
                 
                 var highlight = document.createElement('span');
-                highlight.style.cssText = 'background:#ffeb3b;color:#000;padding:2px 4px;border-radius:3px;transition:background 0.5s;';
+                highlight.className = 'temp-text-highlight';
+                highlight.style.cssText = 'background:#ffeb3b;color:#000;padding:0;margin:0;border-radius:3px;transition:background 0.5s;display:inline;letter-spacing:normal;word-spacing:normal;';
                 range.surroundContents(highlight);
                 
                 highlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 
                 setTimeout(function() {
-                    highlight.style.background = '#ffeb3b80';
+                    if (highlight) highlight.style.background = '#ffeb3b80';
                 }, 1500);
                 
                 setTimeout(function() {
-                    if (highlight.parentNode) {
+                    if (highlight && highlight.parentNode) {
                         var parent = highlight.parentNode;
-                        parent.replaceChild(document.createTextNode(highlight.textContent), highlight);
+                        var text = document.createTextNode(highlight.textContent);
+                        parent.replaceChild(text, highlight);
                         parent.normalize();
                     }
-                }, 4000);
+                }, 3000);
                 
                 found = true;
             } catch (e) {
