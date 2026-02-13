@@ -4412,10 +4412,6 @@ async function startStage2Analysis() {
         });
         finalFixedScript = finalFixedScript.replace(/\n\s*\n\s*\n/g, '\n\n');
 
-                }
-            }
-        });
-        finalFixedScript = finalFixedScript.replace(/\n\s*\n\s*\n/g, '\n\n');
         state.stage2.fixedScript = finalFixedScript;
         state.finalScript = finalFixedScript;
 
