@@ -3718,7 +3718,7 @@ async function startStage1Analysis() {
 
         var systemPrompt = '당신은 조선시대 사극 대본 전문 검수자입니다. ' +
             '사용자가 제공한 전체 대본을 완전히 이해한 상태에서, ' +
-            '요청받은 구간과 역할에 따라 집중 분석합니다. ' +
+            '요청받은 역할에 따라 집중 분석합니다. ' +
             '전체 대본의 인물, 시간, 장소, 복선, 감정선을 모두 파악하고 있어야 합니다.';
 
         var cacheName = await createScriptCache(script, systemPrompt, 1800);
@@ -3734,69 +3734,52 @@ async function startStage1Analysis() {
         startCacheTimer(cacheName, 1800);
 
         // ============================================================
-        // STEP 1~2: 4개 역할 × 청크별 병렬 분석 (v4.58)
-        // 청크 단위로 4개 역할을 동시에 호출하여 속도 4배 향상
+        // STEP 1: 전체 대본을 4개 역할에게 동시 전송
         // ============================================================
-        var chunks = splitScriptIntoChunks(script, 6500);
+        updateProgress(10, '🔍 4개 역할 동시 분석 중...');
+        console.log('🚀 1차 분석: 전체 대본(' + script.length + '자)을 4개 역할에게 동시 전송');
+
+        var chunkInfo = '0~' + script.length + '자 (전체 대본)';
+
+        var prompt1 = buildRolePrompt('role1_historical', script, chunkInfo, script.length);
+        var prompt2 = buildRolePrompt('role2_person_time', script, chunkInfo, script.length);
+        var prompt3 = buildRolePrompt('role3_structure', script, chunkInfo, script.length);
+        var prompt4 = buildRolePrompt('role4_character', script, chunkInfo, script.length);
+
+        var results = await Promise.allSettled([
+            retryWithDelay(function() { return callGeminiAPI(prompt1, cacheName); }, 3, 3000),
+            retryWithDelay(function() { return callGeminiAPI(prompt2, cacheName); }, 3, 3000),
+            retryWithDelay(function() { return callGeminiAPI(prompt3, cacheName); }, 3, 3000),
+            retryWithDelay(function() { return callGeminiAPI(prompt4, cacheName); }, 3, 3000)
+        ]);
+
+        updateProgress(75, '🔀 결과 통합 중...');
+
         var role1Errors = [];
         var role2Errors = [];
         var role3Errors = [];
         var role4Errors = [];
+        var roleNames = ['시대고증', '인물·시간', '서사구조', '캐릭터·감정'];
+        var roleArrays = [role1Errors, role2Errors, role3Errors, role4Errors];
+        var roleIds = ['role1_historical', 'role2_person_time', 'role3_structure', 'role4_character'];
 
-        for (var i = 0; i < chunks.length; i++) {
-            var chunk = chunks[i];
-            var chunkInfo = chunk.startIndex + '~' + chunk.endIndex + '자 (' + (i + 1) + '/' + chunks.length + ' 구간)';
-            var progressPercent = 5 + Math.round(((i + 1) / chunks.length) * 70);
-
-            updateProgress(progressPercent, '🔍 청크 ' + (i + 1) + '/' + chunks.length + ' - 4개 역할 동시 분석 중...');
-            console.log('📦 청크 ' + (i + 1) + '/' + chunks.length + ' (' + chunk.text.length + '자) - 4개 역할 병렬 호출');
-
-            var prompt1 = buildRolePrompt('role1_historical', chunk.text, chunkInfo, script.length);
-            var prompt2 = buildRolePrompt('role2_person_time', chunk.text, chunkInfo, script.length);
-            var prompt3 = buildRolePrompt('role3_structure', chunk.text, chunkInfo, script.length);
-            var prompt4 = buildRolePrompt('role4_character', chunk.text, chunkInfo, script.length);
-
-            try {
-                var results = await Promise.allSettled([
-                    retryWithDelay(function() { return callGeminiAPI(prompt1, cacheName); }, 3, 2000),
-                    retryWithDelay(function() { return callGeminiAPI(prompt2, cacheName); }, 3, 2000),
-                    retryWithDelay(function() { return callGeminiAPI(prompt3, cacheName); }, 3, 2000),
-                    retryWithDelay(function() { return callGeminiAPI(prompt4, cacheName); }, 3, 2000)
-                ]);
-
-                var roleNames = ['시대고증', '인물·시간', '서사구조', '캐릭터·감정'];
-                var roleArrays = [role1Errors, role2Errors, role3Errors, role4Errors];
-                var roleIds = ['role1_historical', 'role2_person_time', 'role3_structure', 'role4_character'];
-
-                for (var r = 0; r < results.length; r++) {
-                    if (results[r].status === 'fulfilled') {
-                        var parsed = parseApiResponse(results[r].value);
-                        var errors = parsed.errors || parsed.issues || [];
-                        errors = filterNarrationErrors(errors, chunk.text);
-                        for (var e = 0; e < errors.length; e++) {
-                            errors[e]._chunkNum = i + 1;
-                            errors[e]._role = roleIds[r];
-                            roleArrays[r].push(errors[e]);
-                        }
-                        console.log('   ✅ ' + roleNames[r] + ': ' + errors.length + '개 오류');
-                    } else {
-                        console.error('   ❌ ' + roleNames[r] + ' 실패:', results[r].reason ? results[r].reason.message : '알 수 없는 오류');
-                    }
+        for (var r = 0; r < results.length; r++) {
+            if (results[r].status === 'fulfilled') {
+                var parsed = parseApiResponse(results[r].value);
+                var errors = parsed.errors || parsed.issues || [];
+                errors = filterNarrationErrors(errors, script);
+                for (var e = 0; e < errors.length; e++) {
+                    errors[e]._role = roleIds[r];
+                    roleArrays[r].push(errors[e]);
                 }
-
-            } catch (chunkError) {
-                if (chunkError.name === 'AbortError') throw chunkError;
-                console.error('❌ 청크 ' + (i + 1) + ' 병렬 호출 실패:', chunkError.message);
-            }
-
-            // 청크 간 짧은 대기 (429 방지)
-            if (i < chunks.length - 1) {
-                await new Promise(function(resolve) { setTimeout(resolve, 300); });
+                console.log('   ✅ ' + roleNames[r] + ': ' + errors.length + '개 오류');
+            } else {
+                console.error('   ❌ ' + roleNames[r] + ' 실패:', results[r].reason ? results[r].reason.message : '알 수 없는 오류');
             }
         }
 
         // ============================================================
-        // 결과 통합
+        // STEP 2: 결과 통합
         // ============================================================
         updateProgress(80, '🔀 결과 통합 중...');
         var allRoleErrors = role1Errors.concat(role2Errors).concat(role3Errors).concat(role4Errors);
@@ -3927,7 +3910,7 @@ async function startStage1AnalysisFallback(script) {
 // ============================================================
 async function startStage2Analysis() {
     console.log('🔬 ========================================');
-    console.log('🔬 2차 분석 시작 (v4.56 Context Caching + 역할 분담)');
+    console.log('🔬 2차 분석 시작 (전체 대본 동시 전송 방식)');
     console.log('🔬 ========================================');
 
     var stage1Original = state.stage1 ? state.stage1.originalScript : '';
@@ -3987,7 +3970,7 @@ async function startStage2Analysis() {
 
         var systemPrompt2 = '당신은 대한민국 방송 역사상 가장 뛰어난 사극 드라마 감독입니다.\n' +
             'KBS <대장금>, MBC <이산>, SBS <뿌리깊은 나무>, tvN <미스터 션샤인> 급의 명작 사극을 직접 연출한 경력 30년의 거장입니다.\n' +
-            '사용자가 제공한 전체 대본을 완전히 이해한 상태에서, 요청받은 구간과 역할에 따라 집중 분석합니다.\n' +
+            '사용자가 제공한 전체 대본을 완전히 이해한 상태에서, 요청받은 역할에 따라 집중 분석합니다.\n' +
             '냉정하지만 정확한 피드백으로 이 대본을 명작 수준으로 끌어올려야 합니다.';
 
         var cacheName2 = await createScriptCache(stage1FixedScript, systemPrompt2, 1800);
@@ -4002,67 +3985,61 @@ async function startStage2Analysis() {
         console.log('✅ 2차 캐시 생성 성공: ' + cacheName2);
         startCacheTimer(cacheName2, 1800);
 
+        // ============================================================
+        // STEP 1: 전체 대본을 5개 역할에게 동시 전송
+        // ============================================================
+        updateProgress(10, '🔍 5개 역할 동시 분석 중...');
+        console.log('🚀 2차 분석: 전체 대본(' + stage1FixedScript.length + '자)을 5개 역할에게 동시 전송');
 
-        var chunks = splitScriptIntoChunks(stage1FixedScript, 6500);
+        var chunkInfo = '0~' + stage1FixedScript.length + '자 (전체 대본)';
+
+        var prompt2_role2 = buildRolePrompt('role2_person_time', stage1FixedScript, chunkInfo, stage1FixedScript.length);
+        var prompt2_role3 = buildRolePrompt('role3_structure', stage1FixedScript, chunkInfo, stage1FixedScript.length);
+        var prompt2_role4 = buildRolePrompt('role4_character', stage1FixedScript, chunkInfo, stage1FixedScript.length);
+        var prompt2_role5 = buildRolePrompt('role5_dialogue', stage1FixedScript, chunkInfo, stage1FixedScript.length);
+        var prompt2_role6 = buildRolePrompt('role6_audience', '', '', 0);
+
+        var results = await Promise.allSettled([
+            retryWithDelay(function() { return callGeminiAPI(prompt2_role2, cacheName2); }, 3, 3000),
+            retryWithDelay(function() { return callGeminiAPI(prompt2_role3, cacheName2); }, 3, 3000),
+            retryWithDelay(function() { return callGeminiAPI(prompt2_role4, cacheName2); }, 3, 3000),
+            retryWithDelay(function() { return callGeminiAPI(prompt2_role5, cacheName2); }, 3, 3000),
+            retryWithDelay(function() { return callGeminiAPI(prompt2_role6, cacheName2); }, 3, 3000)
+        ]);
+
+        updateProgress(70, '🔀 결과 통합 중...');
+
         var allRoleErrors = [];
+        var roleNames = ['인물·시간', '서사구조', '캐릭터·감정', '대사품질', '시청자몰입'];
+        var roleIds = ['role2_person_time', 'role3_structure', 'role4_character', 'role5_dialogue', 'role6_audience'];
+        var role6Scores = null;
+        var role6ScoreDetails = null;
 
-        // ============================================================
-        // STEP 1: 역할 ② 인물·시간 (미세한 부분)
-        // ============================================================
-        updateProgress(5, '🔍 역할②: 인물·시간 정밀 검증 중...');
-        var role2Errors = await runRoleAnalysis('role2_person_time', '인물·시간 검증관', chunks, cacheName2, stage1FixedScript.length);
-        allRoleErrors = allRoleErrors.concat(role2Errors);
-        updateProgress(18, '🔍 역할②: 완료 (' + role2Errors.length + '개)');
+        for (var r = 0; r < results.length; r++) {
+            if (results[r].status === 'fulfilled') {
+                var parsed = parseApiResponse(results[r].value);
+                var errors = parsed.errors || parsed.issues || [];
+                errors = filterNarrationErrors(errors, stage1FixedScript);
+                for (var e = 0; e < errors.length; e++) {
+                    errors[e]._role = roleIds[r];
+                    allRoleErrors.push(errors[e]);
+                }
+                console.log('   ✅ ' + roleNames[r] + ': ' + errors.length + '개 오류');
 
-        // ============================================================
-        // STEP 2: 역할 ③ 서사 구조 (복선/떡밥 회수)
-        // ============================================================
-        updateProgress(20, '🔍 역할③: 서사 구조 정밀 검증 중...');
-        var role3Errors = await runRoleAnalysis('role3_structure', '서사 구조 편집자', chunks, cacheName2, stage1FixedScript.length);
-        allRoleErrors = allRoleErrors.concat(role3Errors);
-        updateProgress(33, '🔍 역할③: 완료 (' + role3Errors.length + '개)');
-
-        // ============================================================
-        // STEP 3: 역할 ④ 캐릭터·감정 (호칭 일관성)
-        // ============================================================
-        updateProgress(35, '🔍 역할④: 캐릭터·감정선 정밀 검증 중...');
-        var role4Errors = await runRoleAnalysis('role4_character', '캐릭터·감정선 감독', chunks, cacheName2, stage1FixedScript.length);
-        allRoleErrors = allRoleErrors.concat(role4Errors);
-        updateProgress(48, '🔍 역할④: 완료 (' + role4Errors.length + '개)');
-
-        // ============================================================
-        // STEP 4: 역할 ⑤ 대사 품질
-        // ============================================================
-        updateProgress(50, '🔍 역할⑤: 대사 품질 검수 중...');
-        var role5Errors = await runRoleAnalysis('role5_dialogue', '대사 품질 검수관', chunks, cacheName2, stage1FixedScript.length);
-        allRoleErrors = allRoleErrors.concat(role5Errors);
-        updateProgress(65, '🔍 역할⑤: 완료 (' + role5Errors.length + '개)');
-
-        // ============================================================
-        // STEP 5: 결과 통합 + 역할 ⑥ 종합 평가
-        // ============================================================
-        updateProgress(67, '🔀 결과 통합 중...');
-        var mergedErrors = mergeRoleResults(allRoleErrors);
-
-        updateProgress(70, '🔍 역할⑥: 시청자 몰입도 종합 평가 중...');
-        var role6Result = await runRole6Audience(cacheName2, mergedErrors);
-
-        var role6Issues = role6Result.issues || [];
-        role6Issues = filterNarrationErrors(role6Issues, stage1FixedScript);
-        for (var ri = 0; ri < role6Issues.length; ri++) {
-            role6Issues[ri]._role = 'role6_audience';
-            mergedErrors.push(role6Issues[ri]);
+                // 역할⑥에서 점수 추출
+                if (r === 4) {
+                    role6Scores = parsed.scores || null;
+                    role6ScoreDetails = parsed.scoreDetails || null;
+                }
+            } else {
+                console.error('   ❌ ' + roleNames[r] + ' 실패:', results[r].reason ? results[r].reason.message : '알 수 없는 오류');
+            }
         }
 
-        var filteredIssues = mergedErrors;
+        var mergedErrors = mergeRoleResults(allRoleErrors);
 
         console.log('🔬 2차 분석 결과 요약:');
-        console.log('   ② 인물·시간: ' + role2Errors.length + '개');
-        console.log('   ③ 서사 구조: ' + role3Errors.length + '개');
-        console.log('   ④ 캐릭터·감정: ' + role4Errors.length + '개');
-        console.log('   ⑤ 대사 품질: ' + role5Errors.length + '개');
-        console.log('   ⑥ 시청자 몰입: ' + role6Issues.length + '개');
-        console.log('   → 통합 후: ' + filteredIssues.length + '개');
+        console.log('   → 통합 후: ' + mergedErrors.length + '개');
 
         updateProgress(75, '결과 저장 중...');
 
@@ -4072,7 +4049,7 @@ async function startStage2Analysis() {
         state.stage2 = {
             originalScript: stage1FixedScript,
             analysis: [],
-            allErrors: filteredIssues.map(function(err, idx) {
+            allErrors: mergedErrors.map(function(err, idx) {
                 return {
                     id: 'stage2-error-' + idx,
                     type: err.type || '기타',
@@ -4110,8 +4087,8 @@ async function startStage2Analysis() {
         // ============================================================
         // 점수 계산
         // ============================================================
-        var aiScores = role6Result.scores || { senior: 75, fun: 75, flow: 75, retention: 75 };
-        var scoreDetails = role6Result.scoreDetails || {};
+        var aiScores = role6Scores || { senior: 75, fun: 75, flow: 75, retention: 75 };
+        var scoreDetails = role6ScoreDetails || {};
 
         var scoreResult = null;
         try {
@@ -4128,10 +4105,10 @@ async function startStage2Analysis() {
 
         var improvements = [];
 
-        updateProgress(85, '100점 대본 생성 중...');
+        updateProgress(85, '결과 정리 중...');
 
         // ============================================================
-        // 100점 대본
+        // 100점 대본 (2차 수정본을 기본값으로)
         // ============================================================
         state.perfectScript = finalFixedScript;
 
@@ -4148,7 +4125,7 @@ async function startStage2Analysis() {
         // ============================================================
         // 결과 표시
         // ============================================================
-        displayStage2Results(filteredIssues);
+        displayStage2Results(mergedErrors);
         displayScoresAndPerfectScript(scoreResult.finalScores, scoreResult.deductions, improvements);
 
         // 캐시 정리
@@ -4179,9 +4156,6 @@ async function startStage2Analysis() {
     }
 }
 
-// ============================================================
-// startStage2AnalysisFallback - 캐시 실패 시 기존 방식으로 폴백
-// ============================================================
 async function startStage2AnalysisFallback(stage1FixedScript, stage1Original, stage1AppliedList, stage1AppliedCount) {
     console.log('⚠️ 폴백 모드: 기존 방식(요약+청크)으로 2차 분석');
 
