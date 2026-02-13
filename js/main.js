@@ -5903,10 +5903,93 @@ async function generatePerfectScriptFromScores() {
         // ============================================================
         // 최종 결과 저장 및 표시
         // ============================================================
-        updateProgress(90, '결과 처리 중...');
+                // ============================================================
+        // 최종 결과 저장 및 표시
+        // ============================================================
+        updateProgress(88, '결과 처리 중...');
         
         if (!currentScript || currentScript.length < 100) {
             throw new Error('100점 대본 생성 결과가 너무 짧습니다. 다시 시도해주세요.');
+        }
+        
+        // ============================================================
+        // 잘림 감지 및 이어쓰기 (v4.58)
+        // 마지막 페르소나 출력이 토큰 한도로 잘렸으면 이어쓰기 요청
+        // ============================================================
+        var originalLength = finalScript.length;
+        var currentLength = currentScript.length;
+        
+        // 잘림 판단: 원본의 90% 미만이거나, 마지막이 문장 종결이 아닌 경우
+        var lastChar = currentScript.trim().slice(-1);
+        var isIncomplete = (currentLength < originalLength * 0.95) || 
+                           (lastChar !== '.' && lastChar !== '!' && lastChar !== '?' && lastChar !== '"' && lastChar !== ')');
+        
+        if (isIncomplete) {
+            console.log('⚠️ 대본 잘림 감지: ' + currentLength + '자 / 원본 ' + originalLength + '자 (' + Math.round(currentLength / originalLength * 100) + '%)');
+            console.log('   마지막 문자: "' + lastChar + '" → 이어쓰기 시작');
+            
+            updateProgress(90, '💯 잘린 부분 이어쓰기 중...');
+            
+            // 마지막 500자를 컨텍스트로 전달
+            var lastContext = currentScript.substring(currentScript.length - 500);
+            
+            // 원본에서 잘린 이후 부분 추출
+            var cutPosition = finalScript.indexOf(lastContext.substring(0, 50));
+            var remainingOriginal = '';
+            if (cutPosition !== -1) {
+                remainingOriginal = finalScript.substring(cutPosition + 500);
+            } else {
+                // 위치 못 찾으면 비율로 추정
+                var estimatedCutPos = Math.floor(finalScript.length * (currentLength / originalLength));
+                remainingOriginal = finalScript.substring(Math.max(0, estimatedCutPos - 200));
+            }
+            
+            var continuePrompt = '이전 작업에서 대본 수정이 중간에 끊겼습니다.\n' +
+                '아래에 지금까지 수정된 대본의 마지막 부분과, 아직 수정하지 못한 원본 부분이 있습니다.\n' +
+                '끊긴 곳부터 이어서 수정을 완료해주세요.\n\n' +
+                '## 규칙\n' +
+                '1. 지금까지의 수정 내용(기존 태그 [SENIOR], [FUN], [FLOW], [RETAIN], [DEL])은 건드리지 마세요.\n' +
+                '2. 끊긴 부분부터 자연스럽게 이어쓰세요.\n' +
+                '3. 남은 원본 부분에 대해서도 필요한 개선을 적용하세요.\n' +
+                '4. 수정한 부분에는 동일한 태그를 사용하세요.\n' +
+                '5. 앞뒤 설명 없이 이어지는 대본만 출력하세요.\n\n' +
+                '## 지금까지 수정된 대본의 마지막 부분:\n\n' +
+                '...' + lastContext + '\n\n' +
+                '## 아직 수정하지 못한 원본 부분:\n\n' +
+                remainingOriginal;
+            
+            try {
+                var continueResult = await callGeminiAPI(continuePrompt, cacheName);
+                continueResult = continueResult.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
+                
+                if (continueResult && continueResult.length > 50) {
+                    // 중복 방지: 마지막 컨텍스트와 겹치는 부분 제거
+                    var overlapCheck = lastContext.substring(lastContext.length - 100);
+                    var overlapIdx = continueResult.indexOf(overlapCheck);
+                    
+                    if (overlapIdx !== -1) {
+                        continueResult = continueResult.substring(overlapIdx + overlapCheck.length);
+                    }
+                    
+                    currentScript = currentScript.trimEnd() + '\n' + continueResult.trimStart();
+                    console.log('✅ 이어쓰기 완료: +' + continueResult.length + '자 → 총 ' + currentScript.length + '자');
+                } else {
+                    console.log('⚠️ 이어쓰기 결과가 너무 짧아 원본으로 보완');
+                    // 원본의 나머지 부분을 그대로 붙임
+                    if (remainingOriginal && remainingOriginal.length > 50) {
+                        currentScript = currentScript.trimEnd() + '\n' + remainingOriginal.trimStart();
+                    }
+                }
+            } catch (continueError) {
+                console.error('⚠️ 이어쓰기 실패:', continueError.message);
+                // 원본의 나머지 부분을 그대로 붙임
+                if (remainingOriginal && remainingOriginal.length > 50) {
+                    currentScript = currentScript.trimEnd() + '\n' + remainingOriginal.trimStart();
+                    console.log('⚠️ 원본으로 보완: +' + remainingOriginal.length + '자');
+                }
+            }
+        } else {
+            console.log('✅ 대본 잘림 없음: ' + currentLength + '자 (' + Math.round(currentLength / originalLength * 100) + '%)');
         }
         
         // state에 저장
