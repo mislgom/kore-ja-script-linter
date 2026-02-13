@@ -236,6 +236,7 @@ function initApp() {
     createCompareModal();
     initEscKeyHandler();
     initResetCacheButton();
+    initPerfectScriptSection();
     console.log('📊 총 ' + getTotalRulesCount() + '개 시대고증 규칙 로드됨');
     console.log('⏱️ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('🤖 모델: ' + API_CONFIG.MODEL);
@@ -4493,6 +4494,7 @@ function displayScoresAndPerfectScript(scores, deductions, improvements) {
     if (downloadBtn) downloadBtn.disabled = false;
     
     console.log('📊 점수 표시 완료 - 평균:', avgScore);
+    showPerfectScriptSection();
 }
 
 // ============================================================
@@ -5626,6 +5628,225 @@ function showCacheExtendedSuccess() {
 // ============================================================
 // 캐시 초기화 버튼 (v4.57 추가)
 // ============================================================
+// ============================================================
+// 100점 대본 생성 시스템 (v4.58 추가)
+// 최종 수정 반영 대본 + 점수별 개선방안을 AI에게 보내 100점 대본 생성
+// ============================================================
+
+function initPerfectScriptSection() {
+    var generateBtn = document.getElementById('btn-generate-perfect');
+    if (generateBtn) {
+        generateBtn.addEventListener('click', generatePerfectScriptFromScores);
+    }
+    
+    var downloadPerfectBtn = document.getElementById('btn-download-perfect');
+    if (downloadPerfectBtn) {
+        downloadPerfectBtn.addEventListener('click', function() {
+            downloadPerfectScript();
+        });
+    }
+    
+    var compareBtn = document.getElementById('btn-compare-scripts');
+    if (compareBtn) {
+        compareBtn.addEventListener('click', function() {
+            openCompareModal();
+        });
+    }
+}
+
+function showPerfectScriptSection() {
+    var section = document.getElementById('perfect-script-section');
+    if (section) {
+        section.style.display = 'block';
+    }
+}
+
+async function generatePerfectScriptFromScores() {
+    // 최종 수정 반영 대본 가져오기
+    var finalScript = state.stage2.fixedScript || state.stage1.fixedScript || state.finalScript || '';
+    
+    if (!finalScript || finalScript.trim().length < 50) {
+        alert('2차 분석을 먼저 완료해주세요.\n최종 수정 반영 대본이 필요합니다.');
+        return;
+    }
+    
+    var apiKey = localStorage.getItem('GEMINI_API_KEY');
+    if (!apiKey) {
+        alert('API 키를 먼저 설정해주세요.');
+        return;
+    }
+    
+    // 점수 및 감점 사항 수집
+    var scores = state.scores ? state.scores.finalScores : null;
+    var deductions = state.scores ? state.scores.deductions : null;
+    
+    if (!scores) {
+        alert('점수 정보가 없습니다.\n2차 분석을 먼저 완료해주세요.');
+        return;
+    }
+    
+    var generateBtn = document.getElementById('btn-generate-perfect');
+    if (generateBtn) {
+        generateBtn.disabled = true;
+        generateBtn.textContent = '⏳ 100점 대본 생성 중...';
+    }
+    
+    var display = document.getElementById('perfect-script-display');
+    if (display) {
+        display.innerHTML = '<div style="text-align:center;padding:30px;color:#ffaa00;font-size:16px;">⏳ AI가 100점 대본을 생성하고 있습니다...<br><span style="font-size:12px;color:#aaa;">약 1~2분 소요됩니다.</span></div>';
+    }
+    
+    showProgress('💯 100점 대본 생성 중...');
+    updateProgress(10, '프롬프트 구성 중...');
+    
+    try {
+        // 감점 사항을 텍스트로 변환
+        var deductionText = '';
+        
+        deductionText += '\n### 시니어 적합도 (현재 ' + scores.senior + '점)\n';
+        if (deductions.senior && deductions.senior.length > 0) {
+            deductions.senior.forEach(function(d) { deductionText += '- ' + d + '\n'; });
+        } else {
+            deductionText += '- 감점 없음\n';
+        }
+        
+        deductionText += '\n### 재미 요소 (현재 ' + scores.fun + '점)\n';
+        if (deductions.fun && deductions.fun.length > 0) {
+            deductions.fun.forEach(function(d) { deductionText += '- ' + d + '\n'; });
+        } else {
+            deductionText += '- 감점 없음\n';
+        }
+        
+        deductionText += '\n### 이야기 흐름 (현재 ' + scores.flow + '점)\n';
+        if (deductions.flow && deductions.flow.length > 0) {
+            deductions.flow.forEach(function(d) { deductionText += '- ' + d + '\n'; });
+        } else {
+            deductionText += '- 감점 없음\n';
+        }
+        
+        deductionText += '\n### 시청자 이탈 방지 (현재 ' + scores.retention + '점)\n';
+        if (deductions.retention && deductions.retention.length > 0) {
+            deductions.retention.forEach(function(d) { deductionText += '- ' + d + '\n'; });
+        } else {
+            deductionText += '- 감점 없음\n';
+        }
+        
+        var avgScore = Math.round((scores.senior + scores.fun + scores.flow + scores.retention) / 4);
+        
+        var prompt = '당신은 대한민국 최고의 사극 드라마 작가입니다.\n' +
+            '아래 대본은 현재 평균 ' + avgScore + '점입니다.\n' +
+            '이 대본을 100점으로 만들어야 합니다.\n\n' +
+            '## 📊 현재 점수 및 감점 사항\n' +
+            deductionText + '\n\n' +
+            '## 🎯 수정 원칙 (반드시 준수!)\n\n' +
+            '1. **원본 대본의 줄거리, 인물, 사건은 절대 변경하지 마세요!**\n' +
+            '2. **새로운 인물이나 사건을 추가하지 마세요!**\n' +
+            '3. **대본의 전체 구조와 장면 순서를 유지하세요!**\n' +
+            '4. 감점 사항만 정확히 개선하세요:\n' +
+            '   - 50자 초과 대사 → 2~3문장으로 분리\n' +
+            '   - 30~50자 대사 → 더 짧고 간결하게\n' +
+            '   - 불명확한 대명사(그가/그녀가) → 구체적 이름으로\n' +
+            '   - 문어체 대사 → 자연스러운 구어체로\n' +
+            '   - 갈등/반전 부족 → 기존 장면 내에서 긴장감 강화\n' +
+            '   - 감정 표현 부족 → 지문/대사에 감정 추가\n' +
+            '   - 장면 전환 부족 → 연결어 추가\n' +
+            '   - 초반 훅 부재 → 첫 장면 긴장감 강화\n' +
+            '   - 클리프행어 부재 → 마지막 장면 궁금증 추가\n' +
+            '5. 나레이션은 수정하지 마세요!\n' +
+            '6. 수정한 부분은 ★ 표시로 감싸주세요.\n' +
+            '   예: ★수정된 대사★\n\n' +
+            '## 📝 수정 대상 대본 (전문)\n\n' +
+            finalScript + '\n\n' +
+            '## 📤 응답 규칙\n\n' +
+            '1. 대본 전문을 처음부터 끝까지 모두 출력하세요.\n' +
+            '2. 수정한 부분만 ★ 표시로 감싸세요.\n' +
+            '3. 수정하지 않은 부분은 원본 그대로 유지하세요.\n' +
+            '4. JSON이 아닌 **대본 텍스트만** 출력하세요.\n' +
+            '5. 앞뒤 설명 없이 대본만 출력하세요.';
+        
+        updateProgress(30, 'AI에게 100점 대본 요청 중...');
+        
+        var cacheName = state._cacheName || null;
+        var response = await callGeminiAPI(prompt, cacheName);
+        
+        updateProgress(80, '100점 대본 처리 중...');
+        
+        // 응답에서 코드블록 제거
+        var perfectText = response;
+        perfectText = perfectText.replace(/```[a-z]*\n?/g, '').replace(/```/g, '');
+        perfectText = perfectText.trim();
+        
+        if (!perfectText || perfectText.length < 100) {
+            throw new Error('AI 응답이 너무 짧습니다. 다시 시도해주세요.');
+        }
+        
+        // state에 저장
+        state.perfectScript = perfectText;
+        
+        // 변경 포인트 추출
+        state.changePoints = [];
+        try {
+            var changes = findDifferences(finalScript, perfectText);
+            state.changePoints = changes.slice(0, 15);
+        } catch (diffError) {
+            state.changePoints = [];
+        }
+        
+        updateProgress(90, '결과 표시 중...');
+        
+        // 100점 대본 표시
+        displayPerfectScriptResult(perfectText, finalScript);
+        
+        updateProgress(100, '💯 100점 대본 생성 완료!');
+        setTimeout(hideProgress, 1000);
+        
+    } catch (error) {
+        console.error('❌ 100점 대본 생성 실패:', error);
+        if (display) {
+            display.innerHTML = '<div style="text-align:center;padding:30px;color:#ff5555;font-size:16px;">❌ 생성 실패: ' + error.message + '<br><span style="font-size:12px;color:#aaa;">다시 시도해주세요.</span></div>';
+        }
+        hideProgress();
+        if (error.name !== 'AbortError') {
+            alert('100점 대본 생성 중 오류: ' + error.message);
+        }
+    } finally {
+        if (generateBtn) {
+            generateBtn.disabled = false;
+            generateBtn.textContent = '💯 100점 대본 생성';
+        }
+    }
+}
+
+function displayPerfectScriptResult(perfectText, originalText) {
+    var display = document.getElementById('perfect-script-display');
+    if (!display) return;
+    
+    // ★ 표시된 부분을 녹색 하이라이트로 변환
+    var htmlContent = escapeHtml(perfectText);
+    htmlContent = htmlContent.replace(/★([^★]+)★/g, '<span class="perfect-modified">$1</span>');
+    
+    // 수정된 부분 카운트
+    var modifiedCount = (perfectText.match(/★/g) || []).length / 2;
+    
+    var html = '<div style="padding:15px;">' +
+        '<div style="text-align:center;margin-bottom:15px;">' +
+        '<span style="font-size:16px;font-weight:bold;color:#FFD700;">💯 100점 대본 생성 완료</span>' +
+        '<span style="margin-left:15px;font-size:13px;color:#69f0ae;">수정 ' + Math.round(modifiedCount) + '개소 (녹색 표시)</span>' +
+        '</div>' +
+        '<div id="perfect-script-content" class="perfect-script-content">' + htmlContent + '</div>' +
+        '</div>';
+    
+    display.innerHTML = html;
+    
+    // 버튼 표시
+    var buttons = document.getElementById('perfect-script-buttons');
+    if (buttons) {
+        buttons.style.display = 'flex';
+    }
+    
+    console.log('💯 100점 대본 표시 완료: ' + perfectText.length + '자, 수정 약 ' + Math.round(modifiedCount) + '개소');
+}
+
 function initResetCacheButton() {
     var btn = document.getElementById('btn-reset-cache');
     if (!btn) return;
