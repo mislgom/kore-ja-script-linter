@@ -4382,15 +4382,46 @@ async function startStage2Analysis() {
             isFixed: false
         };
 
-        // 최종 수정 반영 대본 생성
+                // 최종 수정 반영 대본 생성 (공백/줄바꿈 차이 허용 매칭)
         var finalFixedScript = stage1FixedScript;
         state.stage2.allErrors.forEach(function(err) {
             if (err.useRevised && err.original && err.revised) {
                 var fixedRevised = cleanRevisedText(err.revised);
-                if (fixedRevised === '__DELETE__') {
-                    finalFixedScript = finalFixedScript.split(err.original).join('');
+                var searchText = err.original;
+                
+                // 1차: 정확한 매칭
+                if (finalFixedScript.indexOf(searchText) !== -1) {
+                    if (fixedRevised === '__DELETE__') {
+                        finalFixedScript = finalFixedScript.split(searchText).join('');
+                    } else {
+                        finalFixedScript = finalFixedScript.split(searchText).join(fixedRevised);
+                    }
                 } else {
-                    finalFixedScript = finalFixedScript.split(err.original).join(fixedRevised);
+                    // 2차: 공백/줄바꿈 차이 허용 매칭
+                    var searchWords = searchText.split(/\s+/).filter(function(w) { return w.length > 0; });
+                    if (searchWords.length >= 2) {
+                        var regexStr = searchWords.map(function(w) {
+                            return w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        }).join('\\s+');
+                        try {
+                            var regex = new RegExp(regexStr);
+                            var match = finalFixedScript.match(regex);
+                            if (match) {
+                                if (fixedRevised === '__DELETE__') {
+                                    finalFixedScript = finalFixedScript.replace(match[0], '');
+                                } else {
+                                    finalFixedScript = finalFixedScript.replace(match[0], fixedRevised);
+                                }
+                            }
+                        } catch (e) {
+                            // regex 오류 무시
+                        }
+                    }
+                }
+            }
+        });
+        finalFixedScript = finalFixedScript.replace(/\n\s*\n\s*\n/g, '\n\n');
+
                 }
             }
         });
@@ -5743,11 +5774,36 @@ function fixScript(stage) {
     errors.forEach(function(err) {
         if (err.useRevised && err.original && err.revised) {
             var fixedRevised = cleanRevisedText(err.revised);
-            if (fixedRevised === '__DELETE__') {
-                // 삭제 지시: 해당 원본 텍스트를 빈 문자열로 치환
-                text = text.split(err.original).join('');
+            var searchText = err.original;
+            
+            // 1차: 정확한 매칭
+            if (text.indexOf(searchText) !== -1) {
+                if (fixedRevised === '__DELETE__') {
+                    text = text.split(searchText).join('');
+                } else {
+                    text = text.split(searchText).join(fixedRevised);
+                }
             } else {
-                text = text.split(err.original).join(fixedRevised);
+                // 2차: 공백/줄바꿈 차이 허용 매칭
+                var searchWords = searchText.split(/\s+/).filter(function(w) { return w.length > 0; });
+                if (searchWords.length >= 2) {
+                    var regexStr = searchWords.map(function(w) {
+                        return w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    }).join('\\s+');
+                    try {
+                        var regex = new RegExp(regexStr);
+                        var match = text.match(regex);
+                        if (match) {
+                            if (fixedRevised === '__DELETE__') {
+                                text = text.replace(match[0], '');
+                            } else {
+                                text = text.replace(match[0], fixedRevised);
+                            }
+                        }
+                    } catch (e) {
+                        // regex 오류 무시
+                    }
+                }
             }
         }
     });
@@ -5757,24 +5813,8 @@ function fixScript(stage) {
     s.isFixed = true;
     if (stage === 'stage2') state.finalScript = text;
     renderScriptWithMarkers(stage);
-    alert((stage === 'stage1' ? '1차' : '최종') + ' 수정본이 적용되었습니다.');
+    alert((stage === 'stage1' ? '1차' : (stage === 'stage2' ? '최종' : '재분석')) + ' 수정본이 적용되었습니다.');
 }
-
-// ============================================================
-// 캐시 TTL 모니터링 + 연장 시스템 (v4.57 추가)
-// - 캐시 생성 시 카운트다운 타이머 시작
-// - 만료 2분 전 경고 바 표시 + 알림음
-// - [15분 연장] 버튼 클릭 시 PATCH API로 TTL 갱신
-// - 분석 완료 시 타이머 + 경고 바 자동 제거
-// ============================================================
-
-var cacheTimer = {
-    intervalId: null,
-    remainingSeconds: 0,
-    cacheName: null,
-    warningShown: false,
-    WARNING_THRESHOLD: 120
-};
 
 function startCacheTimer(cacheName, ttlSeconds) {
     stopCacheTimer();
