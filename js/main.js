@@ -3637,7 +3637,7 @@ async function startStage1Analysis() {
         // ============================================================
         // STEP 1: 역할 ①② 실행 (팩트 검증 계열)
         // ============================================================
-        var chunks = splitScriptIntoChunks(script, 5000);
+        var chunks = splitScriptIntoChunks(script, 6500);
         var allRoleErrors = [];
 
         updateProgress(5, '🔍 STEP 1: 시대고증 + 인물·시간 검증 중...');
@@ -3726,7 +3726,7 @@ async function startStage1AnalysisFallback(script) {
         state.scriptSummary = scriptSummary;
 
         updateProgress(5, '📋 2패스: 청크별 오류 분석 준비 중...');
-        var chunks = splitScriptIntoChunks(script, 5000);
+        var chunks = splitScriptIntoChunks(script, 6500);
         var scriptContext = extractScriptContext(script);
         var allErrors = [];
         var allAnalysis = [];
@@ -3881,7 +3881,7 @@ async function startStage2Analysis() {
         startCacheTimer(cacheName2, 1800);
 
 
-        var chunks = splitScriptIntoChunks(stage1FixedScript, 5000);
+        var chunks = splitScriptIntoChunks(stage1FixedScript, 6500);
         var allRoleErrors = [];
 
         // ============================================================
@@ -4064,7 +4064,7 @@ async function startStage2AnalysisFallback(stage1FixedScript, stage1Original, st
     console.log('⚠️ 폴백 모드: 기존 방식(요약+청크)으로 2차 분석');
 
     try {
-        var chunks = splitScriptIntoChunks(stage1FixedScript, 5000);
+        var chunks = splitScriptIntoChunks(stage1FixedScript, 6500);
         var scriptContext = extractScriptContext(stage1FixedScript);
         var allIssues = [];
         var allAnalysisResults = [];
