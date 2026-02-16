@@ -1373,7 +1373,7 @@ function scrollToMarker(stage, markerId) {
     // 방법 1: data-marker-id로 마커 찾기
     var marker = container.querySelector('.correction-marker[data-marker-id="' + markerId + '"]');
 
-    // 방법 2: 텍스트 검색
+    // 방법 2: 텍스트 검색으로 마커 찾기
     if (!marker && targetError) {
         var allMarkers = container.querySelectorAll('.correction-marker');
         var searchTexts = [];
@@ -1381,6 +1381,8 @@ function scrollToMarker(stage, markerId) {
         if (targetError.original) {
             searchTexts.push(targetError.original);
             searchTexts.push(targetError.original.split(/[\r\n]/)[0].trim());
+            var words = targetError.original.split(/\s+/).filter(function(w) { return w.length >= 3; });
+            if (words.length >= 2) searchTexts.push(words[0]);
         }
         if (targetError.matchedOriginal) {
             searchTexts.push(targetError.matchedOriginal);
@@ -1401,7 +1403,7 @@ function scrollToMarker(stage, markerId) {
                     marker = allMarkers[j];
                     break;
                 }
-                if (st.length > 15 && markerText.indexOf(st.substring(0, 15)) !== -1) {
+                if (st.length > 10 && markerText.indexOf(st.substring(0, 10)) !== -1) {
                     marker = allMarkers[j];
                     break;
                 }
@@ -1409,7 +1411,7 @@ function scrollToMarker(stage, markerId) {
         }
     }
 
-    // 방법 3: 텍스트 위치 기반 스크롤
+    // 방법 3: 컨테이너 전체 텍스트에서 위치 찾아 스크롤
     if (!marker && targetError) {
         var containerText = container.innerText || container.textContent || '';
         var searchCandidates = [];
@@ -1418,6 +1420,13 @@ function scrollToMarker(stage, markerId) {
             searchCandidates.push(targetError.original);
             searchCandidates.push(targetError.original.replace(/[\r\n]+/g, ' ').trim());
             searchCandidates.push(targetError.original.split(/[\r\n]/)[0].trim());
+            // 핵심 구절 추출 (첫 문장)
+            var firstSentence = targetError.original.split(/[.!?。]/)[0].trim();
+            if (firstSentence.length >= 5) searchCandidates.push(firstSentence);
+            // 핵심 단어 조합
+            var keyWords = targetError.original.replace(/[\r\n]+/g, ' ').split(/\s+/).filter(function(w) { return w.length >= 3; });
+            if (keyWords.length >= 2) searchCandidates.push(keyWords[0] + ' ' + keyWords[1]);
+            if (keyWords.length >= 1) searchCandidates.push(keyWords[0]);
         }
         if (targetError.matchedOriginal) {
             searchCandidates.push(targetError.matchedOriginal);
@@ -1426,22 +1435,48 @@ function scrollToMarker(stage, markerId) {
             var cleanRev = cleanRevisedText(targetError.revised);
             if (cleanRev && cleanRev !== '__DELETE__') {
                 searchCandidates.push(cleanRev);
+                var revFirstSentence = cleanRev.split(/[.!?。]/)[0].trim();
+                if (revFirstSentence.length >= 5) searchCandidates.push(revFirstSentence);
             }
         }
 
         var foundIndex = -1;
         for (var s = 0; s < searchCandidates.length && foundIndex === -1; s++) {
             var candidate = searchCandidates[s];
-            if (!candidate || candidate.length < 5) continue;
+            if (!candidate || candidate.length < 3) continue;
             foundIndex = containerText.indexOf(candidate);
-            if (foundIndex === -1 && candidate.length > 15) {
-                foundIndex = containerText.indexOf(candidate.substring(0, 15));
+            if (foundIndex === -1 && candidate.length > 10) {
+                foundIndex = containerText.indexOf(candidate.substring(0, 10));
+            }
+            if (foundIndex === -1 && candidate.length > 5) {
+                foundIndex = containerText.indexOf(candidate.substring(0, 5));
             }
         }
 
         if (foundIndex !== -1 && containerText.length > 0) {
             var scrollRatio = foundIndex / containerText.length;
-            container.scrollTo({ top: Math.max(0, container.scrollHeight * scrollRatio - 100), behavior: 'smooth' });
+            var targetScroll = Math.max(0, container.scrollHeight * scrollRatio - 100);
+            container.scrollTo({ top: targetScroll, behavior: 'smooth' });
+
+            // 해당 위치 근처 텍스트 노드에 임시 하이라이트
+            setTimeout(function() {
+                var allNodes = container.querySelectorAll('span, p, div');
+                for (var n = 0; n < allNodes.length; n++) {
+                    var nodeText = allNodes[n].textContent || '';
+                    var checkText = searchCandidates[0] || '';
+                    if (checkText.length >= 5 && nodeText.indexOf(checkText.substring(0, Math.min(15, checkText.length))) !== -1) {
+                        allNodes[n].style.transition = 'background 0.3s';
+                        allNodes[n].style.background = '#ffeb3b';
+                        allNodes[n].style.borderRadius = '3px';
+                        (function(node) {
+                            setTimeout(function() {
+                                node.style.background = '';
+                            }, 2000);
+                        })(allNodes[n]);
+                        break;
+                    }
+                }
+            }, 500);
             return;
         }
 
