@@ -494,7 +494,7 @@ function initDownloadButton() {
     var btn = document.getElementById('btn-download');
     if (!btn) return;
     btn.addEventListener('click', function() {
-        var script = state.stage1.fixedScript || state.finalScript || '';
+        var script = state.stage1.fixedScript || '';
         if (!script || script.trim() === '') {
             alert('다운로드할 수정본이 없습니다.\n"대본 픽스" 버튼을 먼저 눌러주세요.');
             return;
@@ -630,22 +630,9 @@ function addRevertButton(container, stage) {
     btnFix.disabled = true;
     btnFix.addEventListener('click', function() { fixScript(stage); });
 
-    var btnDownload = document.createElement('button');
-    btnDownload.innerHTML = '💾 수정본 다운로드';
-    btnDownload.style.cssText = 'background:#9C27B0;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
-    btnDownload.addEventListener('click', function() {
-        var scriptToDownload = state.stage1.fixedScript || state.finalScript || '';
-        if (!scriptToDownload || scriptToDownload.trim() === '') {
-            alert('다운로드할 수정본이 없습니다.\n"대본 픽스" 버튼을 먼저 눌러주세요.');
-            return;
-        }
-        downloadScript(scriptToDownload);
-    });
-
     wrapper.appendChild(btnBefore);
     wrapper.appendChild(btnAfter);
     wrapper.appendChild(btnFix);
-    wrapper.appendChild(btnDownload);
     parent.appendChild(wrapper);
 }
 
