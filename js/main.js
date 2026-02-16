@@ -1589,7 +1589,7 @@ async function callGeminiAPI(prompt, cacheName) {
     var requestBody = {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-            temperature: 0.1,
+            temperature: 0.4,
             topK: 40,
             topP: 0.95,
             maxOutputTokens: API_CONFIG.MAX_OUTPUT_TOKENS
