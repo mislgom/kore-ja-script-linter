@@ -1794,7 +1794,7 @@ function renderScriptWithMarkers(stage) {
         // 마커 HTML (v4.54: __DELETE__ 마커 처리 추가)
         var display = (err.useRevised && err.revised) ? cleanRevisedText(err.revised) : m.matchedText;
         var cls = (err.useRevised && err.revised) ? 'marker-revised' : 'marker-original';
-        var title = (err.original + ' → ' + (err.revised || '')).replace(/"/g, '&quot;');
+        var title = ((err.original.length > 50 ? err.original.substring(0, 50) + '...' : err.original) + ' → ' + ((err.revised || '').length > 50 ? (err.revised || '').substring(0, 50) + '...' : (err.revised || ''))).replace(/"/g, '&quot;');
         
         // 삭제 지시문인 경우: 취소선 스타일로 표시
         if (display === '__DELETE__' && err.useRevised) {
