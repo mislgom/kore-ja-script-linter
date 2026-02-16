@@ -199,10 +199,7 @@ var state = {
         isFixed: false
     },
     finalScript: '',
-    perfectScript: '',
     changePoints: [],
-    scores: null,
-    scriptSummary: ''
 };
 
 var currentAbortController = null;
@@ -235,11 +232,8 @@ function initApp() {
     addStyles();
     addFullViewButtonsToHeaders();
     createFullViewModal();
-    createCompareModal();
     initEscKeyHandler();
     initResetCacheButton();
-    initPerfectScriptSection();
-    initScoreButton();
     console.log('📊 총 ' + getTotalRulesCount() + '개 시대고증 규칙 로드됨');
     console.log('⏱️ API 타임아웃: ' + (API_CONFIG.TIMEOUT / 1000) + '초');
     console.log('🤖 모델: ' + API_CONFIG.MODEL);
@@ -254,7 +248,6 @@ function initEscKeyHandler() {
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             closeFullViewModal();
-            closeCompareModal();
         }
     });
 }
@@ -952,17 +945,12 @@ function resetAllAnalysis() {
         isFixed: false
     };
     state.finalScript = '';
-    state.perfectScript = '';
     state.changePoints = [];
-    state.scores = null;
-    state.scriptSummary = '';
 
     var stage1Analysis = document.getElementById('analysis-stage1');
     if (stage1Analysis) stage1Analysis.innerHTML = '<p class="placeholder">분석을 시작하면 결과가 표시됩니다.</p>';
     var revisedStage1 = document.getElementById('revised-stage1');
     if (revisedStage1) revisedStage1.innerHTML = '<p class="placeholder">분석 후 수정본이 표시됩니다.</p>';
-    var scoreDisplay = document.getElementById('score-display');
-    if (scoreDisplay) scoreDisplay.innerHTML = '<p class="placeholder">분석 완료 후 점수 산출 버튼을 눌러주세요.</p>';
 
     var btnNames = ['btn-revert-before-stage1', 'btn-revert-after-stage1', 'btn-fix-script-stage1'];
     btnNames.forEach(function(id) {
