@@ -183,6 +183,7 @@ var cacheTimer = {
     warningShown: false,
     WARNING_THRESHOLD: 300
 };
+
 var state = {
     stage1: {
         originalScript: '',
