@@ -1657,7 +1657,7 @@ function renderScriptWithMarkers(stage) {
             var normalized = searchText.replace(/\s+/g, ' ').trim();
             if (normalized.length >= 5) {
                 // 원본에서 유사 패턴 찾기
-                var searchRegex = normalized.split(' ').join('\\s*');
+                var searchRegex = normalized.split(' ').map(function(w) { return w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }).join('\\s*');
                 try {
                     var regex = new RegExp(searchRegex);
                     var match = originalText.match(regex);
