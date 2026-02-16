@@ -2072,9 +2072,26 @@ function scrollToMarker(stage, markerId) {
             // 첫 줄만
             searchTexts.push(targetError.original.split(/[\r\n]/)[0].trim());
         }
-        if (targetError.revised) {
-            searchTexts.push(cleanRevisedText(targetError.revised));
+                if (targetError.revised) {
+            var cleanRev = cleanRevisedText(targetError.revised);
+            if (cleanRev && cleanRev !== '__DELETE__') {
+                searchCandidates.push(cleanRev);
+                if (cleanRev.length > 15) {
+                    searchCandidates.push(cleanRev.substring(0, 15));
+                }
+                var revFirstLine = cleanRev.split(/[\r\n]/)[0].trim();
+                if (revFirstLine.length >= 5 && revFirstLine !== cleanRev) {
+                    searchCandidates.push(revFirstLine);
+                }
+            }
         }
+        if (targetError.matchedOriginal) {
+            searchCandidates.push(targetError.matchedOriginal);
+            if (targetError.matchedOriginal.length > 15) {
+                searchCandidates.push(targetError.matchedOriginal.substring(0, 15));
+            }
+        }
+
         if (targetError.matchedOriginal) {
             searchTexts.push(targetError.matchedOriginal);
         }
