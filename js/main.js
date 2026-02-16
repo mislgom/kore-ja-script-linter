@@ -176,7 +176,13 @@ var HISTORICAL_RULES = {
         { modern: '멘탈', historical: ['정신', '마음'], confidence: '높음', reason: '외래어' }
     ]
 };
-
+var cacheTimer = {
+    intervalId: null,
+    cacheName: null,
+    remainingSeconds: 0,
+    warningShown: false,
+    WARNING_THRESHOLD: 300
+};
 var state = {
     stage1: {
         originalScript: '',
