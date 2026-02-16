@@ -2195,7 +2195,40 @@ function scrollToMarker(stage, markerId) {
     }
     
     if (!marker) {
-        console.log('⚠️ scrollToMarker: 마커를 찾을 수 없음 - ' + markerId);
+                // 최후 수단: 원문의 단어 2개 이상으로 어디든 찾아서 이동
+        var lastResortWords = [];
+        if (targetError.original) {
+            lastResortWords = targetError.original.replace(/[\r\n]+/g, ' ').replace(/\.\.\./g, ' ').split(/[\s,.:;!?]+/).filter(function(w) { return w.length >= 2; });
+        }
+        if (targetError.revised) {
+            var revWords = cleanRevisedText(targetError.revised).replace(/[\r\n]+/g, ' ').split(/[\s,.:;!?]+/).filter(function(w) { return w.length >= 2; });
+            lastResortWords = lastResortWords.concat(revWords);
+        }
+        
+        var lastFoundIndex = -1;
+        var lastFoundWord = '';
+        for (var lw = 0; lw < lastResortWords.length && lastFoundIndex === -1; lw++) {
+            var word = lastResortWords[lw];
+            if (word.length < 3) continue;
+            lastFoundIndex = containerText.indexOf(word);
+            if (lastFoundIndex !== -1) lastFoundWord = word;
+        }
+        
+        if (lastFoundIndex !== -1 && containerText.length > 0) {
+            var scrollRatio = lastFoundIndex / containerText.length;
+            var scrollTarget = container.scrollHeight * scrollRatio;
+            container.scrollTo({
+                top: Math.max(0, scrollTarget - 100),
+                behavior: 'smooth'
+            });
+            highlightTextInContainer(container, lastFoundWord, stage);
+            console.log('✅ 최후수단 단어검색 스크롤: "' + lastFoundWord + '" (위치:' + lastFoundIndex + ')');
+            return;
+        }
+        
+        // 그래도 못 찾으면 대본 맨 앞으로 스크롤
+        container.scrollTo({ top: 0, behavior: 'smooth' });
+        console.log('⚠️ scrollToMarker: 모든 방법 실패, 맨 앞으로 이동 - ' + markerId);
         return;
     }
     
