@@ -2116,6 +2116,31 @@ function scrollToMarker(stage, markerId) {
     
     // 방법 3: 마커를 못 찾으면 텍스트 내용으로 직접 위치 계산 후 스크롤
     if (!marker && targetError) {
+    // 겹치는 마커 찾기: 이 오류의 원문 위치를 다른 마커가 덮고 있는 경우
+        var origScript = state[stage] ? state[stage].originalScript : '';
+        if (origScript && targetError.original) {
+            var myPos = origScript.indexOf(targetError.original.trim());
+            if (myPos !== -1) {
+                var otherErrors = state[stage].allErrors || [];
+                for (var oe = 0; oe < otherErrors.length; oe++) {
+                    if (otherErrors[oe].id === markerId) continue;
+                    var otherOrig = otherErrors[oe].original ? otherErrors[oe].original.trim() : '';
+                    if (!otherOrig) continue;
+                    var otherPos = origScript.indexOf(otherOrig);
+                    if (otherPos !== -1 && otherPos <= myPos && otherPos + otherOrig.length >= myPos + targetError.original.trim().length) {
+                        var overlapMarker = container.querySelector('.correction-marker[data-marker-id="' + otherErrors[oe].id + '"]');
+                        if (overlapMarker) {
+                            overlapMarker.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            overlapMarker.classList.add(overlapMarker.classList.contains('marker-revised') ? 'highlight-active' : 'highlight-active-orange');
+                            setTimeout(function() { overlapMarker.classList.remove('highlight-active'); overlapMarker.classList.remove('highlight-active-orange'); }, 1600);
+                            console.log('✅ 겹치는 마커로 스크롤 이동: ' + markerId + ' → ' + otherErrors[oe].id);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
         var containerText = container.innerText || container.textContent || '';
         var searchCandidates = [];
         
