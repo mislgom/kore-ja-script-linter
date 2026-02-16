@@ -14,12 +14,12 @@
         <!-- 헤더 -->
         <header class="header">
             <h1 class="logo-title">MISLGOM</h1>
-            <p class="subtitle">대본 검수 자동 프로그램 v4.5</p>
-           <div class="header-controls">
-    <button id="btn-dark-mode" class="btn-secondary">🌙 다크모드</button>
-    <button id="btn-api-settings" class="btn-secondary">⚙️ API 키 설정</button>
-    <button id="btn-reset-cache" class="btn-secondary">🗑️ 캐시 초기화</button>
-</div>
+            <p class="subtitle">대본 검수 자동 프로그램 v5.0</p>
+            <div class="header-controls">
+                <button id="btn-dark-mode" class="btn-secondary">🌙 다크모드</button>
+                <button id="btn-api-settings" class="btn-secondary">⚙️ API 키 설정</button>
+                <button id="btn-reset-cache" class="btn-secondary">🗑️ 캐시 초기화</button>
+            </div>
         </header>
 
         <!-- API 키 설정 패널 -->
@@ -35,7 +35,7 @@
             </div>
         </div>
 
-        <!-- 통합 입력 영역 (파일 업로드 + 원본 대본) -->
+        <!-- 통합 입력 영역 -->
         <section class="input-section">
             <div class="input-header">
                 <h2>📝 원본 대본</h2>
@@ -55,12 +55,6 @@
             <div class="char-count">글자 수: <span id="char-count">0</span></div>
         </section>
 
-        <!-- 분석 버튼 영역 -->
-        <section class="analysis-buttons">
-            <button id="btn-analyze-stage1" class="btn-primary btn-large">🔍 1차 분석 시작</button>
-            <button id="btn-analyze-stage2" class="btn-primary btn-large" disabled>🔍 2차 분석 시작</button>
-        </section>
-
         <!-- 진행률 바 영역 -->
         <div id="progress-container" class="progress-container">
             <div class="progress-bar-wrapper">
@@ -72,37 +66,21 @@
             </div>
         </div>
 
-        <!-- 4칸 결과 영역 -->
+        <!-- 2칸 결과 영역 -->
         <section class="results-grid">
-            <!-- 1차 분석 결과 -->
+            <!-- 분석 결과 -->
             <div class="result-panel">
-                <h3>📊 1차 분석 결과</h3>
+                <h3>📊 분석 결과</h3>
                 <div id="analysis-stage1" class="result-content">
-                    <p class="placeholder">1차 분석을 시작하면 결과가 표시됩니다.</p>
+                    <p class="placeholder">분석을 시작하면 결과가 표시됩니다.</p>
                 </div>
             </div>
 
-            <!-- 1차 수정 반영 -->
+            <!-- 수정 반영 -->
             <div class="result-panel">
-                <h3>✏️ 1차 수정 반영 <span id="revision-count-stage1" class="revision-count"></span></h3>
+                <h3>✏️ 수정 반영 <span id="revision-count-stage1" class="revision-count"></span></h3>
                 <div id="revised-stage1" class="result-content">
-                    <p class="placeholder">1차 분석 후 수정본이 표시됩니다.</p>
-                </div>
-            </div>
-
-            <!-- 2차 분석 결과 -->
-            <div class="result-panel">
-                <h3>📊 2차 분석 결과</h3>
-                <div id="analysis-stage2" class="result-content">
-                    <p class="placeholder">2차 분석을 시작하면 결과가 표시됩니다.</p>
-                </div>
-            </div>
-
-            <!-- 최종 수정 반영 -->
-            <div class="result-panel">
-                <h3>✅ 최종 수정 반영 <span id="revision-count-stage2" class="revision-count"></span></h3>
-                <div id="revised-stage2" class="result-content">
-                    <p class="placeholder">2차 분석 후 최종본이 표시됩니다.</p>
+                    <p class="placeholder">분석 후 수정본이 표시됩니다.</p>
                 </div>
             </div>
         </section>
@@ -111,26 +89,28 @@
         <section id="score-section" class="score-section">
             <h2>📈 대본 분석 점수</h2>
             <div id="score-display" class="score-display">
-                <p class="placeholder">분석 완료 후 점수가 표시됩니다.</p>
+                <p class="placeholder">분석 완료 후 점수 산출 버튼을 눌러주세요.</p>
             </div>
         </section>
-                <!-- 100점 대본 생성 -->
+
+        <!-- 100점 대본 생성 -->
         <section id="perfect-script-section" class="score-section" style="display: none;">
             <h2>💯 100점 대본</h2>
             <div style="text-align:center;padding:15px;">
                 <button id="btn-generate-perfect" class="btn-primary btn-large" style="background:linear-gradient(135deg,#FFD700 0%,#FFA500 100%);">💯 100점 대본 생성</button>
             </div>
             <div id="perfect-script-display" class="score-display">
-                <p class="placeholder">2차 분석 완료 후 버튼을 누르면 100점 대본이 생성됩니다.</p>
+                <p class="placeholder">점수 산출 완료 후 버튼을 누르면 100점 대본이 생성됩니다.</p>
             </div>
             <div id="perfect-script-buttons" style="display:none;text-align:center;padding:15px;gap:10px;justify-content:center;flex-wrap:wrap;">
                 <button id="btn-download-perfect" class="btn-secondary">📥 100점 대본 다운로드</button>
                 <button id="btn-compare-scripts" class="btn-secondary">🔍 대본 비교하기</button>
             </div>
         </section>
+
         <!-- 다운로드 버튼 -->
         <section class="download-section">
-            <button id="btn-download" class="btn-secondary" disabled>📥 최종 수정본 다운로드</button>
+            <button id="btn-download" class="btn-secondary" disabled>📥 수정본 다운로드</button>
         </section>
     </div>
 
