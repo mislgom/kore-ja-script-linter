@@ -2616,6 +2616,7 @@ function buildStage1Prompt(script) {
         '3. 오류가 없어 보여도 문장 구조, 표현, 흐름에서 개선점을 찾으세요!\n' +
         '4. 나레이션 문체는 오류 아니지만, 나레이션 내 시간 모순은 오류!\n' +
         '5. revised에 / 또는 () 넣지 마세요! 수정안 하나만!\n\n' +
+        '6. ⚠️ original과 revised는 변경된 최소 범위만! 문장 전체 금지! 수정 필요한 단어/구절만 넣으세요! 예: original:"선명하게", revised:"희미하게" (앞뒤 동일 텍스트 포함 절대 금지!)\n\n' + 
         '## 📤 응답 형식 (반드시 JSON만):\n' +
         '```json\n' +
         '{"errors": [\n' +
@@ -2750,6 +2751,7 @@ function buildStage2Prompt(script) {
         '4. suggestion에 / 또는 () 넣지 마세요! 수정안 하나만!\n' +
         '5. perfectScript는 모든 issues를 반영한 완전한 대본!\n' +
         '6. 30년 경력 거장 감독의 냉철하고 정확한 눈으로 판단하세요!\n' +
+        '7. ⚠️ original과 suggestion은 변경된 최소 범위만! 문장 전체 금지! 수정 필요한 단어/구절만 넣으세요! 예: original:"선명하게", suggestion:"희미하게" (앞뒤 동일 텍스트 포함 절대 금지!)\n' +
         '\n' +
         '## 📤 응답 형식 (반드시 JSON만):\n' +
         '```json\n' +
