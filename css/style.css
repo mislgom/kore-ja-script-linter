@@ -771,7 +771,7 @@ body { font-size: 19px !important; }
 #revised-re-stage1 div, #revised-re-stage2 div { font-size: 17px !important; }
 #analysis-stage1 td, #analysis-stage2 td { font-size: 14px !important; }
 #analysis-re-stage1 td, #analysis-re-stage2 td { font-size: 14px !important; }
-.fullview-body { font-size: 15px !important; }
+.fullview-body { font-size: 17px !important; }
 .compare-body { font-size: 17px !important; }
 .change-point-item { font-size: 15px !important; }
 button { font-size: inherit !important; }
