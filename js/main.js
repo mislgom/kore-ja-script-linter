@@ -2658,3 +2658,377 @@ function displayPerfectScriptResult(perfectText) {
     var buttons = document.getElementById('perfect-script-buttons');
     if (buttons) buttons.style.display = 'flex';
 }
+// ============================================================
+// 편집모드 시스템 (신규 추가)
+// ============================================================
+
+var editModeState = {
+    isEditMode: false,
+    backupText: ''
+};
+
+function initEditMode() {
+    var checkbox = document.getElementById('edit-mode-checkbox');
+    if (!checkbox) return;
+
+    checkbox.addEventListener('change', function() {
+        if (this.checked) {
+            enterEditMode();
+        } else {
+            exitEditMode();
+        }
+    });
+
+    var textarea = document.getElementById('edit-textarea-stage1');
+    if (textarea) {
+        textarea.addEventListener('input', function() {
+            var countEl = document.getElementById('edit-char-num');
+            if (countEl) countEl.textContent = textarea.value.length;
+        });
+    }
+}
+
+function enterEditMode() {
+    editModeState.isEditMode = true;
+
+    // 현재 텍스트 가져오기
+    var currentText = '';
+    if (state.stage1.fixedScript && state.stage1.fixedScript.trim().length > 0) {
+        currentText = state.stage1.fixedScript;
+    } else if (state.stage1.originalScript && state.stage1.originalScript.trim().length > 0) {
+        currentText = getCurrentRevisedText();
+    }
+
+    editModeState.backupText = currentText;
+
+    // textarea에 텍스트 설정
+    var textarea = document.getElementById('edit-textarea-stage1');
+    if (textarea) {
+        textarea.value = currentText;
+    }
+
+    // 글자수 표시
+    var countEl = document.getElementById('edit-char-num');
+    if (countEl) countEl.textContent = currentText.length;
+
+    // 보기모드 숨기고 편집모드 표시
+    var revisedDiv = document.getElementById('revised-stage1');
+    var editDiv = document.getElementById('edit-stage1');
+    var charCount = document.getElementById('edit-char-count');
+    if (revisedDiv) revisedDiv.style.display = 'none';
+    if (editDiv) editDiv.style.display = 'block';
+    if (charCount) charCount.style.display = 'block';
+
+    // 라벨 변경
+    var label = document.getElementById('edit-mode-label');
+    if (label) { label.textContent = '편집모드'; label.style.color = '#4CAF50'; }
+
+    // 버튼 교체
+    updateEditModeButtons(true);
+}
+
+function exitEditMode() {
+    editModeState.isEditMode = false;
+
+    // 편집모드 숨기고 보기모드 표시
+    var revisedDiv = document.getElementById('revised-stage1');
+    var editDiv = document.getElementById('edit-stage1');
+    var charCount = document.getElementById('edit-char-count');
+    if (revisedDiv) revisedDiv.style.display = 'block';
+    if (editDiv) editDiv.style.display = 'none';
+    if (charCount) charCount.style.display = 'none';
+
+    // 라벨 변경
+    var label = document.getElementById('edit-mode-label');
+    if (label) { label.textContent = '보기모드'; label.style.color = '#aaa'; }
+
+    // 버튼 교체
+    updateEditModeButtons(false);
+}
+
+function getCurrentRevisedText() {
+    var text = state.stage1.originalScript || '';
+    var errors = state.stage1.allErrors || [];
+
+    errors.forEach(function(err) {
+        if (err.useRevised && err.original && err.revised) {
+            var fixedRevised = cleanRevisedText(err.revised);
+            if (text.indexOf(err.original) !== -1) {
+                if (fixedRevised === '__DELETE__') {
+                    text = text.split(err.original).join('');
+                } else {
+                    text = text.split(err.original).join(fixedRevised);
+                }
+            }
+        }
+    });
+
+    return text;
+}
+
+function saveEditedText() {
+    var textarea = document.getElementById('edit-textarea-stage1');
+    if (!textarea) return;
+
+    var editedText = textarea.value;
+    if (!editedText || editedText.trim().length === 0) {
+        alert('저장할 내용이 없습니다.');
+        return;
+    }
+
+    state.stage1.fixedScript = editedText;
+    state.stage1.isFixed = true;
+    state.finalScript = editedText;
+
+    // 다운로드 버튼 활성화
+    var downloadBtn = document.getElementById('btn-download');
+    if (downloadBtn) downloadBtn.disabled = false;
+
+    alert('저장되었습니다.');
+}
+
+function revertEditedText() {
+    if (!editModeState.backupText) {
+        alert('되돌릴 내용이 없습니다.');
+        return;
+    }
+
+    if (!confirm('편집 전 상태로 되돌리시겠습니까?')) return;
+
+    var textarea = document.getElementById('edit-textarea-stage1');
+    if (textarea) {
+        textarea.value = editModeState.backupText;
+        var countEl = document.getElementById('edit-char-num');
+        if (countEl) countEl.textContent = editModeState.backupText.length;
+    }
+}
+
+function updateEditModeButtons(isEdit) {
+    var wrapper = document.querySelector('.revert-btn-wrapper');
+    if (!wrapper) return;
+
+    var btnBefore = document.getElementById('btn-revert-before-stage1');
+    var btnAfter = document.getElementById('btn-revert-after-stage1');
+    var btnFix = document.getElementById('btn-fix-script-stage1');
+
+    // 기존 편집 버튼 제거
+    var existingSave = document.getElementById('btn-edit-save');
+    var existingRevert = document.getElementById('btn-edit-revert');
+    if (existingSave) existingSave.remove();
+    if (existingRevert) existingRevert.remove();
+
+    if (isEdit) {
+        // 보기모드 버튼 숨기기
+        if (btnBefore) btnBefore.style.display = 'none';
+        if (btnAfter) btnAfter.style.display = 'none';
+
+        // 편집모드 버튼 추가
+        var btnSave = document.createElement('button');
+        btnSave.id = 'btn-edit-save';
+        btnSave.innerHTML = '💾 저장';
+        btnSave.style.cssText = 'background:#4CAF50;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
+        btnSave.addEventListener('click', saveEditedText);
+
+        var btnRevert = document.createElement('button');
+        btnRevert.id = 'btn-edit-revert';
+        btnRevert.innerHTML = '↩️ 되돌리기';
+        btnRevert.style.cssText = 'background:#ff9800;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
+        btnRevert.addEventListener('click', revertEditedText);
+
+        // 픽스 버튼 앞에 삽입
+        if (btnFix) {
+            wrapper.insertBefore(btnRevert, btnFix);
+            wrapper.insertBefore(btnSave, btnRevert);
+        }
+    } else {
+        // 보기모드 버튼 복원
+        if (btnBefore) btnBefore.style.display = '';
+        if (btnAfter) btnAfter.style.display = '';
+    }
+}
+
+// ============================================================
+// 전체보기 모달 편집모드 (신규 추가)
+// ============================================================
+
+var fullviewEditState = {
+    isEditMode: false,
+    backupText: ''
+};
+
+function addFullViewEditToggle() {
+    var rightHeader = document.getElementById('fullview-right-header');
+    if (!rightHeader || rightHeader.querySelector('.fullview-edit-toggle')) return;
+
+    var toggleHtml = document.createElement('span');
+    toggleHtml.className = 'fullview-edit-toggle';
+    toggleHtml.style.cssText = 'margin-left:15px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:normal;';
+    toggleHtml.innerHTML =
+        '<span id="fullview-edit-label" style="color:#aaa;">보기</span>' +
+        '<label class="edit-toggle-switch">' +
+        '<input type="checkbox" id="fullview-edit-checkbox">' +
+        '<span class="edit-toggle-slider"></span>' +
+        '</label>';
+    rightHeader.appendChild(toggleHtml);
+
+    var cb = document.getElementById('fullview-edit-checkbox');
+    if (cb) {
+        cb.addEventListener('change', function() {
+            if (this.checked) {
+                enterFullViewEditMode();
+            } else {
+                exitFullViewEditMode();
+            }
+        });
+    }
+}
+
+function enterFullViewEditMode() {
+    fullviewEditState.isEditMode = true;
+
+    var rightBody = document.getElementById('fullview-right-body');
+    if (!rightBody) return;
+
+    // 현재 텍스트 가져오기
+    var currentText = '';
+    if (state.stage1.fixedScript && state.stage1.fixedScript.trim().length > 0) {
+        currentText = state.stage1.fixedScript;
+    } else {
+        currentText = getCurrentRevisedText();
+    }
+
+    fullviewEditState.backupText = currentText;
+
+    // textarea로 교체
+    rightBody.innerHTML = '<textarea id="fullview-edit-textarea" style="width:100%;height:100%;padding:15px;font-size:17px;line-height:1.8;border:none;resize:none;font-family:inherit;background:#2d2d2d;color:#fff;word-break:break-word;outline:none;">' + escapeHtml(currentText) + '</textarea>';
+
+    // 라벨 변경
+    var label = document.getElementById('fullview-edit-label');
+    if (label) { label.textContent = '편집'; label.style.color = '#4CAF50'; }
+
+    // 하단 버튼 교체
+    updateFullViewEditButtons(true);
+}
+
+function exitFullViewEditMode() {
+    fullviewEditState.isEditMode = false;
+
+    // 보기모드로 복원
+    var revisedBox = document.getElementById('revised-stage1');
+    var rightBody = document.getElementById('fullview-right-body');
+    if (revisedBox && rightBody) {
+        rightBody.innerHTML = revisedBox.innerHTML;
+    }
+
+    // 라벨 변경
+    var label = document.getElementById('fullview-edit-label');
+    if (label) { label.textContent = '보기'; label.style.color = '#aaa'; }
+
+    // 하단 버튼 복원
+    updateFullViewEditButtons(false);
+}
+
+function saveFullViewEditedText() {
+    var textarea = document.getElementById('fullview-edit-textarea');
+    if (!textarea) return;
+
+    var editedText = textarea.value;
+    if (!editedText || editedText.trim().length === 0) {
+        alert('저장할 내용이 없습니다.');
+        return;
+    }
+
+    state.stage1.fixedScript = editedText;
+    state.stage1.isFixed = true;
+    state.finalScript = editedText;
+
+    // 메인 페이지 편집 textarea도 동기화
+    var mainTextarea = document.getElementById('edit-textarea-stage1');
+    if (mainTextarea) mainTextarea.value = editedText;
+
+    // 다운로드 버튼 활성화
+    var downloadBtn = document.getElementById('btn-download');
+    if (downloadBtn) downloadBtn.disabled = false;
+
+    alert('저장되었습니다.');
+}
+
+function revertFullViewEditedText() {
+    if (!fullviewEditState.backupText) {
+        alert('되돌릴 내용이 없습니다.');
+        return;
+    }
+
+    if (!confirm('편집 전 상태로 되돌리시겠습니까?')) return;
+
+    var textarea = document.getElementById('fullview-edit-textarea');
+    if (textarea) {
+        textarea.value = fullviewEditState.backupText;
+    }
+}
+
+function updateFullViewEditButtons(isEdit) {
+    var footer = document.getElementById('fullview-footer');
+    if (!footer) return;
+
+    // 기존 편집 버튼 제거
+    var existingSave = document.getElementById('fullview-btn-save');
+    var existingRevert = document.getElementById('fullview-btn-revert');
+    if (existingSave) existingSave.remove();
+    if (existingRevert) existingRevert.remove();
+
+    // 기존 보기모드 버튼들 찾기
+    var buttons = footer.querySelectorAll('button');
+
+    if (isEdit) {
+        // 기존 버튼 숨기기 (수정 전, 수정 후)
+        buttons.forEach(function(btn, i) {
+            if (i < 2) btn.style.display = 'none'; // 수정 전, 수정 후만 숨김
+        });
+
+        // 편집 버튼 추가
+        var btnSave = document.createElement('button');
+        btnSave.id = 'fullview-btn-save';
+        btnSave.innerHTML = '💾 저장';
+        btnSave.style.cssText = 'background:#4CAF50;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
+        btnSave.addEventListener('click', saveFullViewEditedText);
+
+        var btnRevert = document.createElement('button');
+        btnRevert.id = 'fullview-btn-revert';
+        btnRevert.innerHTML = '↩️ 되돌리기';
+        btnRevert.style.cssText = 'background:#ff9800;color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:bold;font-size:13px;';
+        btnRevert.addEventListener('click', revertFullViewEditedText);
+
+        footer.insertBefore(btnSave, footer.firstChild);
+        footer.insertBefore(btnRevert, btnSave.nextSibling);
+    } else {
+        // 기존 버튼 복원
+        buttons.forEach(function(btn) {
+            btn.style.display = '';
+        });
+    }
+}
+
+// ============================================================
+// 기존 openFullViewModal 확장 — 편집 토글 추가
+// ============================================================
+
+var _originalOpenFullViewModal = openFullViewModal;
+openFullViewModal = function() {
+    _originalOpenFullViewModal();
+    // 편집 토글 추가
+    setTimeout(function() {
+        addFullViewEditToggle();
+        // 편집모드 상태 초기화
+        fullviewEditState.isEditMode = false;
+        var cb = document.getElementById('fullview-edit-checkbox');
+        if (cb) cb.checked = false;
+    }, 100);
+};
+
+// ============================================================
+// 초기화 — DOMContentLoaded에 편집모드 초기화 추가
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+    initEditMode();
+});
