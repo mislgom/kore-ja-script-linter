@@ -13,6 +13,81 @@ console.log('🚀 main-economy.js v1.0 로드됨');
 // 경제 분석 규칙
 // ============================================================
 var ECONOMY_RULES = {
+    // ============================================================
+// 공식 데이터 소스 모듈 (대본 생성 엔진과 동일 기준)
+// ============================================================
+var OFFICIAL_DATA_SOURCES = {
+    korea: [
+        { id: 'BOK', name: '한국은행', types: ['기준금리', '통화정책', '금융안정보고서', '경제전망'] },
+        { id: 'KOSTAT', name: '통계청', types: ['소비자물가', 'CPI', '고용률', '실업률', 'GDP', '가계동향'] },
+        { id: 'MOEF', name: '기획재정부', types: ['경제정책', '재정', '세제', '국채'] },
+        { id: 'FSC', name: '금융위원회', types: ['금융정책', '규제', '가계부채'] },
+        { id: 'FSS', name: '금융감독원', types: ['금융감독', '소비자보호'] },
+        { id: 'KDI', name: '한국개발연구원', types: ['경제전망', '정책연구'] },
+        { id: 'KOSIS', name: '국가통계포털', types: ['각종 통계'] }
+    ],
+    usa: [
+        { id: 'FED', name: '연준(Fed)', aliases: ['연방준비제도', 'Federal Reserve', 'FOMC'], types: ['기준금리', '연방기금금리', '통화정책', '양적긴축', 'QT', 'QE'] },
+        { id: 'BLS', name: '노동통계국(BLS)', types: ['비농업고용', 'NFP', '실업률', 'CPI', 'PPI'] },
+        { id: 'BEA', name: '경제분석국(BEA)', types: ['GDP', 'PCE', '개인소득', '무역수지'] },
+        { id: 'TREASURY', name: '미국 재무부', types: ['국채', '재정정책', '환율보고서'] },
+        { id: 'SEC', name: '증권거래위원회(SEC)', types: ['ETF', '증권규제', '공시'] },
+        { id: 'CENSUS', name: '인구조사국', types: ['소매판매', '주택착공', '건설지출'] }
+    ],
+    international: [
+        { id: 'IMF', name: '국제통화기금(IMF)', types: ['세계경제전망(WEO)', '국가보고서', '특별인출권'] },
+        { id: 'WB', name: '세계은행(World Bank)', types: ['개발지표', '빈곤통계', '성장전망'] },
+        { id: 'OECD', name: 'OECD', types: ['경제전망', '실업률', '교육지표', '생산성'] },
+        { id: 'BIS', name: '국제결제은행(BIS)', types: ['글로벌 금융안정', '은행통계'] },
+        { id: 'WTO', name: '세계무역기구(WTO)', types: ['무역통계', '무역분쟁'] }
+    ],
+    othercb: [
+        { id: 'ECB', name: '유럽중앙은행(ECB)', types: ['기준금리', '유로존 통화정책'] },
+        { id: 'BOJ', name: '일본은행(BOJ)', types: ['금리', '일본 통화정책', 'YCC'] },
+        { id: 'PBOC', name: '중국인민은행(PBOC)', types: ['LPR', '지급준비율', '중국 통화정책'] },
+        { id: 'BOE', name: '영란은행(BOE)', types: ['기준금리', '영국 통화정책'] }
+    ]
+};
+
+var DATA_VALIDATION_RULES = {
+    timeRequiredPatterns: [
+        '금리', '기준금리', '환율', '물가', 'CPI', 'GDP', '성장률', '실업률',
+        '고용률', '인플레이션', '주가', '지수', '수출', '수입', '무역수지',
+        '가계부채', '국채', '수익률', 'PPI', 'PCE', '소매판매'
+    ],
+    comparisonRequired: [
+        '상승', '하락', '증가', '감소', '개선', '악화', '둔화', '반등',
+        '전년 대비', '전월 대비', '전기 대비', '전분기 대비'
+    ],
+    policyDateKeywords: [
+        '발표', '결정', '시행', '적용', '인상', '인하', '동결', '변경'
+    ],
+    forecastVsActual: [
+        { forecast: '전망', actual: '확정' },
+        { forecast: '예상', actual: '발표' },
+        { forecast: '예측', actual: '집계' },
+        { forecast: '관측', actual: '확인' },
+        { forecast: '추정', actual: '실적' }
+    ]
+};
+
+function getOfficialSourceNames() {
+    var names = [];
+    for (var region in OFFICIAL_DATA_SOURCES) {
+        OFFICIAL_DATA_SOURCES[region].forEach(function(src) {
+            names.push(src.name);
+            if (src.aliases) {
+                src.aliases.forEach(function(a) { names.push(a); });
+            }
+        });
+    }
+    return names;
+}
+
+function getOfficialSourceNamesString() {
+    return getOfficialSourceNames().join(', ');
+}
+
     dangerousExpressions: [
         { pattern: '반드시', type: '과장단정', reason: '단정 표현 — 조건부 표현 권장' },
         { pattern: '무조건', type: '과장단정', reason: '단정 표현 — 예외 가능성 명시 필요' },
@@ -186,7 +261,9 @@ function formatTypeText(type) {
         '공포조장': '공포<br>조장',
         '투자유도': '투자<br>유도',
         '출처누락': '출처<br>누락',
-        '숫자불일치': '숫자<br>불일치'
+        '숫자불일치': '숫자<br>불일치',
+        '데이터검증': '데이터<br>검증'
+
     };
     return typeMap[type] || type.replace(/(.{2})/g, '$1<br>').replace(/<br>$/, '');
 }
@@ -1380,14 +1457,27 @@ function buildRolePrompt(roleId, chunkText, chunkInfo, scriptLength) {
         '## 📤 응답 형식 (반드시 JSON만):\n' +
         '```json\n{"errors": [\n  {"type": "유형", "original": "원문 그대로", "revised": "수정 제안", "reason": "사유 20자 이내", "severity": "high/medium/low"}\n]}\n```';
 
+    var officialSourceList = getOfficialSourceNamesString();
+
+    var dataValidationGuide = '\n\n## 📋 공식 데이터 검증 기준 (대본 생성 엔진과 동일)\n' +
+        '### 허용 공식 기관 목록:\n' + officialSourceList + '\n\n' +
+        '### 수치 작성 필수 원칙:\n' +
+        '1. 모든 경제 수치에는 반드시 시점(연도/월/분기)이 명시되어야 합니다\n' +
+        '2. 전년 대비 / 전월 대비 / 전기 대비 구분이 명확해야 합니다\n' +
+        '3. 정책 발표 시점과 시행 시점을 구분해야 합니다\n' +
+        '4. 중앙은행 결정(확정)과 시장 전망(예측)을 혼동하면 안 됩니다\n' +
+        '5. 예측/전망 데이터와 확정/발표 데이터를 구분해야 합니다\n' +
+        '6. 위 허용 기관 외 출처의 수치는 출처 명시가 반드시 필요합니다\n';
+
     var rulesString = getEconomyRulesString();
 
     // ============================================================
-    // role1: 수치·단위 오류 + 숫자 불일치
+    // role1: 수치·단위 오류 + 숫자 불일치 + 공식 데이터 검증
     // ============================================================
     if (roleId === 'role1_numbers') {
         return header +
-            '## 🎯 당신의 역할: 수치·단위·숫자 검증관\n\n' +
+            '## 🎯 당신의 역할: 수치·단위·데이터 검증관\n\n' +
+            dataValidationGuide + '\n' +
 
             '### 검사항목 1: 수치·단위 오류 (분석 강도: 100%)\n' +
             '경제 대본에서 숫자, 단위, 연도 등이 정확한지 검사합니다.\n' +
@@ -1400,10 +1490,18 @@ function buildRolePrompt(roleId, chunkText, chunkInfo, scriptLength) {
 
             '### 검사항목 2: 숫자 불일치 (분석 강도: 100%)\n' +
             '같은 대상에 대한 숫자가 앞뒤에서 일치하는지 검사합니다.\n' +
-            '- 예: "GDP 성장률 3.5%" → 뒤에서 "GDP 성장률 2.8%" (같은 시점인데)\n' +
-            '- 예: "실업률 4.2%" → 뒤에서 "실업률 3.8%" (같은 통계인데)\n\n' +
             '⚠️ 서로 다른 시점/대상의 숫자는 비교하지 마세요.\n' +
-            'type은 "숫자불일치"로 표기하세요.\n' +
+            'type은 "숫자불일치"로 표기하세요.\n\n' +
+
+            '### 검사항목 3: 공식 데이터 기준 검증 (분석 강도: 100%)\n' +
+            '아래 항목을 반드시 검사하세요:\n' +
+            '- 경제 수치(금리, GDP, CPI, 실업률 등)에 시점(연도/월)이 빠져 있는 경우 → 오류\n' +
+            '- "상승/하락/증가/감소" 표현에 비교 기준(전년 대비/전월 대비)이 없는 경우 → 오류\n' +
+            '- 정책 발표일과 시행일이 혼동된 경우 → 오류\n' +
+            '- 중앙은행 확정 결정을 "전망/예상"으로 표현하거나, 시장 전망을 "결정/확정"으로 표현한 경우 → 오류\n' +
+            '- 실제로 존재하지 않을 가능성이 높은 FOMC/금통위 회의 날짜가 언급된 경우 → 오류\n' +
+            '- 허용 공식 기관 외 출처에서 가져온 수치인데 출처가 명시되지 않은 경우 → 오류\n\n' +
+            'type은 "데이터검증"으로 표기하세요.\n' +
             footer;
     }
 
@@ -1413,6 +1511,7 @@ function buildRolePrompt(roleId, chunkText, chunkInfo, scriptLength) {
     if (roleId === 'role2_logic') {
         return header +
             '## 🎯 당신의 역할: 논리·표현 검증관\n\n' +
+            dataValidationGuide + '\n' +
 
             '### 검사항목 1: 인과관계 논리 검증 (분석 강도: 90%)\n' +
             '경제 논리가 타당한지 검사합니다.\n' +
@@ -1426,7 +1525,6 @@ function buildRolePrompt(roleId, chunkText, chunkInfo, scriptLength) {
             '### 검사항목 2: 과장·단정 표현 감지 (분석 강도: 100%)\n' +
             '아래 단어/표현이 대본에 있으면 검출하세요:\n' +
             '반드시, 무조건, 100%, 확정, 절대, 틀림없이, 분명히, 당연히, 장담\n' +
-            '이런 표현은 경제 대본에서 오해를 유발할 수 있습니다.\n' +
             'type은 "과장단정"으로 표기하세요.\n\n' +
 
             '### 검사항목 3: 공포 조장 표현 감지 (분석 강도: 100%)\n' +
@@ -1438,11 +1536,12 @@ function buildRolePrompt(roleId, chunkText, chunkInfo, scriptLength) {
     }
 
     // ============================================================
-    // role3: 투자 리스크 표현 + 출처·근거 누락
+    // role3: 투자 리스크 표현 + 출처·근거 누락 + 허용 기관 검증
     // ============================================================
     if (roleId === 'role3_risk') {
         return header +
             '## 🎯 당신의 역할: 투자 리스크·출처 검증관\n\n' +
+            dataValidationGuide + '\n' +
 
             '### 검사항목 1: 투자 리스크 표현 감지 (분석 강도: 100%)\n' +
             '아래와 같은 투자 유도/권유 표현을 검출하세요:\n' +
@@ -1459,8 +1558,13 @@ function buildRolePrompt(roleId, chunkText, chunkInfo, scriptLength) {
             '- "통계에 따르면" → 어떤 통계? 기관명/시점 필요\n' +
             '- "연구 결과" → 어떤 연구? 기관/논문 필요\n' +
             '- "관계자는" → 소속/직함 필요\n' +
-            '- "업계에서는", "시장에서는" → 구체적 근거 필요\n' +
-            '- 출처 없이 구체적 수치를 인용한 경우\n\n' +
+            '- 구체적 수치가 인용되었는데 출처 기관명이 없는 경우\n\n' +
+            '### 검사항목 3: 허용 기관 외 출처 검증 (분석 강도: 100%)\n' +
+            '아래 공식 기관 목록에 없는 출처에서 가져온 경제 수치가\n' +
+            '출처 없이 사용된 경우 오류로 판정하세요:\n' +
+            '허용 기관: ' + officialSourceList + '\n\n' +
+            '위 기관이 아닌 곳의 수치라도 출처를 명확히 밝혔으면 허용합니다.\n' +
+            '출처 없이 수치만 나열된 경우에만 오류로 보고하세요.\n\n' +
             'type은 "출처누락"으로 표기하세요.\n' +
             footer;
     }
