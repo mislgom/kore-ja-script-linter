@@ -263,9 +263,8 @@ function formatTypeText(type) {
         '투자유도': '투자<br>유도',
         '출처누락': '출처<br>누락',
         '숫자불일치': '숫자<br>불일치',
-        '데이터검증': '데이터<br>검증'
+        '데이터검증': '데이터<br>검증',
         '팩트체크': '팩트<br>체크'
-
     };
     return typeMap[type] || type.replace(/(.{2})/g, '$1<br>').replace(/<br>$/, '');
 }
