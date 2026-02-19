@@ -776,3 +776,67 @@ body { font-size: 19px !important; }
 .change-point-item { font-size: 15px !important; }
 button { font-size: inherit !important; }
 textarea { font-size: 19px !important; }
+/* ===================== 편집모드 토글 스위치 ===================== */
+.edit-toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.edit-toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.edit-toggle-slider {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #555;
+    border-radius: 20px;
+    transition: 0.3s;
+}
+
+.edit-toggle-slider:before {
+    content: "";
+    position: absolute;
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    border-radius: 50%;
+    transition: 0.3s;
+}
+
+.edit-toggle-switch input:checked + .edit-toggle-slider {
+    background-color: #4CAF50;
+}
+
+.edit-toggle-switch input:checked + .edit-toggle-slider:before {
+    transform: translateX(20px);
+}
+
+#edit-textarea-stage1 {
+    outline: none;
+}
+
+#edit-textarea-stage1:focus {
+    box-shadow: inset 0 0 0 2px #4CAF50;
+    border-radius: 4px;
+}
+
+.dark-mode #edit-textarea-stage1 {
+    background: #2a2a2a;
+    color: #e0e0e0;
+}
+
+#edit-stage1 {
+    flex: 1;
+    overflow-y: auto;
+}
