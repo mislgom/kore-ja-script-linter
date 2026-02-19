@@ -1504,6 +1504,20 @@ function scrollToMarker(stage, markerId) {
 // ============================================================
 function fixScript(stage) {
     var s = state[stage];
+
+    // 편집모드에서 이미 저장한 텍스트가 있으면 그대로 사용
+    if (s.fixedScript && s.fixedScript.trim().length > 0 && s.isFixed) {
+        state.finalScript = s.fixedScript;
+
+        renderScriptWithMarkers(stage);
+
+        var downloadBtn = document.getElementById('btn-download');
+        if (downloadBtn) downloadBtn.disabled = false;
+
+        alert('수정본이 적용되었습니다.');
+        return;
+    }
+
     var text = s.originalScript;
     var errors = s.allErrors || [];
 
