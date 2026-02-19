@@ -2742,6 +2742,11 @@ function exitEditMode() {
     var label = document.getElementById('edit-mode-label');
     if (label) { label.textContent = '보기모드'; label.style.color = '#aaa'; }
 
+    // 저장된 fixedScript가 있으면 보기모드 영역을 편집된 텍스트로 갱신
+    if (state.stage1.fixedScript && state.stage1.fixedScript.trim().length > 0 && revisedDiv) {
+        revisedDiv.innerHTML = '<div style="white-space:pre-wrap;padding:15px;font-size:14px;line-height:1.8;word-break:break-word;">' + escapeHtml(state.stage1.fixedScript) + '</div>';
+    }
+
     // 버튼 교체
     updateEditModeButtons(false);
 }
@@ -2779,6 +2784,12 @@ function saveEditedText() {
     state.stage1.fixedScript = editedText;
     state.stage1.isFixed = true;
     state.finalScript = editedText;
+
+    // 보기모드 영역도 즉시 갱신
+    var revisedDiv = document.getElementById('revised-stage1');
+    if (revisedDiv) {
+        revisedDiv.innerHTML = '<div style="white-space:pre-wrap;padding:15px;font-size:14px;line-height:1.8;word-break:break-word;">' + escapeHtml(editedText) + '</div>';
+    }
 
     // 다운로드 버튼 활성화
     var downloadBtn = document.getElementById('btn-download');
@@ -2913,11 +2924,17 @@ function enterFullViewEditMode() {
 function exitFullViewEditMode() {
     fullviewEditState.isEditMode = false;
 
-    // 보기모드로 복원
-    var revisedBox = document.getElementById('revised-stage1');
+    // 보기모드로 복원 — 저장된 fixedScript가 있으면 그걸 표시
     var rightBody = document.getElementById('fullview-right-body');
-    if (revisedBox && rightBody) {
-        rightBody.innerHTML = revisedBox.innerHTML;
+    if (rightBody) {
+        if (state.stage1.fixedScript && state.stage1.fixedScript.trim().length > 0) {
+            rightBody.innerHTML = '<div style="white-space:pre-wrap;padding:15px;font-size:14px;line-height:1.8;word-break:break-word;">' + escapeHtml(state.stage1.fixedScript) + '</div>';
+        } else {
+            var revisedBox = document.getElementById('revised-stage1');
+            if (revisedBox) {
+                rightBody.innerHTML = revisedBox.innerHTML;
+            }
+        }
     }
 
     // 라벨 변경
@@ -2941,6 +2958,12 @@ function saveFullViewEditedText() {
     state.stage1.fixedScript = editedText;
     state.stage1.isFixed = true;
     state.finalScript = editedText;
+
+    // 메인 페이지 보기모드 영역도 즉시 갱신
+    var revisedDiv = document.getElementById('revised-stage1');
+    if (revisedDiv) {
+        revisedDiv.innerHTML = '<div style="white-space:pre-wrap;padding:15px;font-size:14px;line-height:1.8;word-break:break-word;">' + escapeHtml(editedText) + '</div>';
+    }
 
     // 메인 페이지 편집 textarea도 동기화
     var mainTextarea = document.getElementById('edit-textarea-stage1');
