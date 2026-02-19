@@ -66,7 +66,7 @@
             </div>
         </div>
 
-        <!-- 2칸 결과 영역 -->
+                <!-- 2칸 결과 영역 -->
         <section class="results-grid">
             <!-- 분석 결과 -->
             <div class="result-panel">
@@ -78,10 +78,22 @@
 
             <!-- 수정 반영 -->
             <div class="result-panel">
-                <h3>✏️ 수정 반영 <span id="revision-count-stage1" class="revision-count"></span></h3>
+                <h3>✏️ 수정 반영 <span id="revision-count-stage1" class="revision-count"></span>
+                    <span id="edit-mode-toggle-wrapper" style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:normal;">
+                        <span id="edit-mode-label" style="color:#aaa;">보기모드</span>
+                        <label class="edit-toggle-switch">
+                            <input type="checkbox" id="edit-mode-checkbox">
+                            <span class="edit-toggle-slider"></span>
+                        </label>
+                    </span>
+                </h3>
                 <div id="revised-stage1" class="result-content">
                     <p class="placeholder">분석 후 수정본이 표시됩니다.</p>
                 </div>
+                <div id="edit-stage1" class="result-content" style="display:none;">
+                    <textarea id="edit-textarea-stage1" style="width:100%;height:100%;min-height:380px;padding:15px;font-size:14px;line-height:1.8;border:none;resize:none;font-family:inherit;background:transparent;color:inherit;word-break:break-word;"></textarea>
+                </div>
+                <div id="edit-char-count" style="display:none;text-align:right;padding:2px 15px;font-size:11px;color:#888;">글자 수: <span id="edit-char-num">0</span></div>
             </div>
         </section>
 
