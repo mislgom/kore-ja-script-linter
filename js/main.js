@@ -358,8 +358,8 @@ function addStyles() {
         '.compare-close{position:fixed;top:20px;right:30px;font-size:40px;color:#fff;cursor:pointer;z-index:10001;}' +
         '.compare-close:hover{color:#ff5555;}' +
         '.marker-deep-revised{background:#FFD700;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;border-bottom:2px solid #FF416C;}' +
-        '.marker-deep-original{background:#FF416C40;color:#FF416C;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;border-bottom:2px dashed #FF416C;}' +
-        '.row-selected{background:#3a3a3a !important;outline:2px solid #69f0ae;}';
+        '.marker-deep-revised{background:#69f0ae;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;border-bottom:2px solid #4CAF50;}' +
+        '.marker-deep-original{background:#FFD700;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;border-bottom:2px solid #FF9800;}' +
     document.head.appendChild(style);
 }
 
@@ -2299,15 +2299,32 @@ function buildDeepAnalysisPrompt(scriptText, scriptLength) {
         '}\n' +
         '```\n\n' +
 
-        '## 🚨 필수 규칙\n' +
+               '## 🚨 필수 규칙\n' +
         '1. evaluation: 7개 항목 반드시 전부 평가 (빠지면 안 됨)\n' +
         '2. issues: 보완점이 있는 항목만 (잘된 항목은 issues에 넣지 마세요)\n' +
         '3. original: 대본에 실제 존재하는 텍스트 그대로 복사 (20자 이상, 100자 이내)\n' +
         '4. revised: 수정안 하나만 (/ 금지, () 설명 금지)\n' +
-        '5. deepType: 초반후킹 / 미스터리구조 / 긴장곡선 / 감정파동 / 인물입체성 / 상징장치 / 결말완성도\n' +
+        '5. deepType: 초반후킹 / 미스터리구조 / 긴장곡선 / 감정파동 / 인물입체성 / 상징장치 / 결말완성도 / 종결어미\n' +
         '6. location: 초반 / 중반 / 후반 / 엔딩\n' +
         '7. score는 소수점 1자리까지 (예: 8.5)\n' +
-        '8. 점수가 10점이어도 evaluation에 포함하세요 (strengths만 작성)\n';
+        '8. 점수가 10점이어도 evaluation에 포함하세요 (strengths만 작성)\n\n' +
+
+        '## ✍️ 수정안 종결어미 절대 규칙\n' +
+        'revised에 작성하는 모든 수정안 문장은 반드시 아래 규칙을 따르세요.\n\n' +
+        '### 사용 가능한 어미 (이것만 허용)\n' +
+        'A그룹(50%): ~했지요, ~하였지요, ~이었지요, ~되었지요, ~더랍니다\n' +
+        'B그룹(50%): ~했습니다, ~하였습니다, ~되었습니다, ~이었습니다, ~그랬습니다\n\n' +
+        '### 절대 금지 어미 (revised에 절대 사용 금지)\n' +
+        '~었다, ~했다, ~되었다, ~하였다, ~있었다 (문어체 금지)\n' +
+        '~어요, ~했어요, ~이에요 (현대 구어체 금지)\n' +
+        '~이다, ~한다, ~된다 (평서문 금지)\n\n' +
+        '### 예시\n' +
+        '❌ revised: "솔이는 이를 악물었다." → 금지\n' +
+        '✅ revised: "솔이는 이를 악물었지요."\n' +
+        '✅ revised: "솔이는 이를 악물었습니다."\n\n' +
+        '❌ revised: "기운이 감돌았다." → 금지\n' +
+        '✅ revised: "기운이 감돌았지요."\n' +
+        '✅ revised: "기운이 감돌았습니다."\n';
 }
 
 // ============================================================
@@ -2758,6 +2775,11 @@ async function calculateAndDisplayScores() {
             '- 지문/무대지시 부족: -5점\n' +
             '- 감각적 묘사 부족: -5점\n\n' +
             '## 📤 응답 형식 (반드시 JSON만):\n' +
+            '## ✍️ 수정안 종결어미 규칙\n' +
+            'revised 작성 시 반드시 존대어를 사용하세요.\n' +
+            '허용: ~했지요/~하였지요(50%) + ~했습니다/~하였습니다(50%)\n' +
+            '금지: ~었다/~했다/~되었다/~이다 (문어체 절대 금지)\n' +
+            '금지: ~어요/~했어요 (현대 구어체 절대 금지)\n\n' +
             '```json\n{\n' +
             '  "scores": { "senior": 75, "fun": 70, "flow": 80, "retention": 72 },\n' +
             '  "scoreDetails": {\n' +
