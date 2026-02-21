@@ -2110,103 +2110,208 @@ async function runMatrixAnalysis(script, roles, cacheName, chunkSize, progressSt
 }
 
 // ============================================================
-// 1차 분석 실행 (v5.2: 오류 검출 + 심층 분석 통합)
-// ============================================================
-// ============================================================
-// 심층 분석 프롬프트 생성
-// ============================================================
-// ============================================================
-// 심층 분석 프롬프트 생성 (v5.3: 초반 후킹 강화)
+// 심층 분석 프롬프트 (v6.0: 전문가 수준 7대 항목 종합 평가)
 // ============================================================
 function buildDeepAnalysisPrompt(scriptText, scriptLength) {
-    return '당신은 20년 경력의 시니어 타깃 유튜브 사극 콘텐츠 총괄 PD입니다.\n' +
+    return '당신은 20년 경력의 시니어 타깃 유튜브 사극 콘텐츠 총괄 PD이자,\n' +
+        '방송 대본 품질 심사위원입니다.\n' +
         '캐시에 제공된 전체 대본(' + scriptLength + '자)을 완전히 읽고 분석한 상태입니다.\n\n' +
 
-        '아래 체크리스트 기준으로 대본을 심층 분석하세요.\n' +
-        '문제가 있는 항목만 보고하세요. 문제 없는 항목은 보고하지 마세요.\n\n' +
+        '## 📋 분석 방법\n' +
+        '아래 7개 평가 항목을 하나씩 분석하세요.\n' +
+        '각 항목마다 반드시:\n' +
+        '- 10점 만점 점수\n' +
+        '- 잘된 점 (구체적 근거)\n' +
+        '- 보완점 (구체적 근거 + 해당 원문 인용 + 수정안)\n' +
+        '을 제시하세요.\n\n' +
 
-        '## 🔥🔥🔥 초반 후킹 분석 (최우선 — 가장 중요)\n\n' +
-        '초반 후킹은 이 대본의 성패를 결정합니다. 아래 7개 항목을 반드시 전부 검사하세요.\n\n' +
+        '보완점이 있을 때는 반드시 대본의 실제 텍스트를 original에 넣고,\n' +
+        '구체적인 수정안을 revised에 넣으세요.\n\n' +
 
-        '### H-1. 첫 문장 검사 (severity: 반드시 high)\n' +
-        '첫 문장이 아래 4가지 중 하나인가?\n' +
-        '① 생명 위협 ② 강한 감정 충돌 ③ 충격적 발언 ④ 즉각적 위험 사건\n' +
-        '→ 배경 설명, 날씨 묘사, 시간 설명으로 시작하면 무조건 오류\n' +
-        '→ 첫 문장은 독자가 "무슨 일이야?"라고 느껴야 합니다.\n\n' +
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
 
-        '### H-2. 초반 30초 긴장 밀도 (약 150~200자)\n' +
-        '처음 200자 안에 아래 긴장 요소가 2개 이상 있는가?\n' +
-        '- 위협 / 충돌 / 비정상 상황 / 감정 폭발 / 죽음·처벌 위험\n' +
-        '→ 1개 이하이면 오류 (severity: high)\n\n' +
+        '## 1️⃣ 초반 후킹력 (10점 만점)\n\n' +
 
-        '### H-3. 궁금증 3개 생성 (약 500~700자 이내)\n' +
-        '1~2분 분량 안에 아래 3가지 궁금증이 자연스럽게 생기는가?\n' +
-        '❶ 왜 이런 일이 벌어졌는가?\n' +
-        '❷ 누가 숨기고 있는가?\n' +
-        '❸ 과거에 무슨 일이 있었는가?\n' +
-        '→ 2개 이하이면 오류\n\n' +
+        '### 검사 기준\n' +
+        'A. 첫 문장 충격도\n' +
+        '   - 생명 위협/감정 충돌/충격 발언/위험 사건 중 하나인가?\n' +
+        '   - 배경 설명/날씨/시간으로 시작하면 -3점\n\n' +
 
-        '### H-4. 초반 감정 동시 삽입\n' +
-        '초반 사건에 감정이 함께 있는가?\n' +
-        '(죄책감/두려움/원망/배신/절망/보호 본능 중 최소 2개)\n' +
-        '→ 사건만 있고 감정이 없으면 오류 (severity: high)\n\n' +
+        'B. 30초 긴장 밀도 (첫 200자)\n' +
+        '   - 위협/충돌/비정상/감정폭발/죽음위험 중 2개 이상 있는가?\n' +
+        '   - 1개 이하면 -2점\n\n' +
 
-        '### H-5. 초반 속도 위반\n' +
-        '초반 500자 안에서 설명이 30%를 넘는가?\n' +
-        '사건→반응→궁금증→설명 순서를 지키는가?\n' +
-        '→ 설명이 먼저 나오거나 설명이 30% 초과하면 오류\n\n' +
+        'C. 궁금증 생성 (첫 700자)\n' +
+        '   - "왜 이런 일이?" / "누가 숨기나?" / "과거에 무슨 일?" 3개 궁금증이 생기는가?\n' +
+        '   - 2개 이하면 -1점\n\n' +
 
-        '### H-6. 후킹 유형 부재\n' +
-        '아래 5가지 후킹 유형 중 최소 1개가 있는가?\n' +
-        '① 고발형 ② 죽음 암시형 ③ 과거 폭로형 ④ 처벌 위기형 ⑤ 기억 폭로형\n' +
-        '→ 하나도 없으면 오류\n\n' +
+        'D. 초반 감정 동시 삽입\n' +
+        '   - 사건과 함께 감정(두려움/죄책감/원망 등)이 있는가?\n' +
+        '   - 사건만 있고 감정 없으면 -2점\n\n' +
 
-        '### H-7. 초반 종합 판정\n' +
-        '위 H-1~H-6을 종합했을 때, 초반 2분 안에 시청자가 이탈할 가능성이 있는가?\n' +
-        '→ 있으면 severity: high로 구체적 수정안 제시\n\n' +
+        'E. 후킹 이후 긴장 유지력 ★★★ (가장 중요)\n' +
+        '   - 후킹 직후 설명/회상으로 긴장이 떨어지지 않는가?\n' +
+        '   - "이야기를 하려면~" 같은 회상 전환으로 긴장이 꺾이면 -2점\n' +
+        '   - 후킹 → 긴장 유지 → 자연스러운 전개 순서를 지키는가?\n\n' +
 
-        '## 😰 감정 삽입 검사\n' +
-        '4. 주요 사건마다 감정이 함께 있는가? (사건만 있고 감정 없으면 오류)\n' +
-        '5. 중반 이후 감정 반전 포인트가 1회 이상 있는가?\n\n' +
+        'F. 후킹 유형\n' +
+        '   - 고발형/죽음암시형/과거폭로형/처벌위기형/기억폭로형 중 하나 이상 있는가?\n\n' +
 
-        '## ⚡ 긴장·흐름 검사\n' +
-        '6. 긴장 상승 곡선 유지되는가? (중간 긴장 하락 구간 있으면 오류)\n' +
-        '7. 장면 전환마다 오해/갈등/위험/의심/감정충돌 중 하나가 있는가?\n' +
-        '8. 실마리 점진 공개 곡선을 따르는가?\n' +
-        '9. 5파트 구조를 갖추고 있는가? (강후킹→갈등확대→위기심화→진실조각→강한여운)\n\n' +
+        '## 2️⃣ 미스터리 구조 완성도 (10점 만점)\n\n' +
 
-        '## 🌙 엔딩·몰입 검사\n' +
-        '10. 엔딩이 완전 해설형이면 오류\n' +
-        '11. 시청자 몰입 장치가 있는가? (반복 단서/기억되는 물건/상징 행동)\n' +
-        '12. 중반 처짐 구간이 있으면 오류\n' +
-        '13. 클리프행어가 있는가?\n\n' +
+        '### 검사 기준\n' +
+        'A. 단서 배치\n' +
+        '   - 작품 전체에 단서(물건/사건/발언)가 3개 이상 있는가?\n' +
+        '   - 각 단서가 무엇인지 구체적으로 나열하세요\n\n' +
+
+        'B. 퍼즐형 전개\n' +
+        '   - 단서들이 점진적으로 공개되는가?\n' +
+        '   - 한꺼번에 쏟아지면 -2점\n\n' +
+
+        'C. 정보 공개 곡선\n' +
+        '   - 초반: 정보 부족 → 중반: 단서 1~2개 → 후반: 진실 조각 → 엔딩: 감정 진실\n' +
+        '   - 이 곡선을 따르는가?\n\n' +
+
+        'D. 중반 설명 과잉\n' +
+        '   - 설명이 길어서 미스터리 템포가 느려지는 구간이 있는가?\n' +
+        '   - 있으면 해당 구간 원문 인용\n\n' +
+
+        '## 3️⃣ 긴장 상승 곡선 (10점 만점)\n\n' +
+
+        '### 검사 기준\n' +
+        'A. 전체 곡선: 작은 이상 → 불안 → 위험 → 위기 → 절정\n' +
+        '   - 이 순서를 따르는가?\n\n' +
+
+        'B. 긴장 하락 구간\n' +
+        '   - 중간에 긴장이 떨어지는 구간이 있는가?\n' +
+        '   - 있으면 해당 구간 원문 인용 + 위치(파트/초반/중반/후반)\n' +
+        '   - 긴장 하락 1곳당 -1점\n\n' +
+
+        'C. 장면 전환 갈등\n' +
+        '   - 장면이 바뀔 때마다 오해/갈등/위험/의심/감정충돌 중 하나가 있는가?\n' +
+        '   - 없는 전환이 있으면 해당 구간 인용\n\n' +
+
+        'D. 파트별 템포\n' +
+        '   - 각 파트(1~5)의 긴장 수준을 평가하세요\n' +
+        '   - 설명이 길어서 템포가 느려지는 파트가 있으면 지적\n\n' +
+
+        '## 4️⃣ 감정 파동 구조 (10점 만점)\n\n' +
+
+        '### 검사 기준\n' +
+        'A. 감정 파동 흐름\n' +
+        '   - 불안 → 희망 → 절망 → 의심 → 충격 → 연민/이해 → 여운\n' +
+        '   - 이 흐름을 따르는가? 빠진 감정이 있는가?\n\n' +
+
+        'B. 사건-감정 동기화\n' +
+        '   - 주요 사건마다 감정이 함께 있는가?\n' +
+        '   - 사건만 있고 감정이 없는 곳이 있으면 인용\n\n' +
+
+        'C. 감정 반전 포인트\n' +
+        '   - 중반 이후 감정 반전이 1회 이상 있는가?\n' +
+        '   - (배신/숨겨진 관계/희생의 진실/오해의 이유)\n\n' +
+
+        'D. 단순 악인 구조 탈피\n' +
+        '   - 악역이 단순 악인이 아닌 입체적 캐릭터인가?\n\n' +
+
+        '## 5️⃣ 인물 입체성 (10점 만점)\n\n' +
+
+        '### 검사 기준\n' +
+        'A. 주요 인물별 역할 명확성\n' +
+        '   - 각 인물의 역할이 뚜렷한가? (주인공/관찰자/대립자 등)\n\n' +
+
+        'B. 내면 갈등\n' +
+        '   - 주요 인물에게 내면 갈등이 있는가?\n' +
+        '   - 갈등이 부족한 인물이 있으면 지적\n\n' +
+
+        'C. 대사의 캐릭터성\n' +
+        '   - 대사가 너무 직접적/설명적이지 않은가?\n' +
+        '   - "할머니가 나쁜 사람 맞지요?" 같은 직접적 대사가 있으면 인용\n\n' +
+
+        'D. 감정 깊이\n' +
+        '   - 수동적 인물도 감정 깊이가 있는가?\n\n' +
+
+        '## 6️⃣ 상징 장치 활용 (10점 만점)\n\n' +
+
+        '### 검사 기준\n' +
+        'A. 상징 물건/장소/행동 나열\n' +
+        '   - 작품에 등장하는 상징 장치를 모두 찾아 나열하세요\n' +
+        '   - 각각이 무엇을 상징하는지 분석\n\n' +
+
+        'B. 반복 단서\n' +
+        '   - 반복적으로 등장하는 물건/말/행동이 있는가?\n\n' +
+
+        'C. 상징 밀도\n' +
+        '   - 상징 장치가 3개 이상이면 우수\n' +
+        '   - 1개 이하이면 보완 필요\n\n' +
+
+        'D. 몰입 장치\n' +
+        '   - 기억되는 물건, 약속/맹세 등 시청자 몰입 장치가 있는가?\n\n' +
+
+        '## 7️⃣ 결말 완성도 (10점 만점)\n\n' +
+
+        '### 검사 기준\n' +
+        'A. 결말 유형\n' +
+        '   - 감정 여운/인과 깨달음/희생 의미/운명의 아이러니 중 하나인가?\n' +
+        '   - 완전 해설형이면 -3점\n\n' +
+
+        'B. 교훈 문장 과잉\n' +
+        '   - "세상에는~" 같은 직접적 교훈 문장이 있으면 -1점\n' +
+        '   - 해당 문장 인용\n\n' +
+
+        'C. 여운\n' +
+        '   - 마지막 장면이 감각적/상징적인가?\n' +
+        '   - 단순 서술로 끝나면 -1점\n\n' +
+
+        'D. 복선 회수\n' +
+        '   - 초반에 깔린 복선이 결말에서 회수되는가?\n\n' +
+
+        '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
 
         '## 📤 응답 형식 (반드시 JSON만)\n' +
         '```json\n' +
-        '{"issues": [\n' +
-        '  {\n' +
-        '    "deepType": "초반후킹",\n' +
-        '    "type": "심층분석",\n' +
-        '    "checkNum": 1,\n' +
-        '    "severity": "high",\n' +
-        '    "original": "해당 구간의 원문 텍스트 (최소 20자, 최대 100자)",\n' +
-        '    "revised": "수정안 (구체적으로 대체할 텍스트)",\n' +
-        '    "reason": "구체적 분석 사유",\n' +
-        '    "location": "초반"\n' +
+        '{\n' +
+        '  "evaluation": [\n' +
+        '    {\n' +
+        '      "category": "초반후킹력",\n' +
+        '      "score": 8.5,\n' +
+        '      "strengths": ["첫 문장 충격 강력", "30초 내 갈등 형성 성공"],\n' +
+        '      "weaknesses": ["후킹 직후 회상 전환으로 긴장 하락"]\n' +
+        '    }\n' +
+        '  ],\n' +
+        '  "issues": [\n' +
+        '    {\n' +
+        '      "deepType": "초반후킹",\n' +
+        '      "type": "심층분석",\n' +
+        '      "severity": "high",\n' +
+        '      "original": "대본에서 실제 존재하는 원문 텍스트 (20자 이상)",\n' +
+        '      "revised": "구체적 수정안 텍스트",\n' +
+        '      "reason": "후킹 직후 설명 전환으로 긴장 곡선 하락. 긴장 유지하며 자연스럽게 전개 필요",\n' +
+        '      "location": "초반"\n' +
+        '    }\n' +
+        '  ],\n' +
+        '  "overall": {\n' +
+        '    "averageScore": 8.9,\n' +
+        '    "topStrengths": ["감정 설계", "상징 장치"],\n' +
+        '    "topWeaknesses": ["초반 긴장 유지력", "중반 설명 과잉"],\n' +
+        '    "completionRate": "높음",\n' +
+        '    "commercialValue": "시니어 채널 적합"\n' +
         '  }\n' +
-        ']}\n' +
+        '}\n' +
         '```\n\n' +
+
         '## 🚨 필수 규칙\n' +
-        '1. original은 대본에서 실제 존재하는 텍스트를 그대로 복사 (20자 이상)\n' +
-        '2. revised는 수정안 하나만 (/ 금지, () 설명 금지)\n' +
-        '3. 문제 없는 항목은 보고하지 마세요\n' +
-        '4. deepType: 초반후킹 / 감정삽입 / 긴장흐름 / 엔딩몰입 중 하나\n' +
-        '5. location: 초반 / 중반 / 후반 / 엔딩 중 하나\n' +
-        '6. 초반후킹 항목은 severity를 반드시 high로 설정\n';
+        '1. evaluation: 7개 항목 반드시 전부 평가 (빠지면 안 됨)\n' +
+        '2. issues: 보완점이 있는 항목만 (잘된 항목은 issues에 넣지 마세요)\n' +
+        '3. original: 대본에 실제 존재하는 텍스트 그대로 복사 (20자 이상, 100자 이내)\n' +
+        '4. revised: 수정안 하나만 (/ 금지, () 설명 금지)\n' +
+        '5. deepType: 초반후킹 / 미스터리구조 / 긴장곡선 / 감정파동 / 인물입체성 / 상징장치 / 결말완성도\n' +
+        '6. location: 초반 / 중반 / 후반 / 엔딩\n' +
+        '7. score는 소수점 1자리까지 (예: 8.5)\n' +
+        '8. 점수가 10점이어도 evaluation에 포함하세요 (strengths만 작성)\n';
 }
 
 // ============================================================
-// 심층 분석 실행
+// 심층 분석 실행 (v6.0: 7대 항목 종합 평가)
 // ============================================================
 async function runDeepAnalysis(script, cacheName) {
     var prompt = buildDeepAnalysisPrompt(script, script.length);
@@ -2217,21 +2322,24 @@ async function runDeepAnalysis(script, cacheName) {
         }, 3, 3000);
 
         var parsed = parseApiResponse(response);
-        var issues = parsed.issues || parsed.errors || [];
 
-        // 유효성 검증
+        // 평가 결과 저장
+        state.stage1.deepEvaluation = parsed.evaluation || [];
+        state.stage1.deepOverall = parsed.overall || null;
+
+        // issues 검증
+        var issues = parsed.issues || parsed.errors || [];
         var validated = [];
+
         issues.forEach(function(item) {
             if (!item.original || item.original.trim().length < 5) return;
             if (!item.reason) return;
 
-            // original이 실제 대본에 존재하는지 확인
             var found = findBestMatch(script, item.original.trim());
 
             validated.push({
                 deepType: item.deepType || '심층분석',
                 type: '심층분석',
-                checkNum: item.checkNum || 0,
                 severity: item.severity || 'medium',
                 original: found.found ? found.matchedText : item.original.trim(),
                 revised: item.revised || '',
@@ -2241,7 +2349,6 @@ async function runDeepAnalysis(script, cacheName) {
             });
         });
 
-        // 위치순 정렬
         validated.sort(function(a, b) {
             return (a._matchPosition || 0) - (b._matchPosition || 0);
         });
@@ -2370,9 +2477,128 @@ async function startStage1Analysis() {
         hideProgress();
     }
 }
+// ============================================================
+// 종합 평가 점수판 HTML 생성
+// ============================================================
+function buildEvaluationScoreBoard(evaluation, overall) {
+    var categoryMeta = {
+        '초반후킹력': { icon: '🔥', color: '#FF416C' },
+        '미스터리구조': { icon: '🔮', color: '#AB47BC' },
+        '긴장상승곡선': { icon: '⚡', color: '#FF9800' },
+        '감정파동구조': { icon: '😰', color: '#E040FB' },
+        '인물입체성': { icon: '🎭', color: '#42A5F5' },
+        '상징장치활용': { icon: '💎', color: '#66BB6A' },
+        '결말완성도': { icon: '🌙', color: '#FFD700' }
+    };
+
+    // 평균 점수
+    var avgScore = 0;
+    if (overall && overall.averageScore) {
+        avgScore = overall.averageScore;
+    } else if (evaluation.length > 0) {
+        var sum = 0;
+        evaluation.forEach(function(e) { sum += (e.score || 0); });
+        avgScore = Math.round(sum / evaluation.length * 10) / 10;
+    }
+
+    var avgColor = avgScore >= 9 ? '#69f0ae' : avgScore >= 7 ? '#FFD700' : '#ff5555';
+
+    var html = '<div style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);border-radius:12px;padding:20px;margin-bottom:15px;">';
+
+    // 헤더
+    html += '<div style="text-align:center;margin-bottom:15px;">' +
+        '<span style="font-size:18px;font-weight:bold;color:#fff;">🎬 종합 구성 평가</span>' +
+        '<span style="display:inline-block;margin-left:15px;font-size:28px;font-weight:bold;color:' + avgColor + ';">' +
+        avgScore + ' / 10</span></div>';
+
+    // 7개 항목 카드
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:15px;">';
+
+    evaluation.forEach(function(item) {
+        var cat = item.category || '';
+        var meta = null;
+        for (var key in categoryMeta) {
+            if (cat.indexOf(key.substring(0, 3)) !== -1 || cat === key) {
+                meta = categoryMeta[key];
+                break;
+            }
+        }
+        if (!meta) meta = { icon: '📋', color: '#aaa' };
+
+        var score = item.score || 0;
+        var scoreColor = score >= 9 ? '#69f0ae' : score >= 7 ? '#FFD700' : '#ff5555';
+        var barWidth = Math.round(score * 10);
+
+        html += '<div style="background:#0d1117;border-radius:8px;padding:10px;border:1px solid #333;">' +
+            '<div style="text-align:center;margin-bottom:6px;">' +
+            '<span style="font-size:20px;">' + meta.icon + '</span></div>' +
+            '<div style="text-align:center;font-size:10px;color:#aaa;margin-bottom:4px;line-height:1.3;">' + escapeHtml(cat) + '</div>' +
+            '<div style="text-align:center;font-size:22px;font-weight:bold;color:' + scoreColor + ';">' + score + '</div>' +
+            '<div style="background:#333;border-radius:4px;height:4px;margin-top:6px;">' +
+            '<div style="background:' + scoreColor + ';border-radius:4px;height:4px;width:' + barWidth + '%;"></div></div>';
+
+        // 강점 표시 (최대 2개)
+        if (item.strengths && item.strengths.length > 0) {
+            item.strengths.slice(0, 2).forEach(function(s) {
+                html += '<div style="font-size:9px;color:#69f0ae;margin-top:4px;line-height:1.3;">✔ ' + escapeHtml(s) + '</div>';
+            });
+        }
+        // 약점 표시 (최대 2개)
+        if (item.weaknesses && item.weaknesses.length > 0) {
+            item.weaknesses.slice(0, 2).forEach(function(w) {
+                html += '<div style="font-size:9px;color:#ff5555;margin-top:3px;line-height:1.3;">❗ ' + escapeHtml(w) + '</div>';
+            });
+        }
+
+        html += '</div>';
+    });
+
+    html += '</div>';
+
+    // 종합 요약
+    if (overall) {
+        html += '<div style="display:flex;gap:15px;flex-wrap:wrap;justify-content:center;padding-top:10px;border-top:1px solid #333;">';
+
+        if (overall.topStrengths && overall.topStrengths.length > 0) {
+            html += '<div style="flex:1;min-width:200px;">' +
+                '<div style="font-size:11px;color:#69f0ae;font-weight:bold;margin-bottom:4px;">🏆 최대 강점</div>';
+            overall.topStrengths.forEach(function(s) {
+                html += '<div style="font-size:11px;color:#ccc;">✔ ' + escapeHtml(s) + '</div>';
+            });
+            html += '</div>';
+        }
+
+        if (overall.topWeaknesses && overall.topWeaknesses.length > 0) {
+            html += '<div style="flex:1;min-width:200px;">' +
+                '<div style="font-size:11px;color:#ff5555;font-weight:bold;margin-bottom:4px;">🔧 보완 필요</div>';
+            overall.topWeaknesses.forEach(function(w) {
+                html += '<div style="font-size:11px;color:#ccc;">❗ ' + escapeHtml(w) + '</div>';
+            });
+            html += '</div>';
+        }
+
+        if (overall.completionRate || overall.commercialValue) {
+            html += '<div style="flex:1;min-width:200px;">' +
+                '<div style="font-size:11px;color:#FFD700;font-weight:bold;margin-bottom:4px;">📊 평가</div>';
+            if (overall.completionRate) {
+                html += '<div style="font-size:11px;color:#ccc;">완주율 예상: ' + escapeHtml(overall.completionRate) + '</div>';
+            }
+            if (overall.commercialValue) {
+                html += '<div style="font-size:11px;color:#ccc;">적합성: ' + escapeHtml(overall.commercialValue) + '</div>';
+            }
+            html += '</div>';
+        }
+
+        html += '</div>';
+    }
+
+    html += '</div>';
+
+    return html;
+}
 
 // ============================================================
-// 분석 결과 표시 (v5.2: 오류 검출 + 심층 분석 통합 테이블)
+// 분석 결과 표시 (v6.0: 오류 검출 + 7대 항목 종합 평가 + 보완점)
 // ============================================================
 function displayStage1Results() {
     var container = document.getElementById('analysis-stage1');
@@ -2381,95 +2607,96 @@ function displayStage1Results() {
 
     if (!allItems || allItems.length === 0) {
         container.innerHTML = '<div style="text-align:center;padding:30px;color:#69f0ae;font-size:18px;">✅ 오류가 발견되지 않았습니다.</div>';
-    } else {
-        // 오류 검출과 심층 분석 분리
-        var errorItems = allItems.filter(function(item) { return item.category === 'error'; });
-        var deepItems = allItems.filter(function(item) { return item.category === 'deep'; });
-
-        var html = '';
-
-        // ── 오류 검출 섹션 ──
-        if (errorItems.length > 0) {
-            html += '<div style="padding:8px 12px;background:#ff555520;border-left:4px solid #ff5555;margin-bottom:8px;border-radius:4px;">' +
-                '<span style="font-weight:bold;color:#ff5555;">🔍 오류 검출</span>' +
-                '<span style="color:#aaa;font-size:12px;margin-left:8px;">' + errorItems.length + '건</span></div>';
-
-            html += '<table class="analysis-table"><thead><tr>' +
-                '<th>유형</th><th>원문</th><th>수정</th><th>사유</th>' +
-                '</tr></thead><tbody>';
-
-            errorItems.forEach(function(err) {
-                var severityColor = err.severity === 'high' ? '#ff5555' : (err.severity === 'medium' ? '#ffaa00' : '#69f0ae');
-                html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;">' +
-                    '<td class="type-cell" style="color:' + severityColor + ';font-weight:bold;">' + formatTypeText(err.type) + '</td>' +
-                    '<td style="color:#ff9800;font-size:11px;">' + escapeHtml(err.original) + '</td>' +
-                    '<td style="color:#69f0ae;font-size:11px;">' + escapeHtml(err.revised) + '</td>' +
-                    '<td style="color:#aaa;font-size:11px;">' + escapeHtml(err.reason) + '</td></tr>';
-            });
-
-            html += '</tbody></table>';
-        }
-
-        // ── 심층 분석 섹션 ──
-        if (deepItems.length > 0) {
-            html += '<div style="padding:8px 12px;background:#FFD70020;border-left:4px solid #FFD700;margin:12px 0 8px 0;border-radius:4px;">' +
-                '<span style="font-weight:bold;color:#FFD700;">🧠 심층 분석</span>' +
-                '<span style="color:#aaa;font-size:12px;margin-left:8px;">' + deepItems.length + '건</span></div>';
-
-            html += '<table class="analysis-table"><thead><tr>' +
-                '<th style="width:55px;">항목</th><th>해당 구간</th><th>수정안</th><th>분석 내용</th>' +
-                '</tr></thead><tbody>';
-
-            // deepType별 색상/아이콘
-            var deepTypeStyle = {
-                '초반후킹': { color: '#FF416C', icon: '🔥', label: '초반\n후킹' },
-                '감정삽입': { color: '#E040FB', icon: '😰', label: '감정\n삽입' },
-                '긴장흐름': { color: '#FF9800', icon: '⚡', label: '긴장\n흐름' },
-                '문체구성': { color: '#42A5F5', icon: '🎭', label: '문체\n구성' },
-                '엔딩몰입': { color: '#66BB6A', icon: '🌙', label: '엔딩\n몰입' }
-            };
-
-            deepItems.forEach(function(item) {
-                var style = deepTypeStyle[item.deepType] || { color: '#FFD700', icon: '🧠', label: item.deepType || '심층' };
-                var severityBadge = '';
-                if (item.severity === 'high') {
-                    severityBadge = '<span style="display:inline-block;background:#ff5555;color:#fff;font-size:9px;padding:1px 4px;border-radius:3px;margin-top:2px;">긴급</span>';
-                } else if (item.severity === 'medium') {
-                    severityBadge = '<span style="display:inline-block;background:#ffaa00;color:#000;font-size:9px;padding:1px 4px;border-radius:3px;margin-top:2px;">권장</span>';
-                }
-
-                var locationBadge = '';
-                if (item.location) {
-                    locationBadge = '<span style="display:inline-block;background:#ffffff15;color:#aaa;font-size:9px;padding:1px 4px;border-radius:3px;margin-top:2px;">' + item.location + '</span>';
-                }
-
-                html += '<tr data-marker-id="' + item.id + '" style="cursor:pointer;border-left:3px solid ' + style.color + ';">' +
-                    '<td class="type-cell" style="text-align:center;">' +
-                        '<span style="font-size:14px;">' + style.icon + '</span><br>' +
-                        '<span style="font-size:10px;color:' + style.color + ';font-weight:bold;line-height:1.2;white-space:pre-line;">' + style.label + '</span><br>' +
-                        severityBadge + '<br>' + locationBadge +
-                    '</td>' +
-                    '<td style="color:#ff9800;font-size:11px;">' + escapeHtml(item.original) + '</td>' +
-                    '<td style="color:#69f0ae;font-size:11px;">' + escapeHtml(item.revised) + '</td>' +
-                    '<td style="color:#ccc;font-size:11px;">' + escapeHtml(item.reason) + '</td></tr>';
-            });
-
-            html += '</tbody></table>';
-        }
-
-        container.innerHTML = html;
-
-        // ── 모든 행 클릭 이벤트 ──
-        container.querySelectorAll('tr[data-marker-id]').forEach(function(row) {
-            row.addEventListener('click', function() {
-                var markerId = this.getAttribute('data-marker-id');
-                var errorIndex = findErrorIndexById('stage1', markerId);
-                if (errorIndex >= 0) {
-                    setCurrentError('stage1', errorIndex);
-                }
-            });
-        });
+        renderScriptWithMarkers('stage1');
+        return;
     }
+
+    var errorItems = allItems.filter(function(item) { return item.category === 'error'; });
+    var deepItems = allItems.filter(function(item) { return item.category === 'deep'; });
+    var evaluation = state.stage1.deepEvaluation || [];
+    var overall = state.stage1.deepOverall || null;
+
+    var html = '';
+
+    // ── 종합 평가 점수판 ──
+    if (evaluation.length > 0) {
+        html += buildEvaluationScoreBoard(evaluation, overall);
+    }
+
+    // ── 오류 검출 섹션 ──
+    if (errorItems.length > 0) {
+        html += '<div style="padding:8px 12px;background:#ff555520;border-left:4px solid #ff5555;margin:12px 0 8px 0;border-radius:4px;">' +
+            '<span style="font-weight:bold;color:#ff5555;">🔍 오류 검출</span>' +
+            '<span style="color:#aaa;font-size:12px;margin-left:8px;">' + errorItems.length + '건</span></div>';
+
+        html += '<table class="analysis-table"><thead><tr>' +
+            '<th>유형</th><th>원문</th><th>수정</th><th>사유</th>' +
+            '</tr></thead><tbody>';
+
+        errorItems.forEach(function(err) {
+            var severityColor = err.severity === 'high' ? '#ff5555' : (err.severity === 'medium' ? '#ffaa00' : '#69f0ae');
+            html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;">' +
+                '<td class="type-cell" style="color:' + severityColor + ';font-weight:bold;">' + formatTypeText(err.type) + '</td>' +
+                '<td style="color:#ff9800;font-size:11px;">' + escapeHtml(err.original) + '</td>' +
+                '<td style="color:#69f0ae;font-size:11px;">' + escapeHtml(err.revised) + '</td>' +
+                '<td style="color:#aaa;font-size:11px;">' + escapeHtml(err.reason) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+    }
+
+    // ── 심층 분석 보완점 섹션 ──
+    if (deepItems.length > 0) {
+        html += '<div style="padding:8px 12px;background:#FFD70020;border-left:4px solid #FFD700;margin:12px 0 8px 0;border-radius:4px;">' +
+            '<span style="font-weight:bold;color:#FFD700;">🧠 심층 분석 보완점</span>' +
+            '<span style="color:#aaa;font-size:12px;margin-left:8px;">' + deepItems.length + '건 — 클릭하면 해당 위치로 이동</span></div>';
+
+        html += '<table class="analysis-table"><thead><tr>' +
+            '<th style="width:55px;">항목</th><th>해당 구간</th><th>수정안</th><th>분석 내용</th>' +
+            '</tr></thead><tbody>';
+
+        var deepTypeStyle = {
+            '초반후킹': { color: '#FF416C', icon: '🔥' },
+            '미스터리구조': { color: '#AB47BC', icon: '🔮' },
+            '긴장곡선': { color: '#FF9800', icon: '⚡' },
+            '감정파동': { color: '#E040FB', icon: '😰' },
+            '인물입체성': { color: '#42A5F5', icon: '🎭' },
+            '상징장치': { color: '#66BB6A', icon: '💎' },
+            '결말완성도': { color: '#FFD700', icon: '🌙' }
+        };
+
+        deepItems.forEach(function(item) {
+            var style = deepTypeStyle[item.deepType] || { color: '#FFD700', icon: '🧠' };
+            var severityBadge = item.severity === 'high' ?
+                '<span style="display:inline-block;background:#ff5555;color:#fff;font-size:9px;padding:1px 4px;border-radius:3px;margin-top:3px;">긴급</span>' :
+                '<span style="display:inline-block;background:#ffaa00;color:#000;font-size:9px;padding:1px 4px;border-radius:3px;margin-top:3px;">권장</span>';
+            var locationBadge = item.location ?
+                '<span style="display:inline-block;background:#ffffff15;color:#aaa;font-size:9px;padding:1px 4px;border-radius:3px;margin-top:3px;">' + item.location + '</span>' : '';
+
+            html += '<tr data-marker-id="' + item.id + '" style="cursor:pointer;border-left:3px solid ' + style.color + ';">' +
+                '<td style="text-align:center;padding:6px 2px;">' +
+                    '<span style="font-size:16px;">' + style.icon + '</span><br>' +
+                    '<span style="font-size:9px;color:' + style.color + ';font-weight:bold;">' + (item.deepType || '') + '</span><br>' +
+                    severityBadge + '<br>' + locationBadge +
+                '</td>' +
+                '<td style="color:#ff9800;font-size:11px;">' + escapeHtml(item.original) + '</td>' +
+                '<td style="color:#69f0ae;font-size:11px;">' + escapeHtml(item.revised) + '</td>' +
+                '<td style="color:#ccc;font-size:11px;">' + escapeHtml(item.reason) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+    }
+
+    container.innerHTML = html;
+
+    // 모든 행 클릭 이벤트
+    container.querySelectorAll('tr[data-marker-id]').forEach(function(row) {
+        row.addEventListener('click', function() {
+            var markerId = this.getAttribute('data-marker-id');
+            var errorIndex = findErrorIndexById('stage1', markerId);
+            if (errorIndex >= 0) {
+                setCurrentError('stage1', errorIndex);
+            }
+        });
+    });
 
     renderScriptWithMarkers('stage1');
 
