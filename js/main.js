@@ -3407,6 +3407,185 @@ function buildRewritePrompt(chunkText, chunkInfo, totalLength, analysisErrors, i
 
         '━━ 수정 대상 구간 ━━\n' + chunkText + '\n━━ 구간 끝 ━━';
 }
+// ============================================================
+// 심층 분석 결과를 요약 텍스트로 변환
+// ============================================================
+function buildDeepAnalysisSummary(deepItems) {
+    if (!deepItems || deepItems.length === 0) return '';
+
+    var summary = '';
+
+    // 카테고리별 분류
+    var categories = {
+        '초반후킹': [],
+        '감정삽입': [],
+        '긴장흐름': [],
+        '문체구성': [],
+        '엔딩몰입': []
+    };
+
+    deepItems.forEach(function(item) {
+        var key = item.deepType || '기타';
+        if (!categories[key]) categories[key] = [];
+        categories[key].push(item);
+    });
+
+    var categoryLabels = {
+        '초반후킹': '🔥 초반 후킹 문제',
+        '감정삽입': '😰 감정 삽입 문제',
+        '긴장흐름': '⚡ 긴장/흐름 문제',
+        '문체구성': '🎭 문체/구성 문제',
+        '엔딩몰입': '🌙 엔딩/몰입 문제'
+    };
+
+    for (var cat in categories) {
+        var items = categories[cat];
+        if (items.length === 0) continue;
+
+        summary += '\n### ' + (categoryLabels[cat] || cat) + ' (' + items.length + '건)\n';
+        items.forEach(function(item, idx) {
+            summary += (idx + 1) + '. [' + (item.severity === 'high' ? '긴급' : '권장') + '] ' + item.reason + '\n';
+            if (item.original) {
+                summary += '   해당 구간: "' + item.original.substring(0, 80) + '"\n';
+            }
+            if (item.revised) {
+                summary += '   수정 방향: "' + item.revised.substring(0, 80) + '"\n';
+            }
+        });
+    }
+
+    return summary;
+}
+
+// ============================================================
+// 전면 수정용 프롬프트 (오류 검출 + 심층 분석 통합)
+// ============================================================
+function buildRewritePromptWithDeepAnalysis(chunkText, chunkInfo, totalLength, errorItems, deepItems, deepAnalysisSummary, isFirstChunk, isLastChunk) {
+
+    // 이 청크에 해당하는 오류 검출 결과
+    var relevantErrors = '';
+    if (errorItems && errorItems.length > 0) {
+        var matched = errorItems.filter(function(err) {
+            if (!err.original) return false;
+            var snippet = err.original.substring(0, 30);
+            return chunkText.indexOf(snippet) !== -1;
+        });
+        if (matched.length > 0) {
+            relevantErrors = '\n\n## 📋 이 구간의 오류 검출 결과 (반드시 수정 반영)\n';
+            matched.forEach(function(err, idx) {
+                relevantErrors += (idx + 1) + '. [' + (err.type || '기타') + '] ' +
+                    '"' + (err.original || '').substring(0, 60) + '" → "' + (err.revised || '').substring(0, 60) + '"\n' +
+                    '   사유: ' + (err.reason || '') + '\n';
+            });
+        }
+    }
+
+    // 이 청크에 해당하는 심층 분석 결과
+    var relevantDeep = '';
+    if (deepItems && deepItems.length > 0) {
+        var chunkLocation = '';
+        if (isFirstChunk) chunkLocation = '초반';
+        else if (isLastChunk) chunkLocation = '엔딩';
+        else chunkLocation = '중반';
+
+        // 위치가 일치하거나, 원문이 이 청크에 포함된 항목
+        var matchedDeep = deepItems.filter(function(item) {
+            if (item.location === chunkLocation) return true;
+            if (item.location === '후반' && isLastChunk) return true;
+            if (!item.original) return false;
+            var snippet = item.original.substring(0, 30);
+            return chunkText.indexOf(snippet) !== -1;
+        });
+
+        if (matchedDeep.length > 0) {
+            relevantDeep = '\n\n## 🧠 이 구간의 심층 분석 결과 (반드시 수정 반영)\n';
+            matchedDeep.forEach(function(item, idx) {
+                var urgency = item.severity === 'high' ? '⚠️ 긴급' : '권장';
+                relevantDeep += (idx + 1) + '. [' + urgency + '] [' + (item.deepType || '') + '] ' + item.reason + '\n';
+                if (item.original) {
+                    relevantDeep += '   문제 구간: "' + item.original.substring(0, 80) + '"\n';
+                }
+                if (item.revised) {
+                    relevantDeep += '   수정 방향: "' + item.revised.substring(0, 80) + '"\n';
+                }
+            });
+        }
+    }
+
+    // 전체 심층 분석 요약 (맥락 파악용)
+    var globalDeepContext = '';
+    if (deepAnalysisSummary && deepAnalysisSummary.length > 0) {
+        globalDeepContext = '\n\n## 📊 전체 대본 심층 분석 요약 (전체 맥락 참고)\n' +
+            '아래는 전체 대본에 대한 심층 분석 결과입니다. 이 구간 수정 시 전체 방향성을 참고하세요.\n' +
+            deepAnalysisSummary;
+    }
+
+    // 위치별 가이드
+    var positionGuide = '';
+    if (isFirstChunk) {
+        positionGuide = '\n\n## 🔥 이 구간은 대본의 시작부입니다. 초반 후킹 규칙을 최우선 적용하세요.\n' +
+            '- 첫 문장: 생명 위협 / 강한 감정 충돌 / 충격적 발언 / 즉각적 위험 사건 중 택1\n' +
+            '- 설명으로 시작 절대 금지\n' +
+            '- 초반 30초 내 긴장 요소 2개 이상\n' +
+            '- 1~2분 내 궁금증 3개 자연 생성 (왜? 누가? 과거에 무슨 일?)\n' +
+            '- 감정 동시 삽입 (죄책감/두려움/원망/배신/절망/보호 본능)\n' +
+            '- 설명 30% 이하, 사건→반응→궁금증→설명 순서\n';
+    } else if (isLastChunk) {
+        positionGuide = '\n\n## 🌙 이 구간은 대본의 마무리입니다. 엔딩 규칙을 적용하세요.\n' +
+            '- 감정 여운 / 인과 깨달음 / 희생 의미 / 운명의 아이러니 중 택1\n' +
+            '- 완전 해설형 엔딩 금지\n' +
+            '- 감정 파동: 충격 → 이해 → 여운\n' +
+            '- 시청자 몰입 장치 마무리 (반복 단서 회수, 약속 결말)\n';
+    } else {
+        positionGuide = '\n\n## ⚡ 이 구간은 대본의 중반부입니다.\n' +
+            '- 장면 전환마다: 오해/갈등 확대/위험 신호/새로운 의심/감정 충돌 중 하나 삽입\n' +
+            '- 긴장 상승 곡선 유지 (중간 긴장 하락 금지)\n' +
+            '- 실마리 점진 공개 ("알 것 같지만 모르는 상태" 유지)\n' +
+            '- 감정 반전 포인트 삽입 (배신/숨겨진 관계/희생의 진실/오해의 이유)\n';
+    }
+
+    return '## 📌 작업 지시\n' +
+        '전체 대본 ' + totalLength + '자 중 ' + chunkInfo + '\n' +
+        '아래 구간을 전면 수정(리라이팅)하세요.\n\n' +
+
+        '⚠️ 중요: 아래 "오류 검출 결과"와 "심층 분석 결과"에 나온 문제점을 반드시 수정에 반영하세요.\n' +
+        '심층 분석에서 지적된 항목은 단순 참고가 아니라 필수 수정 사항입니다.\n\n' +
+
+        '## ⛔ 절대 규칙\n' +
+        '- 작가 소개, 제목, 회차 번호, 소제목, 메타 설명 금지\n' +
+        '- 스토리 본문만 출력\n' +
+        '- 조선 후기 고증 준수 (현대 단어, 현대 제도, 외래어 금지)\n' +
+        '- 화폐: 냥/전/푼/관 | 시간: 자시/삼경/동틀 무렵 | 장소: 관아/포졸/주막/장터/암자\n' +
+        '- 과도한 잔혹 묘사 금지\n' +
+        '- 서술 80~85%, 대사 10~15%, 대사는 짧게\n\n' +
+
+        '## 🎭 문체 규칙\n' +
+        '- 할머니가 손주에게 들려주는 따뜻한 구술체\n' +
+        '- 특정 종결어미 30% 이하 (기계적 반복 금지)\n' +
+        '- 연결형 문장 60% 이상\n' +
+        '- 보고서체 금지\n\n' +
+
+        '## 😰 감정 규칙\n' +
+        '- 사건마다 감정 반드시 삽입 (죄책감/두려움/원망/배신/절망/보호 본능)\n' +
+        '- 사건만 있고 감정 없으면 실패\n' +
+        '- 감정 파동: 불안→희망→절망→의심→충격→이해→여운\n\n' +
+
+        '## 🔗 시청자 몰입 유지 장치\n' +
+        '- 반복 단서, 기억되는 물건, 상징 행동, 약속/맹세\n\n' +
+
+        positionGuide +
+        relevantErrors +
+        relevantDeep +
+        globalDeepContext +
+
+        '\n\n## 📤 출력 규칙\n' +
+        '1. 수정된 대본 본문만 출력 (설명/주석/코드블록 금지)\n' +
+        '2. JSON 아닌 순수 텍스트만\n' +
+        '3. 이 구간의 내용을 빠짐없이 수정하여 전문 출력\n' +
+        '4. 핵심 줄거리와 등장인물은 반드시 유지\n\n' +
+
+        '━━ 수정 대상 구간 ━━\n' + chunkText + '\n━━ 구간 끝 ━━';
+}
 
 // ============================================================
 // 전면 수정용 청크 분할 (겹침 포함)
@@ -3522,8 +3701,10 @@ function mergeRewrittenChunks(chunks, rewrittenTexts, originalScript) {
 // ============================================================
 // 전면 수정 실행
 // ============================================================
+// ============================================================
+// 전면 수정 실행 (v5.2: 오류 검출 + 심층 분석 결과 통합 반영)
+// ============================================================
 async function startFullRewrite() {
-    // 분석 오류 확인
     var errors = state.stage1.allErrors || [];
     var baseScript = state.stage1.fixedScript || state.stage1.originalScript || '';
 
@@ -3538,6 +3719,15 @@ async function startFullRewrite() {
         return;
     }
 
+    // 오류 검출 항목과 심층 분석 항목 분리
+    var errorItems = errors.filter(function(e) { return e.category === 'error'; });
+    var deepItems = errors.filter(function(e) { return e.category === 'deep'; });
+
+    if (errorItems.length === 0 && deepItems.length === 0) {
+        alert('분석 결과가 없습니다.\n"분석 시작"을 먼저 실행해주세요.');
+        return;
+    }
+
     // 버튼 비활성화
     var rewriteBtn = document.getElementById('btn-full-rewrite');
     if (rewriteBtn) {
@@ -3549,7 +3739,7 @@ async function startFullRewrite() {
     updateProgress(2, '캐시 생성 중...');
 
     try {
-        // 캐시 생성 (전체 대본 + 시스템 프롬프트)
+        // 캐시 생성
         var systemPrompt = getRewriteSystemPrompt();
         var cacheName = await createScriptCache(baseScript, systemPrompt, 1800);
         state._rewriteCacheName = cacheName;
@@ -3561,6 +3751,9 @@ async function startFullRewrite() {
             startCacheTimer(cacheName, 1800);
         }
 
+        // 심층 분석 결과를 텍스트로 변환
+        var deepAnalysisSummary = buildDeepAnalysisSummary(deepItems);
+
         // 청크 분할
         var chunks = splitForRewrite(baseScript);
         console.log('📦 전면 수정: ' + chunks.length + '개 청크');
@@ -3570,7 +3763,7 @@ async function startFullRewrite() {
         var rewrittenTexts = new Array(chunks.length).fill('');
         var maxConcurrent = REWRITE_CONFIG.MAX_CONCURRENT;
 
-        // 순차적 배치 처리 (429 방지)
+        // 순차적 배치 처리
         for (var batchStart = 0; batchStart < chunks.length; batchStart += maxConcurrent) {
             var batchEnd = Math.min(batchStart + maxConcurrent, chunks.length);
             var batchPromises = [];
@@ -3581,9 +3774,10 @@ async function startFullRewrite() {
                 var isFirst = (ci === 0);
                 var isLast = (ci === chunks.length - 1);
 
-                var prompt = buildRewritePrompt(
+                var prompt = buildRewritePromptWithDeepAnalysis(
                     chunk.text, chunkInfo, baseScript.length,
-                    errors, isFirst, isLast
+                    errorItems, deepItems, deepAnalysisSummary,
+                    isFirst, isLast
                 );
 
                 (function(index, promptRef, cacheRef) {
@@ -3592,7 +3786,6 @@ async function startFullRewrite() {
                             return callGeminiAPI(promptRef, cacheRef);
                         }, 3, 3000)
                         .then(function(response) {
-                            // 코드블록 제거
                             var cleaned = response
                                 .replace(/```[a-z]*\n?/g, '')
                                 .replace(/```/g, '')
@@ -3602,7 +3795,7 @@ async function startFullRewrite() {
                         })
                         .catch(function(err) {
                             console.error('   ❌ 청크 ' + (index + 1) + ' 실패: ' + err.message);
-                            rewrittenTexts[index] = ''; // 실패 시 빈 문자열
+                            rewrittenTexts[index] = '';
                         })
                     );
                 })(ci, prompt, cacheName);
@@ -3613,7 +3806,6 @@ async function startFullRewrite() {
             var progress = 5 + Math.round((batchEnd / chunks.length) * 80);
             updateProgress(progress, '📝 수정 중... (' + batchEnd + '/' + chunks.length + ')');
 
-            // 배치 간 딜레이 (429 방지)
             if (batchEnd < chunks.length) {
                 await new Promise(function(resolve) { setTimeout(resolve, 1500); });
             }
@@ -3623,7 +3815,6 @@ async function startFullRewrite() {
         updateProgress(88, '📎 수정 결과 병합 중...');
         var fullRewrittenScript = mergeRewrittenChunks(chunks, rewrittenTexts, baseScript);
 
-        // 결과 검증
         if (!fullRewrittenScript || fullRewrittenScript.trim().length < baseScript.length * 0.3) {
             throw new Error('수정 결과가 너무 짧습니다. 원본 대비 30% 미만입니다.');
         }
@@ -3644,7 +3835,6 @@ async function startFullRewrite() {
             state._rewriteCacheName = null;
         }
 
-        // 다운로드 버튼 활성화
         var downloadBtn = document.getElementById('btn-download');
         if (downloadBtn) downloadBtn.disabled = false;
 
