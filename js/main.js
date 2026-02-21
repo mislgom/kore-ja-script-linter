@@ -3069,3 +3069,511 @@ openFullViewModal = function() {
 document.addEventListener('DOMContentLoaded', function() {
     initEditMode();
 });
+
+// ============================================================
+// 대본 전면 수정 시스템 (v5.1 신규)
+// - 분석 완료 후 시니어 야담 작가 프롬프트 기반 전면 리라이팅
+// - 수정 결과를 "수정 반영" 칸에 표시
+// ============================================================
+
+var REWRITE_CONFIG = {
+    CHUNK_SIZE: 4000,       // 청크당 글자수
+    OVERLAP: 200,           // 청크 간 겹침 (문맥 유지)
+    MAX_CONCURRENT: 2       // 동시 API 호출 수 (429 방지)
+};
+
+// ============================================================
+// 시니어 야담 작가 시스템 프롬프트
+// ============================================================
+function getRewriteSystemPrompt() {
+    return '당신은 20년 이상 라디오 연속극·오디오북·시니어 매거진 연재 경력을 가진 ' +
+        '시니어 전문 장편 야담 작가입니다.\n\n' +
+        '전문 분야:\n' +
+        '- 조선 후기 배경 야담·기담·미스터리 장편 서사 제작\n' +
+        '- 할머니가 손주에게 들려주듯 따뜻한 구술체 유지\n' +
+        '- 초반부터 끝까지 궁금증 유지\n\n' +
+        '이 대본은 문학 작품이 아니라 유튜브 시니어 완주율 최적화 설계물입니다.';
+}
+
+// ============================================================
+// 전면 수정용 역할 프롬프트 생성
+// ============================================================
+function buildRewritePrompt(chunkText, chunkInfo, totalLength, analysisErrors, isFirstChunk, isLastChunk) {
+
+    // 이 청크에 해당하는 분석 오류 추출
+    var relevantErrors = '';
+    if (analysisErrors && analysisErrors.length > 0) {
+        var matched = analysisErrors.filter(function(err) {
+            if (!err.original) return false;
+            var snippet = err.original.substring(0, 30);
+            return chunkText.indexOf(snippet) !== -1;
+        });
+        if (matched.length > 0) {
+            relevantErrors = '\n\n## 📋 이 구간에서 발견된 분석 오류 (반드시 수정 반영)\n';
+            matched.forEach(function(err, idx) {
+                relevantErrors += (idx + 1) + '. [' + (err.type || '기타') + '] ' +
+                    '"' + (err.original || '').substring(0, 60) + '" → "' + (err.revised || '').substring(0, 60) + '"\n' +
+                    '   사유: ' + (err.reason || '') + '\n';
+            });
+        }
+    }
+
+    var positionGuide = '';
+    if (isFirstChunk) {
+        positionGuide = '\n\n## 🔥 이 구간은 대본의 시작부입니다. 초반 후킹 규칙을 적용하세요.\n' +
+            '- 첫 문장: 생명 위협 / 강한 감정 충돌 / 충격적 발언 / 즉각적 위험 사건 중 택1\n' +
+            '- 설명으로 시작 절대 금지\n' +
+            '- 초반 30초 내 긴장 요소 2개 이상\n' +
+            '- 1~2분 내 궁금증 3개 자연 생성 (왜? 누가? 과거에 무슨 일?)\n' +
+            '- 설명 30% 이하, 사건→반응→궁금증→설명 순서\n';
+    } else if (isLastChunk) {
+        positionGuide = '\n\n## 🌙 이 구간은 대본의 마무리입니다. 엔딩 규칙을 적용하세요.\n' +
+            '- 감정 여운 / 인과 깨달음 / 희생 의미 / 운명의 아이러니 중 택1\n' +
+            '- 완전 해설형 엔딩 금지\n' +
+            '- 감정 파동: 충격 → 이해 → 여운\n';
+    } else {
+        positionGuide = '\n\n## ⚡ 이 구간은 대본의 중반부입니다.\n' +
+            '- 장면 전환마다: 오해/갈등 확대/위험 신호/새로운 의심/감정 충돌 중 하나 삽입\n' +
+            '- 긴장 상승 곡선 유지 (중간 긴장 하락 금지)\n' +
+            '- 실마리 점진 공개 ("알 것 같지만 모르는 상태" 유지)\n';
+    }
+
+    return '## 📌 작업 지시\n' +
+        '전체 대본 ' + totalLength + '자 중 ' + chunkInfo + '\n' +
+        '아래 구간을 전면 수정(리라이팅)하세요.\n\n' +
+
+        '## ⛔ 절대 규칙\n' +
+        '- 작가 소개, 제목, 회차 번호, 소제목, 메타 설명 금지\n' +
+        '- 스토리 본문만 출력\n' +
+        '- 조선 후기 고증 준수 (현대 단어, 현대 제도, 외래어 금지)\n' +
+        '- 화폐: 냥/전/푼/관 | 시간: 자시/삼경/동틀 무렵 | 장소: 관아/포졸/주막/장터/암자\n' +
+        '- 과도한 잔혹 묘사 금지\n' +
+        '- 서술 80~85%, 대사 10~15%, 대사는 짧게\n\n' +
+
+        '## 🎭 문체 규칙\n' +
+        '- 할머니가 손주에게 들려주는 따뜻한 구술체\n' +
+        '- 특정 종결어미 30% 이하 (기계적 반복 금지)\n' +
+        '- 연결형 문장 60% 이상\n' +
+        '- 보고서체 금지\n\n' +
+
+        '## 😰 감정 규칙\n' +
+        '- 사건마다 감정 반드시 삽입 (죄책감/두려움/원망/배신/절망/보호 본능)\n' +
+        '- 사건만 있고 감정 없으면 실패\n' +
+        '- 감정 파동: 불안→희망→절망→의심→충격→이해→여운\n\n' +
+
+        '## 🔗 시청자 몰입 유지 장치\n' +
+        '- 반복 단서, 기억되는 물건, 상징 행동, 약속/맹세\n' +
+        '- 중반 이후 감정 반전 1회 이상 (배신/숨겨진 관계/희생의 진실/오해의 이유)\n\n' +
+
+        positionGuide +
+        relevantErrors +
+
+        '\n\n## 📤 출력 규칙\n' +
+        '1. 수정된 대본 본문만 출력 (설명/주석/코드블록 금지)\n' +
+        '2. JSON 아닌 순수 텍스트만\n' +
+        '3. 이 구간의 내용을 빠짐없이 수정하여 전문 출력\n' +
+        '4. 핵심 줄거리와 등장인물은 반드시 유지\n\n' +
+
+        '━━ 수정 대상 구간 ━━\n' + chunkText + '\n━━ 구간 끝 ━━';
+}
+
+// ============================================================
+// 전면 수정용 청크 분할 (겹침 포함)
+// ============================================================
+function splitForRewrite(script) {
+    if (!script || script.length === 0) return [];
+
+    var chunkSize = REWRITE_CONFIG.CHUNK_SIZE;
+    var overlap = REWRITE_CONFIG.OVERLAP;
+
+    if (script.length <= chunkSize) {
+        return [{ text: script, start: 0, end: script.length, num: 1, total: 1 }];
+    }
+
+    var chunks = [];
+    var pos = 0;
+
+    while (pos < script.length) {
+        var end = Math.min(pos + chunkSize, script.length);
+
+        // 문장 경계에서 자르기
+        if (end < script.length) {
+            var cutSearch = script.substring(Math.max(end - 100, pos), end);
+            var lastPeriod = cutSearch.lastIndexOf('.');
+            var lastNewline = cutSearch.lastIndexOf('\n');
+            var cutPoint = Math.max(lastPeriod, lastNewline);
+            if (cutPoint > 0) {
+                end = Math.max(end - 100, pos) + cutPoint + 1;
+            }
+        }
+
+        chunks.push({
+            text: script.substring(pos, end),
+            start: pos,
+            end: end,
+            num: chunks.length + 1,
+            total: 0
+        });
+
+        // 다음 시작점 (겹침 적용)
+        pos = Math.max(end - overlap, pos + 1);
+        if (pos >= script.length) break;
+    }
+
+    for (var i = 0; i < chunks.length; i++) {
+        chunks[i].total = chunks.length;
+    }
+
+    return chunks;
+}
+
+// ============================================================
+// 겹침 구간 병합
+// ============================================================
+function mergeRewrittenChunks(chunks, rewrittenTexts, originalScript) {
+    if (rewrittenTexts.length === 1) return rewrittenTexts[0];
+
+    var result = '';
+
+    for (var i = 0; i < rewrittenTexts.length; i++) {
+        var text = rewrittenTexts[i];
+        if (!text || text.trim().length === 0) {
+            // 실패한 청크는 원본으로 대체
+            text = chunks[i].text;
+        }
+
+        if (i === 0) {
+            result = text;
+        } else {
+            // 겹침 구간 처리: 이전 결과의 마지막 부분과 현재 텍스트의 첫 부분에서 공통점 찾기
+            var overlapLen = REWRITE_CONFIG.OVERLAP;
+            var prevTail = result.substring(Math.max(0, result.length - overlapLen * 3));
+            var currHead = text.substring(0, overlapLen * 3);
+
+            var bestOverlap = 0;
+            // 문장 단위로 겹침 찾기
+            var prevSentences = prevTail.split(/(?<=[.!?。\n])\s*/);
+            var currSentences = currHead.split(/(?<=[.!?。\n])\s*/);
+
+            for (var p = prevSentences.length - 1; p >= 0; p--) {
+                var prevSent = prevSentences[p].trim();
+                if (prevSent.length < 5) continue;
+
+                for (var c = 0; c < Math.min(currSentences.length, 5); c++) {
+                    var currSent = currSentences[c].trim();
+                    if (currSent.length < 5) continue;
+
+                    // 유사도 체크 (첫 10글자 비교)
+                    var checkLen = Math.min(10, prevSent.length, currSent.length);
+                    if (prevSent.substring(0, checkLen) === currSent.substring(0, checkLen)) {
+                        // 겹침 발견 — 현재 텍스트에서 이 문장부터 사용
+                        var cutPos = text.indexOf(currSent);
+                        if (cutPos > 0) {
+                            bestOverlap = cutPos;
+                        }
+                        break;
+                    }
+                }
+                if (bestOverlap > 0) break;
+            }
+
+            if (bestOverlap > 0) {
+                result += '\n' + text.substring(bestOverlap);
+            } else {
+                result += '\n\n' + text;
+            }
+        }
+    }
+
+    return result;
+}
+
+// ============================================================
+// 전면 수정 실행
+// ============================================================
+async function startFullRewrite() {
+    // 분석 오류 확인
+    var errors = state.stage1.allErrors || [];
+    var baseScript = state.stage1.fixedScript || state.stage1.originalScript || '';
+
+    if (!baseScript || baseScript.trim().length < 50) {
+        alert('수정할 대본이 없습니다.\n대본을 입력하고 분석을 먼저 실행해주세요.');
+        return;
+    }
+
+    var apiKey = localStorage.getItem('GEMINI_API_KEY');
+    if (!apiKey) {
+        alert('API 키를 먼저 설정해주세요.');
+        return;
+    }
+
+    // 버튼 비활성화
+    var rewriteBtn = document.getElementById('btn-full-rewrite');
+    if (rewriteBtn) {
+        rewriteBtn.disabled = true;
+        rewriteBtn.textContent = '⏳ 전면 수정 중...';
+    }
+
+    showProgress('🔥 대본 전면 수정 시작...');
+    updateProgress(2, '캐시 생성 중...');
+
+    try {
+        // 캐시 생성 (전체 대본 + 시스템 프롬프트)
+        var systemPrompt = getRewriteSystemPrompt();
+        var cacheName = await createScriptCache(baseScript, systemPrompt, 1800);
+        state._rewriteCacheName = cacheName;
+
+        if (!cacheName) {
+            console.log('⚠️ 캐시 없이 진행');
+        } else {
+            console.log('✅ 전면 수정 캐시: ' + cacheName);
+            startCacheTimer(cacheName, 1800);
+        }
+
+        // 청크 분할
+        var chunks = splitForRewrite(baseScript);
+        console.log('📦 전면 수정: ' + chunks.length + '개 청크');
+
+        updateProgress(5, '📝 ' + chunks.length + '개 구간 수정 시작...');
+
+        var rewrittenTexts = new Array(chunks.length).fill('');
+        var maxConcurrent = REWRITE_CONFIG.MAX_CONCURRENT;
+
+        // 순차적 배치 처리 (429 방지)
+        for (var batchStart = 0; batchStart < chunks.length; batchStart += maxConcurrent) {
+            var batchEnd = Math.min(batchStart + maxConcurrent, chunks.length);
+            var batchPromises = [];
+
+            for (var ci = batchStart; ci < batchEnd; ci++) {
+                var chunk = chunks[ci];
+                var chunkInfo = chunk.start + '~' + chunk.end + '자 (' + chunk.num + '/' + chunk.total + ')';
+                var isFirst = (ci === 0);
+                var isLast = (ci === chunks.length - 1);
+
+                var prompt = buildRewritePrompt(
+                    chunk.text, chunkInfo, baseScript.length,
+                    errors, isFirst, isLast
+                );
+
+                (function(index, promptRef, cacheRef) {
+                    batchPromises.push(
+                        retryWithDelay(function() {
+                            return callGeminiAPI(promptRef, cacheRef);
+                        }, 3, 3000)
+                        .then(function(response) {
+                            // 코드블록 제거
+                            var cleaned = response
+                                .replace(/```[a-z]*\n?/g, '')
+                                .replace(/```/g, '')
+                                .trim();
+                            rewrittenTexts[index] = cleaned;
+                            console.log('   ✅ 청크 ' + (index + 1) + ' 수정 완료 (' + cleaned.length + '자)');
+                        })
+                        .catch(function(err) {
+                            console.error('   ❌ 청크 ' + (index + 1) + ' 실패: ' + err.message);
+                            rewrittenTexts[index] = ''; // 실패 시 빈 문자열
+                        })
+                    );
+                })(ci, prompt, cacheName);
+            }
+
+            await Promise.all(batchPromises);
+
+            var progress = 5 + Math.round((batchEnd / chunks.length) * 80);
+            updateProgress(progress, '📝 수정 중... (' + batchEnd + '/' + chunks.length + ')');
+
+            // 배치 간 딜레이 (429 방지)
+            if (batchEnd < chunks.length) {
+                await new Promise(function(resolve) { setTimeout(resolve, 1500); });
+            }
+        }
+
+        // 청크 병합
+        updateProgress(88, '📎 수정 결과 병합 중...');
+        var fullRewrittenScript = mergeRewrittenChunks(chunks, rewrittenTexts, baseScript);
+
+        // 결과 검증
+        if (!fullRewrittenScript || fullRewrittenScript.trim().length < baseScript.length * 0.3) {
+            throw new Error('수정 결과가 너무 짧습니다. 원본 대비 30% 미만입니다.');
+        }
+
+        // 상태 저장
+        state.stage1.rewrittenScript = fullRewrittenScript;
+        state.stage1.fixedScript = fullRewrittenScript;
+        state.stage1.isFixed = true;
+        state.finalScript = fullRewrittenScript;
+
+        // 수정 반영 칸에 표시
+        updateProgress(92, '결과 표시 중...');
+        displayRewrittenResult(fullRewrittenScript, baseScript);
+
+        // 캐시 정리
+        if (state._rewriteCacheName) {
+            deleteScriptCache(state._rewriteCacheName);
+            state._rewriteCacheName = null;
+        }
+
+        // 다운로드 버튼 활성화
+        var downloadBtn = document.getElementById('btn-download');
+        if (downloadBtn) downloadBtn.disabled = false;
+
+        updateProgress(100, '🔥 전면 수정 완료!');
+        setTimeout(hideProgress, 1500);
+
+    } catch (error) {
+        if (state._rewriteCacheName) {
+            deleteScriptCache(state._rewriteCacheName);
+            state._rewriteCacheName = null;
+        }
+        if (error.name !== 'AbortError') {
+            alert('전면 수정 중 오류: ' + error.message);
+        }
+        hideProgress();
+    } finally {
+        if (rewriteBtn) {
+            rewriteBtn.disabled = false;
+            rewriteBtn.innerHTML = '🔥 대본 전면 수정';
+        }
+    }
+}
+
+// ============================================================
+// 수정 결과를 "수정 반영" 칸에 표시
+// ============================================================
+function displayRewrittenResult(rewrittenScript, originalScript) {
+    var container = document.getElementById('revised-stage1');
+    if (!container) return;
+
+    // 변경 통계 계산
+    var origLen = originalScript.length;
+    var newLen = rewrittenScript.length;
+    var lenDiff = newLen - origLen;
+    var lenDiffStr = (lenDiff >= 0 ? '+' : '') + lenDiff;
+    var changeRate = Math.round(Math.abs(lenDiff) / origLen * 100);
+
+    // 간단한 diff 하이라이트 (줄 단위 비교)
+    var origLines = originalScript.split('\n');
+    var newLines = rewrittenScript.split('\n');
+
+    var htmlContent = '';
+    var addedCount = 0;
+    var removedCount = 0;
+    var modifiedCount = 0;
+
+    // 줄 단위 비교용 Set
+    var origLineSet = {};
+    origLines.forEach(function(line) {
+        var trimmed = line.trim();
+        if (trimmed.length > 0) origLineSet[trimmed] = true;
+    });
+
+    newLines.forEach(function(line) {
+        var trimmed = line.trim();
+        if (trimmed.length === 0) {
+            htmlContent += '\n';
+            return;
+        }
+
+        if (origLineSet[trimmed]) {
+            // 원본과 동일한 줄
+            htmlContent += escapeHtml(line) + '\n';
+        } else {
+            // 새로 추가되거나 수정된 줄
+            // 원본에 유사한 줄이 있는지 확인
+            var isSimilar = false;
+            for (var i = 0; i < origLines.length; i++) {
+                var origTrimmed = origLines[i].trim();
+                if (origTrimmed.length < 5) continue;
+                // 첫 10글자 비교로 유사도 판단
+                var checkLen = Math.min(10, trimmed.length, origTrimmed.length);
+                if (trimmed.substring(0, checkLen) === origTrimmed.substring(0, checkLen)) {
+                    isSimilar = true;
+                    break;
+                }
+            }
+
+            if (isSimilar) {
+                // 수정된 줄 (노란색)
+                htmlContent += '<span style="background:#FFD70030;border-left:3px solid #FFD700;padding-left:4px;" title="수정됨">' + escapeHtml(line) + '</span>\n';
+                modifiedCount++;
+            } else {
+                // 새로 추가된 줄 (초록색)
+                htmlContent += '<span style="background:#4CAF5030;border-left:3px solid #4CAF50;padding-left:4px;" title="추가됨">' + escapeHtml(line) + '</span>\n';
+                addedCount++;
+            }
+        }
+    });
+
+    // 삭제된 줄 수 계산
+    var newLineSet = {};
+    newLines.forEach(function(line) {
+        var trimmed = line.trim();
+        if (trimmed.length > 0) newLineSet[trimmed] = true;
+    });
+    origLines.forEach(function(line) {
+        var trimmed = line.trim();
+        if (trimmed.length > 0 && !newLineSet[trimmed]) removedCount++;
+    });
+
+    // 상단 통계 바
+    var statsHtml = '<div style="background:#1a1a2e;padding:12px 15px;border-radius:8px;margin-bottom:10px;' +
+        'display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+        '<span style="font-size:13px;font-weight:bold;color:#FFD700;">🔥 전면 수정 완료</span>' +
+        '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+        '<span style="font-size:11px;color:#aaa;">원본: ' + origLen + '자</span>' +
+        '<span style="font-size:11px;color:#aaa;">수정본: ' + newLen + '자 (' + lenDiffStr + ')</span>' +
+        '<span style="font-size:11px;color:#4CAF50;">추가: ' + addedCount + '줄</span>' +
+        '<span style="font-size:11px;color:#FFD700;">수정: ' + modifiedCount + '줄</span>' +
+        '<span style="font-size:11px;color:#ff5555;">삭제: ' + removedCount + '줄</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;">' +
+        '<span style="font-size:10px;padding:2px 6px;background:#4CAF5030;border-left:2px solid #4CAF50;color:#4CAF50;">추가</span>' +
+        '<span style="font-size:10px;padding:2px 6px;background:#FFD70030;border-left:2px solid #FFD700;color:#FFD700;">수정</span>' +
+        '</div></div>';
+
+    container.innerHTML = statsHtml +
+        '<div style="white-space:pre-wrap;padding:15px;font-size:14px;line-height:1.8;word-break:break-word;">' +
+        htmlContent + '</div>';
+
+    // 편집모드 textarea도 동기화
+    var editTextarea = document.getElementById('edit-textarea-stage1');
+    if (editTextarea) editTextarea.value = rewrittenScript;
+}
+
+// ============================================================
+// 전면 수정 버튼 초기화 (분석 완료 후 호출)
+// ============================================================
+function initRewriteButton() {
+    var container = document.getElementById('revised-stage1');
+    if (!container) return;
+
+    var parent = container.parentElement;
+    var wrapper = parent.querySelector('.revert-btn-wrapper');
+    if (!wrapper) return;
+
+    // 이미 있으면 스킵
+    if (document.getElementById('btn-full-rewrite')) return;
+
+    var btn = document.createElement('button');
+    btn.id = 'btn-full-rewrite';
+    btn.innerHTML = '🔥 대본 전면 수정';
+    btn.style.cssText = 'background:linear-gradient(135deg,#FF416C 0%,#FF4B2B 100%);' +
+        'color:white;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;' +
+        'font-weight:bold;font-size:13px;box-shadow:0 2px 8px rgba(255,65,108,0.4);';
+    btn.addEventListener('click', startFullRewrite);
+
+    wrapper.appendChild(btn);
+}
+
+// ============================================================
+// 기존 displayStage1Results 확장 — 전면 수정 버튼 추가
+// ============================================================
+var _originalDisplayStage1Results = displayStage1Results;
+displayStage1Results = function() {
+    _originalDisplayStage1Results();
+
+    // 전면 수정 버튼 추가
+    setTimeout(function() {
+        initRewriteButton();
+    }, 200);
+};
