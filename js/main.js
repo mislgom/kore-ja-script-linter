@@ -2596,10 +2596,10 @@ function calculateScoresLocally(script) {
     var literary = 0;
     lines.forEach(function(line) {
         if (line.match(/^[가-힣]{2,4}\s*[:：]/) && !line.match(/^나레이션|^NA|^N:/i)) {
-            if (line.match(/하였다|되었다|있었다|하였으며|것이다/)) literary++;
+                   // 문체 검사 비활성화
         }
     });
-    if (literary > 0) { var d = Math.min(literary * 3, 15); seniorScore -= d; seniorDeductions.push('문어체 대사 ' + literary + '개 (-' + d + '점)'); }
+        // 문체 감점 비활성화
 
     // 재미 요소
     var funScore = 100;
