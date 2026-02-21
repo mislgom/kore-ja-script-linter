@@ -1632,7 +1632,7 @@ function buildFixedScript(stage) {
 // Gemini API 호출
 // ============================================================
 
-async function callGeminiAPI(prompt, cacheName) {
+async function callGeminiAPI(prompt, cacheName, useCreativeMode) {
     var apiKey = localStorage.getItem('GEMINI_API_KEY');
     var validation = validateApiKey(apiKey);
     if (!validation.valid) throw new Error(validation.message);
@@ -1643,12 +1643,16 @@ async function callGeminiAPI(prompt, cacheName) {
 
     var url = API_CONFIG.ENDPOINT + '/' + API_CONFIG.MODEL + ':generateContent?key=' + apiKey;
 
+    // 분석 = 0.0 (항상 동일한 결과), 전면 수정 = 0.4 (창의적 리라이팅)
+    var temp = useCreativeMode ? 0.4 : 0.0;
+    var topP = useCreativeMode ? 0.95 : 0.1;
+
     var requestBody = {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-            temperature: 0.4,
+            temperature: temp,
             topK: 40,
-            topP: 0.95,
+            topP: topP,
             maxOutputTokens: API_CONFIG.MAX_OUTPUT_TOKENS
         }
     };
@@ -3829,10 +3833,11 @@ async function startFullRewrite() {
                 );
 
                 (function(index, promptRef, cacheRef) {
-                    batchPromises.push(
+                     batchPromises.push(
                         retryWithDelay(function() {
-                            return callGeminiAPI(promptRef, cacheRef);
+                            return callGeminiAPI(promptRef, cacheRef, true);
                         }, 3, 3000)
+
                         .then(function(response) {
                             var cleaned = response
                                 .replace(/```[a-z]*\n?/g, '')
