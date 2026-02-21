@@ -1908,6 +1908,11 @@ function buildRolePrompt(roleId, chunkText, chunkInfo, scriptLength) {
         '1. revised에 / 또는 () 넣지 마세요! 수정안 하나만!\n' +
         '2. original과 revised는 변경된 최소 범위만! 문장 전체 금지!\n' +
         '3. 확실한 오류만 보고하세요. 추측/의심 수준은 보고하지 마세요.\n\n' +
+        '## ✍️ 수정안 종결어미 규칙\n' +
+        'revised 작성 시 반드시 존대어를 사용하세요.\n' +
+        '허용: ~했지요/~하였지요(50%) + ~했습니다/~하였습니다(50%)\n' +
+        '금지: ~었다/~했다/~되었다/~이다 (문어체 절대 금지)\n' +
+        '금지: ~어요/~했어요 (현대 구어체 절대 금지)\n\n' +
         '## 📤 응답 형식 (반드시 JSON만):\n' +
         '```json\n{"errors": [\n  {"type": "유형", "original": "원문 그대로", "revised": "수정안 하나만", "reason": "사유 15자 이내", "severity": "high/medium/low"}\n]}\n```';
 
