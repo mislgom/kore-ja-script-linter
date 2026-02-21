@@ -357,6 +357,8 @@ function addStyles() {
         '.compare-body{flex:1;overflow:auto;padding:15px;background:#2d2d2d;white-space:pre-wrap;word-break:break-word;line-height:1.8;color:#fff;}' +
         '.compare-close{position:fixed;top:20px;right:30px;font-size:40px;color:#fff;cursor:pointer;z-index:10001;}' +
         '.compare-close:hover{color:#ff5555;}' +
+        '.marker-deep-revised{background:#FFD700;color:#000;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;border-bottom:2px solid #FF416C;}' +
+        '.marker-deep-original{background:#FF416C40;color:#FF416C;padding:2px 4px;border-radius:3px;cursor:pointer;font-weight:bold;border-bottom:2px dashed #FF416C;}' +
         '.row-selected{background:#3a3a3a !important;outline:2px solid #69f0ae;}';
     document.head.appendChild(style);
 }
@@ -1324,7 +1326,13 @@ function renderScriptWithMarkers(stage) {
         }
 
         var display = (fErr.useRevised && fErr.revised) ? cleanRevisedText(fErr.revised) : fm.matchedText;
-        var cls = (fErr.useRevised && fErr.revised) ? 'marker-revised' : 'marker-original';
+        var cls = '';
+if (fErr.category === 'deep') {
+    cls = (fErr.useRevised && fErr.revised) ? 'marker-deep-revised' : 'marker-deep-original';
+} else {
+    cls = (fErr.useRevised && fErr.revised) ? 'marker-revised' : 'marker-original';
+}
+
         var title = escapeHtml((fErr.original || '').substring(0, 50) + ' → ' + (fErr.revised || '').substring(0, 50));
 
         if (display === '__DELETE__' && fErr.useRevised) {
@@ -2098,8 +2106,134 @@ async function runMatrixAnalysis(script, roles, cacheName, chunkSize, progressSt
 }
 
 // ============================================================
-// 1차 분석 실행 (v5.0: 8개 항목, 4개 역할)
+// 1차 분석 실행 (v5.2: 오류 검출 + 심층 분석 통합)
 // ============================================================
+// ============================================================
+// 심층 분석 프롬프트 생성
+// ============================================================
+function buildDeepAnalysisPrompt(scriptText, scriptLength) {
+    return '당신은 20년 경력의 시니어 타깃 유튜브 사극 콘텐츠 총괄 PD입니다.\n' +
+        '캐시에 제공된 전체 대본(' + scriptLength + '자)을 완전히 읽고 분석한 상태입니다.\n\n' +
+
+        '아래 18개 체크리스트 기준으로 대본을 심층 분석하세요.\n' +
+        '문제가 있는 항목만 보고하세요. 문제 없는 항목은 보고하지 마세요.\n\n' +
+
+        '## 체크리스트\n\n' +
+
+        '### 🔥 초반 후킹 (1~3)\n' +
+        '1. 첫 문장이 생명 위협/강한 감정 충돌/충격적 발언/즉각적 위험 사건 중 하나인가?\n' +
+        '   → 설명으로 시작하면 무조건 오류\n' +
+        '2. 초반 30초(약 150~200자) 내 긴장 요소가 2개 이상인가?\n' +
+        '   (위협/충돌/비정상 상황/감정 폭발/죽음·처벌 위험)\n' +
+        '3. 1~2분(약 500~700자) 내 궁금증 3개가 자연 생성되는가?\n' +
+        '   (왜 이런 일이? / 누가 숨기고 있는가? / 과거에 무슨 일?)\n\n' +
+
+        '### 😰 감정 삽입 (4~5)\n' +
+        '4. 주요 사건마다 감정이 반드시 함께 있는가?\n' +
+        '   (죄책감/두려움/원망/배신/절망/보호 본능)\n' +
+        '   → 사건만 있고 감정 없으면 오류\n' +
+        '5. 중반 이후 감정 반전 포인트가 1회 이상 있는가?\n' +
+        '   (배신/숨겨진 관계/희생의 진실/오해의 이유)\n\n' +
+
+        '### ⚡ 긴장·흐름 (6~9)\n' +
+        '6. 긴장 상승 곡선이 유지되는가? (작은 이상→불안→위험→위기→절정)\n' +
+        '   → 중간에 긴장이 하락하는 구간이 있으면 오류\n' +
+        '7. 장면 전환마다 오해/갈등 확대/위험 신호/새로운 의심/감정 충돌 중 하나가 있는가?\n' +
+        '8. 실마리 점진 공개 곡선을 따르는가?\n' +
+        '   (초반: 정보 부족 → 중반: 단서 1~2개 → 후반: 진실 조각 → 엔딩: 감정 진실)\n' +
+        '9. 초반 속도 규칙: 설명 30% 이하, 사건→반응→궁금증→설명 순서인가?\n\n' +
+
+        '### 🎭 문체·구성 (10~13)\n' +
+        '10. 서술 80~85% / 대사 10~15% 비율을 지키는가?\n' +
+        '    → 대사가 너무 많거나 너무 적으면 오류\n' +
+        '11. 구술체(할머니가 손주에게 들려주는 느낌)를 유지하는가?\n' +
+        '    → 보고서체/문어체가 있으면 오류\n' +
+        '12. 특정 종결어미가 30% 이상 반복되는가?\n' +
+        '    → 반복되면 오류\n' +
+        '13. 5파트 구조를 갖추고 있는가?\n' +
+        '    (1:강후킹 → 2:갈등확대 → 3:위기심화 → 4:진실조각 → 5:강한여운)\n\n' +
+
+        '### 🌙 엔딩·몰입장치 (14~18)\n' +
+        '14. 엔딩이 감정 여운/인과 깨달음/희생 의미/운명의 아이러니 중 하나인가?\n' +
+        '    → 완전 해설형 엔딩이면 오류\n' +
+        '15. 시청자 몰입 장치가 있는가? (반복 단서/기억되는 물건/상징 행동/약속·맹세)\n' +
+        '16. 감정 파동 구조를 따르는가?\n' +
+        '    (불안→희망→절망→의심→충격→이해→여운)\n' +
+        '17. 중반 처짐 구간이 있는가? → 있으면 오류\n' +
+        '18. 초반 훅과 클리프행어가 모두 있는가?\n\n' +
+
+        '## 📤 응답 형식 (반드시 JSON만)\n' +
+        '```json\n' +
+        '{"issues": [\n' +
+        '  {\n' +
+        '    "deepType": "초반후킹",\n' +
+        '    "type": "심층분석",\n' +
+        '    "checkNum": 1,\n' +
+        '    "severity": "high",\n' +
+        '    "original": "해당 구간의 원문 텍스트 (최소 20자, 최대 100자)",\n' +
+        '    "revised": "수정안 (구체적으로 대체할 텍스트)",\n' +
+        '    "reason": "첫 문장이 설명으로 시작됨. 위협/충격 사건으로 교체 필요",\n' +
+        '    "location": "초반/중반/후반/엔딩"\n' +
+        '  }\n' +
+        ']}\n' +
+        '```\n\n' +
+        '## 🚨 필수 규칙\n' +
+        '1. original은 대본에서 실제 존재하는 텍스트를 그대로 복사 (20자 이상)\n' +
+        '2. revised는 수정안 하나만 (/ 금지, () 설명 금지)\n' +
+        '3. 문제 없는 항목은 보고하지 마세요\n' +
+        '4. deepType은: 초반후킹 / 감정삽입 / 긴장흐름 / 문체구성 / 엔딩몰입 중 하나\n' +
+        '5. location은: 초반 / 중반 / 후반 / 엔딩 중 하나\n';
+}
+
+// ============================================================
+// 심층 분석 실행
+// ============================================================
+async function runDeepAnalysis(script, cacheName) {
+    var prompt = buildDeepAnalysisPrompt(script, script.length);
+
+    try {
+        var response = await retryWithDelay(function() {
+            return callGeminiAPI(prompt, cacheName);
+        }, 3, 3000);
+
+        var parsed = parseApiResponse(response);
+        var issues = parsed.issues || parsed.errors || [];
+
+        // 유효성 검증
+        var validated = [];
+        issues.forEach(function(item) {
+            if (!item.original || item.original.trim().length < 5) return;
+            if (!item.reason) return;
+
+            // original이 실제 대본에 존재하는지 확인
+            var found = findBestMatch(script, item.original.trim());
+
+            validated.push({
+                deepType: item.deepType || '심층분석',
+                type: '심층분석',
+                checkNum: item.checkNum || 0,
+                severity: item.severity || 'medium',
+                original: found.found ? found.matchedText : item.original.trim(),
+                revised: item.revised || '',
+                reason: item.reason || '',
+                location: item.location || '',
+                _matchPosition: found.found ? found.position : -1
+            });
+        });
+
+        // 위치순 정렬
+        validated.sort(function(a, b) {
+            return (a._matchPosition || 0) - (b._matchPosition || 0);
+        });
+
+        return validated;
+
+    } catch (error) {
+        console.error('❌ 심층 분석 실패:', error.message);
+        return [];
+    }
+}
+
 async function startStage1Analysis() {
     var script = document.getElementById('original-script').value.trim();
     if (!script) { alert('분석할 대본을 입력해주세요.'); return; }
@@ -2136,8 +2270,8 @@ async function startStage1Analysis() {
         console.log('✅ 캐시 생성 성공: ' + cacheName);
         startCacheTimer(cacheName, 1800);
 
-        // 매트릭스 분석 (4개 역할 × N개 청크)
-        updateProgress(8, '🔍 매트릭스 병렬 분석 시작...');
+        // ── Phase 1: 기존 오류 검출 (4역할) ──
+        updateProgress(8, '🔍 오류 검출 분석 시작...');
 
         var roles = [
             { id: 'role1_historical', name: '시대고증+역사적사실' },
@@ -2146,25 +2280,57 @@ async function startStage1Analysis() {
             { id: 'role4_character', name: '캐릭터일관성' }
         ];
 
-        var matrixResult = await runMatrixAnalysis(script, roles, cacheName, 6500, 10, 85, '분석');
+        var matrixResult = await runMatrixAnalysis(script, roles, cacheName, 6500, 10, 60, '오류 검출');
         var mergedErrors = matrixResult.errors;
 
-        console.log('🔍 분석 완료: 총 ' + mergedErrors.length + '개 오류');
+        console.log('🔍 오류 검출 완료: ' + mergedErrors.length + '개');
 
-        // 결과 저장
+        // ── Phase 2: 심층 분석 (프롬프트 기반) ──
+        updateProgress(62, '🧠 심층 분석 시작...');
+
+        var deepAnalysisResult = await runDeepAnalysis(script, cacheName);
+
+        console.log('🧠 심층 분석 완료: ' + deepAnalysisResult.length + '개 항목');
+
+        // ── 결과 통합 저장 ──
         updateProgress(87, '결과 저장 중...');
 
-        state.stage1.allErrors = mergedErrors.map(function(err, idx) {
-            return {
+        var allItems = [];
+        var idx = 0;
+
+        // 오류 검출 결과
+        mergedErrors.forEach(function(err) {
+            allItems.push({
                 id: 'error-' + idx,
                 type: err.type || '기타',
+                category: 'error',
                 original: err.original || '',
                 revised: err.revised || err.suggestion || '',
                 reason: err.reason || '',
                 severity: err.severity || 'medium',
                 useRevised: true
-            };
+            });
+            idx++;
         });
+
+        // 심층 분석 결과
+        deepAnalysisResult.forEach(function(item) {
+            allItems.push({
+                id: 'deep-' + idx,
+                type: item.type || '심층분석',
+                category: 'deep',
+                original: item.original || '',
+                revised: item.revised || '',
+                reason: item.reason || '',
+                severity: item.severity || 'medium',
+                useRevised: true,
+                deepType: item.deepType || '',
+                location: item.location || ''
+            });
+            idx++;
+        });
+
+        state.stage1.allErrors = allItems;
 
         updateProgress(90, '결과 표시 중...');
         displayStage1Results();
@@ -2186,33 +2352,101 @@ async function startStage1Analysis() {
 }
 
 // ============================================================
-// 분석 결과 표시
+// 분석 결과 표시 (v5.2: 오류 검출 + 심층 분석 통합 테이블)
 // ============================================================
 function displayStage1Results() {
     var container = document.getElementById('analysis-stage1');
     if (!container) return;
-    var errors = state.stage1.allErrors;
+    var allItems = state.stage1.allErrors;
 
-    if (!errors || errors.length === 0) {
+    if (!allItems || allItems.length === 0) {
         container.innerHTML = '<div style="text-align:center;padding:30px;color:#69f0ae;font-size:18px;">✅ 오류가 발견되지 않았습니다.</div>';
     } else {
-        var html = '<table class="analysis-table"><thead><tr><th>유형</th><th>원문</th><th>수정</th><th>사유</th></tr></thead><tbody>';
-        errors.forEach(function(err) {
-            var severityColor = err.severity === 'high' ? '#ff5555' : (err.severity === 'medium' ? '#ffaa00' : '#69f0ae');
-            html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;">' +
-                '<td class="type-cell" style="color:' + severityColor + ';font-weight:bold;">' + formatTypeText(err.type) + '</td>' +
-                '<td style="color:#ff9800;font-size:11px;">' + escapeHtml(err.original) + '</td>' +
-                '<td style="color:#69f0ae;font-size:11px;">' + escapeHtml(err.revised) + '</td>' +
-                '<td style="color:#aaa;font-size:11px;">' + escapeHtml(err.reason) + '</td></tr>';
-        });
-        html += '</tbody></table>';
+        // 오류 검출과 심층 분석 분리
+        var errorItems = allItems.filter(function(item) { return item.category === 'error'; });
+        var deepItems = allItems.filter(function(item) { return item.category === 'deep'; });
+
+        var html = '';
+
+        // ── 오류 검출 섹션 ──
+        if (errorItems.length > 0) {
+            html += '<div style="padding:8px 12px;background:#ff555520;border-left:4px solid #ff5555;margin-bottom:8px;border-radius:4px;">' +
+                '<span style="font-weight:bold;color:#ff5555;">🔍 오류 검출</span>' +
+                '<span style="color:#aaa;font-size:12px;margin-left:8px;">' + errorItems.length + '건</span></div>';
+
+            html += '<table class="analysis-table"><thead><tr>' +
+                '<th>유형</th><th>원문</th><th>수정</th><th>사유</th>' +
+                '</tr></thead><tbody>';
+
+            errorItems.forEach(function(err) {
+                var severityColor = err.severity === 'high' ? '#ff5555' : (err.severity === 'medium' ? '#ffaa00' : '#69f0ae');
+                html += '<tr data-marker-id="' + err.id + '" style="cursor:pointer;">' +
+                    '<td class="type-cell" style="color:' + severityColor + ';font-weight:bold;">' + formatTypeText(err.type) + '</td>' +
+                    '<td style="color:#ff9800;font-size:11px;">' + escapeHtml(err.original) + '</td>' +
+                    '<td style="color:#69f0ae;font-size:11px;">' + escapeHtml(err.revised) + '</td>' +
+                    '<td style="color:#aaa;font-size:11px;">' + escapeHtml(err.reason) + '</td></tr>';
+            });
+
+            html += '</tbody></table>';
+        }
+
+        // ── 심층 분석 섹션 ──
+        if (deepItems.length > 0) {
+            html += '<div style="padding:8px 12px;background:#FFD70020;border-left:4px solid #FFD700;margin:12px 0 8px 0;border-radius:4px;">' +
+                '<span style="font-weight:bold;color:#FFD700;">🧠 심층 분석</span>' +
+                '<span style="color:#aaa;font-size:12px;margin-left:8px;">' + deepItems.length + '건</span></div>';
+
+            html += '<table class="analysis-table"><thead><tr>' +
+                '<th style="width:55px;">항목</th><th>해당 구간</th><th>수정안</th><th>분석 내용</th>' +
+                '</tr></thead><tbody>';
+
+            // deepType별 색상/아이콘
+            var deepTypeStyle = {
+                '초반후킹': { color: '#FF416C', icon: '🔥', label: '초반\n후킹' },
+                '감정삽입': { color: '#E040FB', icon: '😰', label: '감정\n삽입' },
+                '긴장흐름': { color: '#FF9800', icon: '⚡', label: '긴장\n흐름' },
+                '문체구성': { color: '#42A5F5', icon: '🎭', label: '문체\n구성' },
+                '엔딩몰입': { color: '#66BB6A', icon: '🌙', label: '엔딩\n몰입' }
+            };
+
+            deepItems.forEach(function(item) {
+                var style = deepTypeStyle[item.deepType] || { color: '#FFD700', icon: '🧠', label: item.deepType || '심층' };
+                var severityBadge = '';
+                if (item.severity === 'high') {
+                    severityBadge = '<span style="display:inline-block;background:#ff5555;color:#fff;font-size:9px;padding:1px 4px;border-radius:3px;margin-top:2px;">긴급</span>';
+                } else if (item.severity === 'medium') {
+                    severityBadge = '<span style="display:inline-block;background:#ffaa00;color:#000;font-size:9px;padding:1px 4px;border-radius:3px;margin-top:2px;">권장</span>';
+                }
+
+                var locationBadge = '';
+                if (item.location) {
+                    locationBadge = '<span style="display:inline-block;background:#ffffff15;color:#aaa;font-size:9px;padding:1px 4px;border-radius:3px;margin-top:2px;">' + item.location + '</span>';
+                }
+
+                html += '<tr data-marker-id="' + item.id + '" style="cursor:pointer;border-left:3px solid ' + style.color + ';">' +
+                    '<td class="type-cell" style="text-align:center;">' +
+                        '<span style="font-size:14px;">' + style.icon + '</span><br>' +
+                        '<span style="font-size:10px;color:' + style.color + ';font-weight:bold;line-height:1.2;white-space:pre-line;">' + style.label + '</span><br>' +
+                        severityBadge + '<br>' + locationBadge +
+                    '</td>' +
+                    '<td style="color:#ff9800;font-size:11px;">' + escapeHtml(item.original) + '</td>' +
+                    '<td style="color:#69f0ae;font-size:11px;">' + escapeHtml(item.revised) + '</td>' +
+                    '<td style="color:#ccc;font-size:11px;">' + escapeHtml(item.reason) + '</td></tr>';
+            });
+
+            html += '</tbody></table>';
+        }
+
         container.innerHTML = html;
 
+        // ── 모든 행 클릭 이벤트 ──
         container.querySelectorAll('tr[data-marker-id]').forEach(function(row) {
             row.addEventListener('click', function() {
                 var markerId = this.getAttribute('data-marker-id');
                 var errorIndex = findErrorIndexById('stage1', markerId);
-                if (errorIndex >= 0) setCurrentError('stage1', errorIndex);
+                if (errorIndex >= 0) {
+                    setCurrentError('stage1', errorIndex);
+                }
             });
         });
     }
@@ -2220,17 +2454,14 @@ function displayStage1Results() {
     renderScriptWithMarkers('stage1');
 
     // 버튼 활성화
-    var hasErrors = errors && errors.length > 0;
+    var hasItems = allItems && allItems.length > 0;
     var btnBefore = document.getElementById('btn-revert-before-stage1');
     var btnAfter = document.getElementById('btn-revert-after-stage1');
     var btnFix = document.getElementById('btn-fix-script-stage1');
-    if (btnBefore) btnBefore.disabled = !hasErrors;
-    if (btnAfter) btnAfter.disabled = !hasErrors;
+    if (btnBefore) btnBefore.disabled = !hasItems;
+    if (btnAfter) btnAfter.disabled = !hasItems;
     if (btnFix) btnFix.disabled = false;
 }
-// ============================================================
-// 점수 산출 (v5.0: 별도 버튼으로 실행)
-// ============================================================
 
 async function calculateAndDisplayScores() {
     var fixedScript = state.stage1.fixedScript || state.finalScript || '';
